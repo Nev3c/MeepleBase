@@ -412,39 +412,6 @@ function parseBggCsv(text: string): CsvGame[] {
   return results;
 }
 
-// ── XML parser (client-side, no library needed) ───────────────────────────────
-
-function parseXmlItems(xml: string): CsvGame[] {
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xml, "text/xml");
-    const items = Array.from(doc.querySelectorAll("item"));
-    const results: CsvGame[] = [];
-    for (const item of items) {
-      const bggId = Number(item.getAttribute("objectid"));
-      if (!bggId) continue;
-      const status = item.querySelector("status");
-      const own = status?.getAttribute("own") === "1";
-      const trade = status?.getAttribute("fortrade") === "1";
-      const wtp = status?.getAttribute("wanttoplay") === "1";
-      const wl = status?.getAttribute("wishlist") === "1";
-      const prev = status?.getAttribute("prevowned") === "1";
-      if (!own && !trade && !wtp && !wl && !prev) continue;
-      let gameStatus = "owned";
-      if (prev && !own) gameStatus = "previously_owned";
-      else if (trade) gameStatus = "for_trade";
-      else if (wtp && !own) gameStatus = "want_to_play";
-      else if (wl && !own) gameStatus = "wishlist";
-      const name = item.querySelector("name")?.textContent ?? `BGG #${bggId}`;
-      const year = Number(item.querySelector("yearpublished")?.textContent) || null;
-      results.push({ bgg_id: bggId, name, year_published: year, status: gameStatus });
-    }
-    return results;
-  } catch {
-    return [];
-  }
-}
-
 // ── Import tab ────────────────────────────────────────────────────────────────
 
 type ImportMode = "options" | "auto-loading" | "csv" | "csv-uploading" | "success";
