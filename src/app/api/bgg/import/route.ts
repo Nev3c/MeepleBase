@@ -3,24 +3,24 @@ import { XMLParser } from "fast-xml-parser";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+// Edge Runtime = Cloudflare IPs (different from standard Vercel/AWS Lambda)
+// BGG blocks standard cloud IPs but edge IPs are often not blocked
+export const runtime = "edge";
+
 const BGG_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Accept": "application/xml, text/xml, */*",
   "Referer": "https://boardgamegeek.com/",
-};
-const GEEKITEMS_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Accept": "application/json",
-  "Referer": "https://boardgamegeek.com/",
+  "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
 };
 
 interface LinkItem { name: string }
 
-async function fetchGameDetails(bggId: number) {
+async function fetchGameDetails(bggId: number): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(
       `https://boardgamegeek.com/api/geekitems?objectid=${bggId}&objecttype=thing&subtype=boardgame`,
-      { signal: AbortSignal.timeout(8000), cache: "no-store", headers: GEEKITEMS_HEADERS }
+      { signal: AbortSignal.timeout(8000), cache: "no-store", headers: { ...BGG_HEADERS, Accept: "application/json" } }
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -46,6 +46,81 @@ async function fetchGameDetails(bggId: number) {
   } catch {
     return null;
   }
+}
+
+function parseCollectionXml(xml: string): Record<string, unknown>[] {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    isArray: (name) => name === "item",
+  });
+  const data = parser.parse(xml);
+  if (data?.errors?.error) return [];
+  const raw = data?.items?.item;
+  return Array.isArray(raw) ? raw : raw ? [raw] : [];
+}
+
+async function tryFetchCollection(username: string): Promise<{ items: Record<string, unknown>[]; error?: string }> {
+  // Attempt list – ordered by likelihood of working from edge/cloud
+  const attempts = [
+    // 1. BGG XML API v2 – standard endpoint
+    async () => {
+      const res = await fetch(
+        `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&excludesubtype=boardgameexpansion`,
+        { signal: AbortSignal.timeout(15000), cache: "no-store", headers: BGG_HEADERS }
+      );
+      if (res.status === 202) throw new Error("queued");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return parseCollectionXml(await res.text());
+    },
+    // 2. BGG XML API v1 – older, sometimes less restricted
+    async () => {
+      const res = await fetch(
+        `https://www.boardgamegeek.com/xmlapi/collection/${encodeURIComponent(username)}?own=1`,
+        { signal: AbortSignal.timeout(15000), cache: "no-store", headers: BGG_HEADERS }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return parseCollectionXml(await res.text());
+    },
+    // 3. BGG XML API v2 with brief=1 (lighter response, might bypass restrictions)
+    async () => {
+      const res = await fetch(
+        `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&brief=1`,
+        { signal: AbortSignal.timeout(15000), cache: "no-store", headers: BGG_HEADERS }
+      );
+      if (res.status === 202) throw new Error("queued");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return parseCollectionXml(await res.text());
+    },
+  ];
+
+  let lastError = "";
+  for (const attempt of attempts) {
+    // Retry up to 2x for queued (202) responses
+    for (let retry = 0; retry < 2; retry++) {
+      try {
+        const items = await attempt();
+        if (items.length > 0 || retry > 0) return { items };
+        // empty result on first try might mean still queued – wait and retry
+        await new Promise((r) => setTimeout(r, 3000));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg === "queued") {
+          await new Promise((r) => setTimeout(r, 4000));
+          continue;
+        }
+        lastError = msg;
+        break; // try next attempt
+      }
+    }
+  }
+
+  return {
+    items: [],
+    error: lastError.includes("401")
+      ? `BGG hat den Zugriff verweigert (401). Mögliche Ursachen:\n• Dein BGG-Benutzername "${username}" stimmt nicht überein\n• BGG blockiert automatisierte Abfragen vorübergehend\n\nBitte warte einige Minuten und versuche es nochmal.`
+      : `BGG-Sammlung konnte nicht geladen werden (${lastError || "unbekannter Fehler"}). Bitte versuche es später nochmal.`,
+  };
 }
 
 export async function POST() {
@@ -75,83 +150,20 @@ export async function POST() {
   }
 
   // ── 1. BGG-Sammlung laden ─────────────────────────────────────────────────
-  let collectionItems: Record<string, unknown>[] = [];
+  const { items: collectionItems, error: fetchError } = await tryFetchCollection(profile.bgg_username);
 
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-    isArray: (name) => name === "item",
-  });
-
-  // Versuche API v2, dann v1 als Fallback
-  const collectionUrls = [
-    `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(profile.bgg_username)}&own=1&excludesubtype=boardgameexpansion`,
-    `https://www.boardgamegeek.com/xmlapi/collection/${encodeURIComponent(profile.bgg_username)}?own=1`,
-  ];
-
-  let fetchSuccess = false;
-
-  for (const collectionUrl of collectionUrls) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      let res: Response;
-      try {
-        res = await fetch(collectionUrl, {
-          signal: AbortSignal.timeout(15000),
-          cache: "no-store",
-          headers: BGG_HEADERS,
-        });
-      } catch {
-        break; // Netzwerkfehler bei dieser URL → nächste URL
-      }
-
-      if (res.status === 202) {
-        // BGG queued die Anfrage – kurz warten und nochmal versuchen
-        await new Promise((r) => setTimeout(r, 4000));
-        continue;
-      }
-
-      if (res.status === 401) {
-        // Sammlung privat oder Nutzer existiert nicht
-        return NextResponse.json({
-          error: `Deine BGG-Sammlung ist auf "privat" gestellt oder der Benutzername "${profile.bgg_username}" existiert nicht auf BGG. Bitte stelle deine Sammlung unter boardgamegeek.com → Einstellungen → Privatsphäre auf "öffentlich".`,
-        }, { status: 400 });
-      }
-
-      if (!res.ok) {
-        break; // andere Fehler → nächste URL versuchen
-      }
-
-      const xml = await res.text();
-      const data = parser.parse(xml);
-
-      if (data?.errors?.error) {
-        const msg = data.errors.error?.message ?? "BGG-Fehler";
-        return NextResponse.json({ error: `BGG: ${msg}` }, { status: 400 });
-      }
-
-      const raw = data?.items?.item;
-      collectionItems = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      fetchSuccess = true;
-      break;
-    }
-    if (fetchSuccess) break;
-  }
-
-  if (!fetchSuccess && collectionItems.length === 0) {
-    return NextResponse.json({
-      error: "BGG-Sammlung konnte nicht geladen werden. Bitte stelle sicher, dass deine Sammlung öffentlich ist und versuche es nochmal.",
-    }, { status: 502 });
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError }, { status: 502 });
   }
 
   if (collectionItems.length === 0) {
-    return NextResponse.json({ imported: 0 });
+    return NextResponse.json({ imported: 0, total: 0 });
   }
 
   // ── 2. Spiele verarbeiten ─────────────────────────────────────────────────
   let imported = 0;
-
-  // In Batches von 5 verarbeiten um BGG nicht zu überlasten
   const BATCH = 5;
+
   for (let i = 0; i < collectionItems.length; i += BATCH) {
     const batch = collectionItems.slice(i, i + BATCH);
 
