@@ -2,26 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* MeepleBase Design Tokens */
+    --background: #FDFAF6;
+    --foreground: #1E2A3A;
+
+    --card: #FFFFFF;
+    --card-foreground: #1E2A3A;
+
+    --primary: #E8821A;
+    --primary-foreground: #FFFFFF;
+
+    --secondary: #1E2A3A;
+    --secondary-foreground: #FFFFFF;
+
+    --muted: #F5EFE6;
+    --muted-foreground: #627D98;
+
+    --accent: #3DB87A;
+    --accent-foreground: #FFFFFF;
+
+    --destructive: #E53E3E;
+    --destructive-foreground: #FFFFFF;
+
+    --border: #E8DDD0;
+    --input: #F5EFE6;
+    --ring: #E8821A;
+
+    --radius: 12px;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: "kern" 1, "liga" 1;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-instrument-sans), system-ui, sans-serif;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-fraunces), serif;
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
 @layer utilities {
+  /* Shimmer skeleton animation */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #F5EFE6 25%,
+      #EDE3D4 50%,
+      #F5EFE6 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
+  /* Safe area for mobile notches */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Game cover art aspect ratio */
+  .aspect-cover {
+    aspect-ratio: 3 / 4;
+  }
+
+  /* Amber gradient text */
+  .text-gradient-amber {
+    background: linear-gradient(135deg, #E8821A, #C96D12);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Hide scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

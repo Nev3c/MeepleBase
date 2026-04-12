@@ -1,0 +1,126 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+const GEEKITEMS_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json",
+  "Referer": "https://boardgamegeek.com/",
+};
+
+interface LinkItem { name: string }
+
+export async function POST(request: NextRequest) {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => cookieStore.getAll(),
+        setAll: (c) =>
+          c.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          ),
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const bggId = Number(body.bgg_id);
+  const status = body.status ?? "owned";
+
+  if (!bggId) {
+    return NextResponse.json({ error: "bgg_id fehlt" }, { status: 400 });
+  }
+
+  // ── 1. Spieldetails via geekitems holen ───────────────────────────────────
+  let upsertData: Record<string, unknown> = {
+    bgg_id: bggId,
+    name: body.name ?? `BGG #${bggId}`,
+    last_synced_at: new Date().toISOString(),
+  };
+
+  try {
+    const res = await fetch(
+      `https://boardgamegeek.com/api/geekitems?objectid=${bggId}&objecttype=thing&subtype=boardgame`,
+      { signal: AbortSignal.timeout(10000), cache: "no-store", headers: GEEKITEMS_HEADERS }
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      const item = data?.item;
+      if (item) {
+        const links = item.links ?? {};
+        const getNames = (arr: LinkItem[] | undefined) =>
+          (arr ?? []).map((l) => l.name).filter(Boolean);
+
+        upsertData = {
+          bgg_id: bggId,
+          name: item.name ?? item.primaryname?.name ?? upsertData.name,
+          year_published: item.yearpublished ? Number(item.yearpublished) : null,
+          min_players: item.minplayers ? Number(item.minplayers) : null,
+          max_players: item.maxplayers ? Number(item.maxplayers) : null,
+          min_playtime: item.minplaytime ? Number(item.minplaytime) : null,
+          max_playtime: item.maxplaytime ? Number(item.maxplaytime) : null,
+          thumbnail_url: item.imageurl ?? null,
+          image_url: item.topimageurl ?? null,
+          description: item.short_description ?? null,
+          categories: getNames(links.boardgamecategory).length
+            ? getNames(links.boardgamecategory)
+            : null,
+          mechanics: getNames(links.boardgamemechanic).length
+            ? getNames(links.boardgamemechanic)
+            : null,
+          designers: getNames(links.boardgamedesigner).length
+            ? getNames(links.boardgamedesigner)
+            : null,
+          publishers: getNames(links.boardgamepublisher).length
+            ? getNames(links.boardgamepublisher)
+            : null,
+          last_synced_at: new Date().toISOString(),
+        };
+      }
+    }
+  } catch (e) {
+    console.error("[games/add] BGG fetch failed, continuing with minimal data:", e);
+  }
+
+  // ── 2. Spiel in games-Tabelle upserten ────────────────────────────────────
+  const { data: game, error: gameError } = await supabase
+    .from("games")
+    .upsert(upsertData, { onConflict: "bgg_id" })
+    .select()
+    .single();
+
+  if (gameError || !game) {
+    return NextResponse.json(
+      { error: "Spiel konnte nicht gespeichert werden", detail: gameError?.message },
+      { status: 500 }
+    );
+  }
+
+  // ── 3. user_games-Eintrag anlegen ─────────────────────────────────────────
+  const { data: userGame, error: ugError } = await supabase
+    .from("user_games")
+    .insert({ user_id: user.id, game_id: game.id, status })
+    .select("*, game:games(*)")
+    .single();
+
+  if (ugError) {
+    if (ugError.code === "23505") {
+      return NextResponse.json({ error: "already_in_library" }, { status: 409 });
+    }
+    return NextResponse.json(
+      { error: "Bibliothekseintrag fehlgeschlagen", detail: ugError.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ userGame });
+}
