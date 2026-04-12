@@ -71,7 +71,7 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       setAddSuccess(false);
       setSearchError(false);
     }
-  }, [open]);
+  }, [open, initialTab]);
 
   // Debounced search
   useEffect(() => {
@@ -292,7 +292,7 @@ function SearchTab({
             </div>
             <p className="text-xs text-amber-700 leading-relaxed">
               Die BGG-API ist lokal geblockt. Nach dem Deployment auf Vercel funktioniert die Suche normal.
-              Alternativ: Wechsle zum Tab "BGG importieren" um deine ganze Sammlung zu laden.
+              Alternativ: Wechsle zum Tab &quot;BGG importieren&quot; um deine ganze Sammlung zu laden.
             </p>
           </div>
         )}
