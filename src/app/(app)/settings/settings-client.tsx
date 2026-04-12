@@ -50,7 +50,9 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
       try {
         const res = await fetch(`/api/bgg/check-user?username=${encodeURIComponent(trimmed)}`);
         const data = await res.json();
-        setBggStatus(data.exists ? "found" : "not_found");
+        if (data.exists === true) setBggStatus("found");
+        else if (data.exists === false) setBggStatus("not_found");
+        else setBggStatus("error"); // exists === null means BGG unreachable
       } catch {
         setBggStatus("error");
       }
@@ -73,10 +75,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
 
     const trimmedBgg = bggUsername.trim();
     if (trimmedBgg !== originalBgg) {
-      // Nur speichern wenn gefunden oder leer (zum Entfernen)
-      if (trimmedBgg === "" || bggStatus === "found") {
-        updates.bgg_username = trimmedBgg || null;
-      } else if (bggStatus === "not_found") {
+      // Nur blockieren wenn definitiv "nicht gefunden" oder noch am Prüfen
+      if (bggStatus === "not_found") {
         setSaveError("BGG-Username nicht gefunden. Bitte prüfe die Schreibweise.");
         setSaveStatus("error");
         return;
@@ -85,6 +85,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
         setSaveStatus("error");
         return;
       }
+      // "found", "error" (unreachable) oder "" → speichern erlaubt
+      updates.bgg_username = trimmedBgg || null;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -117,6 +119,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     bggStatus !== "checking" &&
     bggStatus !== "not_found" &&
     saveStatus !== "saving";
+
+  // When BGG is unreachable we still allow saving (error = can't verify, not "doesn't exist")
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
