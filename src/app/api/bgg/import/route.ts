@@ -77,38 +77,70 @@ export async function POST() {
   // ── 1. BGG-Sammlung laden ─────────────────────────────────────────────────
   let collectionItems: Record<string, unknown>[] = [];
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(
-      `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(profile.bgg_username)}&own=1&stats=1&excludesubtype=boardgameexpansion`,
-      { signal: AbortSignal.timeout(12000), cache: "no-store", headers: BGG_HEADERS }
-    );
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    isArray: (name) => name === "item",
+  });
 
-    if (res.status === 202) {
-      // BGG queued die Anfrage – kurz warten
-      await new Promise((r) => setTimeout(r, 3000));
-      continue;
+  // Versuche API v2, dann v1 als Fallback
+  const collectionUrls = [
+    `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(profile.bgg_username)}&own=1&excludesubtype=boardgameexpansion`,
+    `https://www.boardgamegeek.com/xmlapi/collection/${encodeURIComponent(profile.bgg_username)}?own=1`,
+  ];
+
+  let fetchSuccess = false;
+
+  for (const collectionUrl of collectionUrls) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let res: Response;
+      try {
+        res = await fetch(collectionUrl, {
+          signal: AbortSignal.timeout(15000),
+          cache: "no-store",
+          headers: BGG_HEADERS,
+        });
+      } catch {
+        break; // Netzwerkfehler bei dieser URL → nächste URL
+      }
+
+      if (res.status === 202) {
+        // BGG queued die Anfrage – kurz warten und nochmal versuchen
+        await new Promise((r) => setTimeout(r, 4000));
+        continue;
+      }
+
+      if (res.status === 401) {
+        // Sammlung privat oder Nutzer existiert nicht
+        return NextResponse.json({
+          error: `Deine BGG-Sammlung ist auf "privat" gestellt oder der Benutzername "${profile.bgg_username}" existiert nicht auf BGG. Bitte stelle deine Sammlung unter boardgamegeek.com → Einstellungen → Privatsphäre auf "öffentlich".`,
+        }, { status: 400 });
+      }
+
+      if (!res.ok) {
+        break; // andere Fehler → nächste URL versuchen
+      }
+
+      const xml = await res.text();
+      const data = parser.parse(xml);
+
+      if (data?.errors?.error) {
+        const msg = data.errors.error?.message ?? "BGG-Fehler";
+        return NextResponse.json({ error: `BGG: ${msg}` }, { status: 400 });
+      }
+
+      const raw = data?.items?.item;
+      collectionItems = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      fetchSuccess = true;
+      break;
     }
+    if (fetchSuccess) break;
+  }
 
-    if (!res.ok) {
-      return NextResponse.json({ error: `BGG nicht erreichbar (HTTP ${res.status})` }, { status: 502 });
-    }
-
-    const xml = await res.text();
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: "@_",
-      isArray: (name) => name === "item",
-    });
-    const data = parser.parse(xml);
-
-    if (data?.errors?.error) {
-      const msg = data.errors.error?.message ?? "BGG-Fehler";
-      return NextResponse.json({ error: `BGG: ${msg}` }, { status: 400 });
-    }
-
-    const raw = data?.items?.item;
-    collectionItems = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    break;
+  if (!fetchSuccess && collectionItems.length === 0) {
+    return NextResponse.json({
+      error: "BGG-Sammlung konnte nicht geladen werden. Bitte stelle sicher, dass deine Sammlung öffentlich ist und versuche es nochmal.",
+    }, { status: 502 });
   }
 
   if (collectionItems.length === 0) {

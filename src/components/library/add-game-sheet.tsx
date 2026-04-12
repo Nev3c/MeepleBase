@@ -291,8 +291,7 @@ function SearchTab({
               </button>
             </div>
             <p className="text-xs text-amber-700 leading-relaxed">
-              Die BGG-API ist lokal geblockt. Nach dem Deployment auf Vercel funktioniert die Suche normal.
-              Alternativ: Wechsle zum Tab &quot;BGG importieren&quot; um deine ganze Sammlung zu laden.
+              BGG antwortet gerade nicht. Bitte versuche es nochmal oder wechsle zum Tab &quot;BGG importieren&quot; um deine ganze Sammlung zu laden.
             </p>
           </div>
         )}
