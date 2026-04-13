@@ -14,9 +14,10 @@ interface LibraryClientProps {
   initialGames: UserGame[];
   user?: User | null;
   profile?: Profile | null;
+  playCounts?: Record<string, number>;
 }
 
-export function LibraryClient({ initialGames, user, profile }: LibraryClientProps) {
+export function LibraryClient({ initialGames, user, profile, playCounts }: LibraryClientProps) {
   const { view, filter, sortKey } = useLibraryStore();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetInitialTab, setSheetInitialTab] = useState<"search" | "import">("search");
@@ -60,13 +61,17 @@ export function LibraryClient({ initialGames, user, profile }: LibraryClientProp
           return (b.personal_rating ?? b.game?.rating_avg ?? 0) - (a.personal_rating ?? a.game?.rating_avg ?? 0);
         case "rating_asc":
           return (a.personal_rating ?? a.game?.rating_avg ?? 0) - (b.personal_rating ?? b.game?.rating_avg ?? 0);
+        case "plays_desc":
+          return (playCounts?.[b.game_id] ?? 0) - (playCounts?.[a.game_id] ?? 0);
+        case "plays_asc":
+          return (playCounts?.[a.game_id] ?? 0) - (playCounts?.[b.game_id] ?? 0);
         default:
           return 0;
       }
     });
 
     return games;
-  }, [initialGames, filter, sortKey]);
+  }, [initialGames, filter, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
   const isFiltered = !!(filter.search || filter.status);
@@ -118,7 +123,12 @@ export function LibraryClient({ initialGames, user, profile }: LibraryClientProp
               )}
             >
               {filteredGames.map((userGame) => (
-                <GameCard key={userGame.id} userGame={userGame} view={view} />
+                <GameCard
+                  key={userGame.id}
+                  userGame={userGame}
+                  view={view}
+                  playCount={playCounts?.[userGame.game_id] ?? 0}
+                />
               ))}
             </div>
           </div>

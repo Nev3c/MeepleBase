@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Search, LayoutGrid, List, SlidersHorizontal, Plus, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Calendar, Star } from "lucide-react";
+import { Search, LayoutGrid, List, SlidersHorizontal, Plus, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Calendar, Star, Dices } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryStore } from "@/stores/library-store";
@@ -26,6 +26,8 @@ const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: React.ReactNode 
   { key: "players_desc", label: "Spieler ↓ (viele)",   icon: <ArrowDown01 size={14} /> },
   { key: "rating",       label: "Bewertung ↓ (beste)",   icon: <Star size={14} /> },
   { key: "rating_asc",   label: "Bewertung ↑ (schlechte)", icon: <Star size={14} /> },
+  { key: "plays_desc",   label: "Meist gespielt",          icon: <Dices size={14} /> },
+  { key: "plays_asc",    label: "Wenigst gespielt",        icon: <Dices size={14} /> },
 ];
 
 export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) {

@@ -18,9 +18,10 @@ const STATUS_LABELS: Record<GameStatus, string> = {
 interface GameCardProps {
   userGame: UserGame;
   view: "grid" | "list";
+  playCount?: number;
 }
 
-export function GameCard({ userGame, view }: GameCardProps) {
+export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
   const { game } = userGame;
   if (!game) return null;
 
@@ -70,7 +71,7 @@ export function GameCard({ userGame, view }: GameCardProps) {
           </div>
         </div>
 
-        {/* Rating / Status */}
+        {/* Rating / Status / Play count */}
         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
           {userGame.personal_rating ? (
             <span className="flex items-center gap-0.5 text-xs font-semibold text-amber-600">
@@ -86,6 +87,9 @@ export function GameCard({ userGame, view }: GameCardProps) {
           <Badge variant={userGame.status as keyof typeof STATUS_LABELS}>
             {STATUS_LABELS[userGame.status]}
           </Badge>
+          {playCount > 0 && (
+            <span className="text-[10px] text-muted-foreground font-medium">{playCount}×</span>
+          )}
         </div>
       </Link>
     );
@@ -121,15 +125,18 @@ export function GameCard({ userGame, view }: GameCardProps) {
           </div>
         )}
 
-        {/* Rating overlay */}
-        {(userGame.personal_rating || game.rating_avg) && (
-          <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-slate-900/80 backdrop-blur-sm text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md">
-            <Star size={9} fill={userGame.personal_rating ? "currentColor" : "none"} strokeWidth={1.5} className="text-amber-400" />
-            {userGame.personal_rating
-              ? userGame.personal_rating
-              : game.rating_avg!.toFixed(1)}
+        {/* Rating overlay — personal rating (amber/filled) takes priority over BGG */}
+        {userGame.personal_rating ? (
+          <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-amber-500/90 backdrop-blur-sm text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+            <Star size={9} fill="currentColor" strokeWidth={1.5} />
+            {userGame.personal_rating}
           </div>
-        )}
+        ) : game.rating_avg ? (
+          <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-slate-900/80 backdrop-blur-sm text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+            <Star size={9} fill="none" strokeWidth={1.5} className="text-amber-400" />
+            {game.rating_avg.toFixed(1)}
+          </div>
+        ) : null}
       </div>
 
       {/* Card body */}
@@ -151,6 +158,9 @@ export function GameCard({ userGame, view }: GameCardProps) {
             </span>
           )}
         </div>
+        {playCount > 0 && (
+          <span className="text-[10px] text-amber-600 font-medium">{playCount}× gespielt</span>
+        )}
       </div>
     </Link>
   );

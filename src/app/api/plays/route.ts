@@ -79,5 +79,10 @@ export async function POST(req: NextRequest) {
     await supabase.from("play_players").insert(rows);
   }
 
-  return NextResponse.json(play, { status: 201 });
+  const { data: fullPlay } = await supabase
+    .from("plays")
+    .select("*, game:games(id, name, thumbnail_url, bgg_id), players:play_players(*)")
+    .eq("id", play.id)
+    .single();
+  return NextResponse.json(fullPlay ?? play, { status: 201 });
 }

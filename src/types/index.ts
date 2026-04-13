@@ -45,12 +45,23 @@ export interface Game {
   thumbnail_url: string | null;
   image_url: string | null;
   description: string | null;
+  description_de: string | null;
   categories: string[] | null;
   mechanics: string[] | null;
   designers: string[] | null;
   publishers: string[] | null;
   last_synced_at: string | null;
   created_at: string;
+}
+
+export interface CustomFields {
+  name?: string;
+  description?: string;
+  min_players?: number | null;
+  max_players?: number | null;
+  min_playtime?: number | null;
+  max_playtime?: number | null;
+  categories?: string[];
 }
 
 export interface UserGame {
@@ -65,6 +76,7 @@ export interface UserGame {
   bgg_synced_at: string | null;
   created_at: string;
   updated_at: string;
+  custom_fields: CustomFields | null;
   // Joined
   game?: Game;
 }
@@ -161,4 +173,5 @@ export type LibrarySortKey =
   | "name_asc" | "name_desc"
   | "added_desc" | "added_asc"
   | "players_asc" | "players_desc"
-  | "rating" | "rating_asc";
+  | "rating" | "rating_asc"
+  | "plays_desc" | "plays_asc";

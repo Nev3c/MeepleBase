@@ -19,7 +19,7 @@ export default async function LibraryPage() {
     ? (await supabase.from("profiles").select("*").eq("id", user.id).single()).data
     : null;
 
-  // Spiele aus der Bibliothek laden (leer am Anfang)
+  // Spiele aus der Bibliothek laden
   const { data: userGames } = user
     ? await supabase
         .from("user_games")
@@ -28,11 +28,22 @@ export default async function LibraryPage() {
         .order("created_at", { ascending: false })
     : { data: [] };
 
+  // Partien-Zählungen pro Spiel
+  const { data: playRows } = user
+    ? await supabase.from("plays").select("game_id").eq("user_id", user.id)
+    : { data: [] };
+
+  const playCountMap: Record<string, number> = {};
+  for (const p of (playRows ?? [])) {
+    playCountMap[p.game_id] = (playCountMap[p.game_id] ?? 0) + 1;
+  }
+
   return (
     <LibraryClient
       initialGames={userGames ?? []}
       user={user}
       profile={profile}
+      playCounts={playCountMap}
     />
   );
 }

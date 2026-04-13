@@ -3,10 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown } from "lucide-react";
+import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown, Edit2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LibraryGame {
   id: string;
@@ -41,8 +39,6 @@ interface DraftPlayer {
   winner: boolean;
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-
 export function PlaysClient({
   initialPlays,
   libraryGames,
@@ -53,6 +49,7 @@ export function PlaysClient({
   const router = useRouter();
   const [plays, setPlays] = useState<Play[]>(initialPlays);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editPlay, setEditPlay] = useState<Play | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
@@ -67,13 +64,18 @@ export function PlaysClient({
     router.refresh();
   }
 
+  function handleUpdated(play: Play) {
+    setPlays((prev) => prev.map((p) => (p.id === play.id ? play : p)));
+    setEditPlay(null);
+    router.refresh();
+  }
+
   const totalPlays = plays.length;
   const uniqueGames = new Set(plays.map((p) => p.game_id)).size;
 
   return (
     <>
       <div className="flex flex-col min-h-[calc(100dvh-72px)]">
-        {/* Header */}
         <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-3">
           <div className="flex items-center justify-between max-w-2xl mx-auto">
             <div>
@@ -94,7 +96,6 @@ export function PlaysClient({
           </div>
         </div>
 
-        {/* Content */}
         <div className="px-4 py-4 max-w-2xl mx-auto w-full">
           {plays.length === 0 ? (
             <EmptyState onAdd={() => setSheetOpen(true)} />
@@ -104,6 +105,7 @@ export function PlaysClient({
                 <PlayCard
                   key={play.id}
                   play={play}
+                  onEdit={() => setEditPlay(play)}
                   onDelete={() => setDeleteId(play.id)}
                   showDeleteConfirm={deleteId === play.id}
                   onConfirmDelete={() => handleDelete(play.id)}
@@ -115,22 +117,31 @@ export function PlaysClient({
         </div>
       </div>
 
-      {/* Add play sheet */}
       {sheetOpen && (
-        <AddPlaySheet
+        <PlaySheet
           libraryGames={libraryGames}
           onClose={() => setSheetOpen(false)}
-          onCreated={handleCreated}
+          onSaved={handleCreated}
+        />
+      )}
+
+      {editPlay && (
+        <PlaySheet
+          libraryGames={libraryGames}
+          editPlay={editPlay}
+          onClose={() => setEditPlay(null)}
+          onSaved={handleUpdated}
         />
       )}
     </>
   );
 }
 
-// ── Play Card ─────────────────────────────────────────────────────────────────
-
-function PlayCard({ play, onDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete }: {
+function PlayCard({
+  play, onEdit, onDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete,
+}: {
   play: Play;
+  onEdit: () => void;
   onDelete: () => void;
   showDeleteConfirm: boolean;
   onConfirmDelete: () => void;
@@ -138,14 +149,12 @@ function PlayCard({ play, onDelete, showDeleteConfirm, onConfirmDelete, onCancel
 }) {
   const date = new Date(play.played_at);
   const dateStr = date.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
-  const hasWinner = play.players?.some((p) => p.winner);
   const winner = play.players?.find((p) => p.winner);
-  const withScores = play.players?.some((p) => p.score != null);
+  const withScores = play.players?.some((p) => p.score != null) && !winner;
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
       <div className="flex items-start gap-3 p-3">
-        {/* Cover */}
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
           {play.game?.thumbnail_url ? (
             <Image src={play.game.thumbnail_url} alt={play.game?.name ?? ""} fill className="object-cover" sizes="56px" />
@@ -156,7 +165,6 @@ function PlayCard({ play, onDelete, showDeleteConfirm, onConfirmDelete, onCancel
           )}
         </div>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-sm text-foreground leading-tight truncate">
             {play.game?.name ?? "Unbekanntes Spiel"}
@@ -184,16 +192,14 @@ function PlayCard({ play, onDelete, showDeleteConfirm, onConfirmDelete, onCancel
             )}
           </div>
 
-          {/* Result */}
-          {hasWinner && winner && (
-            <div className="mt-1.5 flex items-center gap-1.5">
+          {winner && (
+            <div className="mt-1.5">
               <span className="text-xs bg-amber-100 text-amber-800 font-medium px-2 py-0.5 rounded-full">
-                🏆 {winner.display_name}
-                {winner.score != null && ` (${winner.score})`}
+                🏆 {winner.display_name}{winner.score != null && ` (${winner.score})`}
               </span>
             </div>
           )}
-          {withScores && !hasWinner && (
+          {withScores && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {play.players?.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((p) => (
                 <span key={p.id} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
@@ -205,12 +211,19 @@ function PlayCard({ play, onDelete, showDeleteConfirm, onConfirmDelete, onCancel
           {play.cooperative && (
             <span className="mt-1.5 inline-block text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-medium">Kooperativ</span>
           )}
+          {play.notes && (
+            <p className="mt-1.5 text-xs text-muted-foreground italic line-clamp-2">{play.notes}</p>
+          )}
         </div>
 
-        {/* Delete */}
-        <button onClick={onDelete} className="text-muted-foreground hover:text-red-400 transition-colors mt-0.5 flex-shrink-0" aria-label="Löschen">
-          <Trash2 size={15} />
-        </button>
+        <div className="flex flex-col gap-1.5 flex-shrink-0 mt-0.5">
+          <button onClick={onEdit} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Bearbeiten">
+            <Edit2 size={14} />
+          </button>
+          <button onClick={onDelete} className="text-muted-foreground hover:text-red-400 transition-colors" aria-label="Löschen">
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       {showDeleteConfirm && (
@@ -226,23 +239,30 @@ function PlayCard({ play, onDelete, showDeleteConfirm, onConfirmDelete, onCancel
   );
 }
 
-// ── Add Play Sheet ─────────────────────────────────────────────────────────────
-
-function AddPlaySheet({ libraryGames, onClose, onCreated }: {
+function PlaySheet({
+  libraryGames, editPlay, onClose, onSaved,
+}: {
   libraryGames: LibraryGame[];
+  editPlay?: Play | null;
   onClose: () => void;
-  onCreated: (play: Play) => void;
+  onSaved: (play: Play) => void;
 }) {
+  const isEdit = !!editPlay;
   const today = new Date().toISOString().slice(0, 10);
-  const [gameId, setGameId] = useState<string>("");
+
+  const [gameId, setGameId] = useState<string>(editPlay?.game_id ?? "");
   const [gameSearch, setGameSearch] = useState("");
   const [gameDropdownOpen, setGameDropdownOpen] = useState(false);
-  const [playedAt, setPlayedAt] = useState(today);
-  const [duration, setDuration] = useState("");
-  const [location, setLocation] = useState("");
-  const [notes, setNotes] = useState("");
-  const [cooperative, setCooperative] = useState(false);
-  const [players, setPlayers] = useState<DraftPlayer[]>([{ display_name: "", score: "", winner: false }]);
+  const [playedAt, setPlayedAt] = useState(editPlay?.played_at?.slice(0, 10) ?? today);
+  const [duration, setDuration] = useState(editPlay?.duration_minutes?.toString() ?? "");
+  const [location, setLocation] = useState(editPlay?.location ?? "");
+  const [notes, setNotes] = useState(editPlay?.notes ?? "");
+  const [cooperative, setCooperative] = useState(editPlay?.cooperative ?? false);
+  const [players, setPlayers] = useState<DraftPlayer[]>(
+    editPlay?.players && editPlay.players.length > 0
+      ? editPlay.players.map((p) => ({ display_name: p.display_name, score: p.score?.toString() ?? "", winner: p.winner }))
+      : [{ display_name: "", score: "", winner: false }]
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -263,8 +283,11 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
     setPlayers((prev) => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
   }
 
-  function setWinner(i: number) {
-    setPlayers((prev) => prev.map((p, idx) => ({ ...p, winner: idx === i })));
+  function toggleWinner(i: number) {
+    setPlayers((prev) => prev.map((p, idx) => ({
+      ...p,
+      winner: idx === i ? !p.winner : false,
+    })));
   }
 
   async function handleSave() {
@@ -280,37 +303,42 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
         winner: p.winner,
       }));
 
-    const res = await fetch("/api/plays", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        game_id: gameId,
-        played_at: playedAt,
-        duration_minutes: duration ? Number(duration) : null,
-        location: location.trim() || null,
-        notes: notes.trim() || null,
-        cooperative,
-        players: validPlayers,
-      }),
-    });
+    const payload = {
+      game_id: gameId,
+      played_at: playedAt,
+      duration_minutes: duration ? Number(duration) : null,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
+      cooperative,
+      players: validPlayers,
+    };
+
+    const res = isEdit
+      ? await fetch(`/api/plays/${editPlay!.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      : await fetch("/api/plays", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
     const data = await res.json();
     if (!res.ok) { setError(data.error ?? "Fehler"); setSaving(false); return; }
-    onCreated(data);
+    onSaved(data as Play);
   }
 
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col" style={{ maxHeight: "92dvh" }}>
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
-
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
-          <h2 className="font-display text-lg font-semibold">Partie erfassen</h2>
+          <h2 className="font-display text-lg font-semibold">{isEdit ? "Partie bearbeiten" : "Partie erfassen"}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
           </button>
@@ -338,7 +366,7 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
               </button>
 
               {gameDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-60">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-60">
                   <div className="p-2 border-b border-border">
                     <input
                       value={gameSearch}
@@ -370,7 +398,6 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
             </div>
           </div>
 
-          {/* Date + Duration row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Datum</label>
@@ -393,7 +420,6 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
             </div>
           </div>
 
-          {/* Location */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
               <MapPin size={11} className="inline mr-1" />Ort (optional)
@@ -406,16 +432,12 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
             />
           </div>
 
-          {/* Cooperative toggle */}
           <div className="flex items-center justify-between px-3 py-2.5 bg-muted/40 rounded-xl">
             <span className="text-sm font-medium">Kooperativ gespielt</span>
             <button
               onClick={() => setCooperative((c) => !c)}
-              className={cn(
-                "w-10 h-5.5 rounded-full transition-colors relative",
-                cooperative ? "bg-amber-500" : "bg-border"
-              )}
-              style={{ height: "22px" }}
+              className={cn("rounded-full transition-colors relative flex-shrink-0", cooperative ? "bg-amber-500" : "bg-border")}
+              style={{ width: "40px", height: "22px" }}
               aria-checked={cooperative}
               role="switch"
             >
@@ -423,7 +445,6 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
             </button>
           </div>
 
-          {/* Players */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -451,7 +472,7 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
                   />
                   {!cooperative && (
                     <button
-                      onClick={() => setWinner(i)}
+                      onClick={() => toggleWinner(i)}
                       className={cn(
                         "w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0",
                         p.winner ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:bg-amber-100"
@@ -471,7 +492,6 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
             </div>
           </div>
 
-          {/* Notes */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notizen (optional)</label>
             <textarea
@@ -486,7 +506,6 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
-        {/* Save */}
         <div className="px-4 py-4 border-t border-border flex-shrink-0">
           <button
             onClick={handleSave}
@@ -498,15 +517,13 @@ function AddPlaySheet({ libraryGames, onClose, onCreated }: {
             ) : (
               <Check size={16} />
             )}
-            Partie speichern
+            {isEdit ? "Änderungen speichern" : "Partie speichern"}
           </button>
         </div>
       </div>
     </>
   );
 }
-
-// ── Empty State ───────────────────────────────────────────────────────────────
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (

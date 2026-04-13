@@ -11,9 +11,12 @@ import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star } from "lucide
 interface ProfileClientProps {
   user: User;
   profile: Profile | null;
+  gameCount: number;
+  playCount: number;
+  favoriteGame: { name: string; count: number; thumbnail: string | null } | null;
 }
 
-export function ProfileClient({ user, profile }: ProfileClientProps) {
+export function ProfileClient({ user, profile, gameCount, playCount, favoriteGame }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -51,6 +54,14 @@ export function ProfileClient({ user, profile }: ProfileClientProps) {
     router.push("/login");
     router.refresh();
   }
+
+  const favoriteLabel = favoriteGame
+    ? favoriteGame.name.length > 10
+      ? favoriteGame.name.slice(0, 10) + "…"
+      : favoriteGame.name
+    : "–";
+
+  const favoriteSub = favoriteGame ? `${favoriteGame.count}×` : undefined;
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
@@ -104,9 +115,9 @@ export function ProfileClient({ user, profile }: ProfileClientProps) {
       {/* Statistiken */}
       <div className="px-4 mb-4">
         <div className="grid grid-cols-3 gap-3">
-          <StatCard icon={<Library size={18} className="text-amber-500" />} value="0" label="Spiele" />
-          <StatCard icon={<Dices size={18} className="text-amber-500" />} value="0" label="Partien" />
-          <StatCard icon={<Star size={18} className="text-amber-500" />} value="–" label="Lieblingsspiel" />
+          <StatCard icon={<Library size={18} className="text-amber-500" />} value={gameCount.toString()} label="Spiele" />
+          <StatCard icon={<Dices size={18} className="text-amber-500" />} value={playCount.toString()} label="Partien" />
+          <StatCard icon={<Star size={18} className="text-amber-500" />} value={favoriteLabel} label="Lieblingsspiel" sub={favoriteSub} />
         </div>
       </div>
 
@@ -196,11 +207,12 @@ export function ProfileClient({ user, profile }: ProfileClientProps) {
 }
 
 // Kleine Stat-Karte
-function StatCard({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+function StatCard({ icon, value, label, sub }: { icon: React.ReactNode; value: string; label: string; sub?: string }) {
   return (
-    <div className="bg-card rounded-xl border border-border shadow-card p-3 flex flex-col items-center gap-1.5">
+    <div className="bg-card rounded-xl border border-border shadow-card p-3 flex flex-col items-center gap-1">
       {icon}
-      <span className="font-display text-xl font-semibold text-foreground">{value}</span>
+      <span className="font-display text-xl font-semibold text-foreground leading-tight">{value}</span>
+      {sub && <span className="text-[10px] text-amber-600 font-medium leading-none">{sub}</span>}
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );

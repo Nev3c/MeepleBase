@@ -23,19 +23,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function GameDetailPage({ params }: Props) {
   const supabase = createClient();
+  const id = params.id;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: game }, { data: userGame }, { data: notes }, { data: images }] = await Promise.all([
-    supabase.from("games").select("*").eq("id", params.id).single(),
-    supabase.from("user_games").select("*").eq("game_id", params.id).eq("user_id", user.id).single(),
-    supabase.from("game_notes").select("*").eq("game_id", params.id).eq("user_id", user.id)
+  const [{ data: game }, { data: userGame }, { data: notes }, { data: images }, { data: playsData }] = await Promise.all([
+    supabase.from("games").select("*").eq("id", id).single(),
+    supabase.from("user_games").select("*").eq("game_id", id).eq("user_id", user.id).single(),
+    supabase.from("game_notes").select("*").eq("game_id", id).eq("user_id", user.id)
       .order("is_pinned", { ascending: false })
       .order("created_at", { ascending: false }),
     // user_game_images table may not exist yet — handle gracefully
-    supabase.from("user_game_images").select("*").eq("game_id", params.id).eq("user_id", user.id)
+    supabase.from("user_game_images").select("*").eq("game_id", id).eq("user_id", user.id)
       .order("sort_order").order("created_at"),
+    supabase
+      .from("plays")
+      .select("*, players:play_players(*)")
+      .eq("user_id", user.id)
+      .eq("game_id", id)
+      .order("played_at", { ascending: false })
+      .limit(20),
   ]);
 
   if (!game) notFound();
@@ -46,6 +54,7 @@ export default async function GameDetailPage({ params }: Props) {
       userGame={userGame}
       initialNotes={notes ?? []}
       initialImages={images ?? []}
+      initialPlays={playsData ?? []}
     />
   );
 }

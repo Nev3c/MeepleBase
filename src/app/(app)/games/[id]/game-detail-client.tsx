@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { translateCategories, translateMechanics } from "@/lib/bgg-translations";
-import type { Game, UserGame, GameStatus, GameNote, NoteType } from "@/types";
+import type { Game, UserGame, GameStatus, GameNote, NoteType, CustomFields } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,15 @@ interface UserGameImage {
   url: string;
   label: string | null;
   storage_path: string;
+}
+
+interface PlaySummary {
+  id: string;
+  played_at: string;
+  duration_minutes: number | null;
+  location: string | null;
+  cooperative: boolean;
+  players?: Array<{ id: string; display_name: string; winner: boolean; score: number | null }>;
 }
 
 const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
@@ -43,11 +52,12 @@ interface GameDetailClientProps {
   userGame: UserGame | null;
   initialNotes?: GameNote[];
   initialImages?: UserGameImage[];
+  initialPlays?: PlaySummary[];
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function GameDetailClient({ game, userGame, initialNotes = [], initialImages = [] }: GameDetailClientProps) {
+export function GameDetailClient({ game, userGame, initialNotes = [], initialImages = [], initialPlays = [] }: GameDetailClientProps) {
   const router = useRouter();
   const [status, setStatus] = useState<GameStatus>(userGame?.status ?? "owned");
   const [editingStatus, setEditingStatus] = useState(false);
@@ -56,30 +66,65 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [deleting, setDeleting] = useState(false);
   const [notes, setNotes] = useState<GameNote[]>(initialNotes);
   const [images, setImages] = useState<UserGameImage[]>(initialImages);
+  const [personalRating, setPersonalRating] = useState<number | null>(userGame?.personal_rating ?? null);
 
   // Custom overrides stored in user_games.custom_fields
-  type CustomFields = { name?: string; description?: string };
-  const initialCustom: CustomFields = (userGame as { custom_fields?: CustomFields } | null)?.custom_fields ?? {};
+  const initialCustom: CustomFields = userGame?.custom_fields ?? {};
   const [customFields, setCustomFields] = useState<CustomFields>(initialCustom);
   const [editingInfo, setEditingInfo] = useState(false);
   const [draftName, setDraftName] = useState(customFields.name ?? game.name);
-  const [draftDesc, setDraftDesc] = useState(customFields.description ?? game.description ?? "");
+  const [draftDesc, setDraftDesc] = useState(customFields.description ?? game.description_de ?? game.description ?? "");
+  const [draftMinPlayers, setDraftMinPlayers] = useState(customFields.min_players?.toString() ?? "");
+  const [draftMaxPlayers, setDraftMaxPlayers] = useState(customFields.max_players?.toString() ?? "");
+  const [draftMinPlaytime, setDraftMinPlaytime] = useState(customFields.min_playtime?.toString() ?? "");
+  const [draftMaxPlaytime, setDraftMaxPlaytime] = useState(customFields.max_playtime?.toString() ?? "");
+  const [draftCategories, setDraftCategories] = useState(customFields.categories?.join(", ") ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
 
   const displayName = customFields.name ?? game.name;
-  const displayDesc = customFields.description ?? game.description;
+  const displayDesc = customFields.description ?? game.description_de ?? game.description;
+
+  // Effective player/playtime values (custom overrides BGG)
+  const effMinPlayers = customFields.min_players ?? game.min_players;
+  const effMaxPlayers = customFields.max_players ?? game.max_players;
+  const effMinPlaytime = customFields.min_playtime ?? game.min_playtime;
+  const effMaxPlaytime = customFields.max_playtime ?? game.max_playtime;
 
   async function handleSaveInfo() {
     if (!userGame) return;
     setSavingInfo(true);
-    const newCustom: CustomFields = {
-      ...customFields,
-      ...(draftName.trim() !== game.name ? { name: draftName.trim() } : {}),
-      ...(draftDesc.trim() !== (game.description ?? "") ? { description: draftDesc.trim() } : {}),
-    };
-    // Remove key if reset to original
-    if (newCustom.name === game.name) delete newCustom.name;
-    if (newCustom.description === game.description) delete newCustom.description;
+
+    const newCustom: CustomFields = { ...customFields };
+
+    // Name
+    if (draftName.trim() && draftName.trim() !== game.name) {
+      newCustom.name = draftName.trim();
+    } else {
+      delete newCustom.name;
+    }
+
+    // Description
+    if (draftDesc.trim() && draftDesc.trim() !== (game.description ?? "")) {
+      newCustom.description = draftDesc.trim();
+    } else {
+      delete newCustom.description;
+    }
+
+    // Players
+    const minP = draftMinPlayers !== "" ? Number(draftMinPlayers) : null;
+    const maxP = draftMaxPlayers !== "" ? Number(draftMaxPlayers) : null;
+    if (minP !== null) newCustom.min_players = minP; else delete newCustom.min_players;
+    if (maxP !== null) newCustom.max_players = maxP; else delete newCustom.max_players;
+
+    // Playtime
+    const minT = draftMinPlaytime !== "" ? Number(draftMinPlaytime) : null;
+    const maxT = draftMaxPlaytime !== "" ? Number(draftMaxPlaytime) : null;
+    if (minT !== null) newCustom.min_playtime = minT; else delete newCustom.min_playtime;
+    if (maxT !== null) newCustom.max_playtime = maxT; else delete newCustom.max_playtime;
+
+    // Categories
+    const cats = draftCategories.split(",").map((s) => s.trim()).filter(Boolean);
+    if (cats.length > 0) newCustom.categories = cats; else delete newCustom.categories;
 
     await fetch(`/api/user-games/${userGame.id}`, {
       method: "PATCH",
@@ -91,7 +136,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     setSavingInfo(false);
   }
 
-  const categories = translateCategories(game.categories);
+  const categories = customFields.categories ?? translateCategories(game.categories);
   const mechanics = translateMechanics(game.mechanics);
 
   async function handleStatusSave(newStatus: GameStatus) {
@@ -110,6 +155,17 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     }
   }
 
+  async function handleRatingClick(rating: number) {
+    if (!userGame) return;
+    const newRating = personalRating === rating ? null : rating;
+    setPersonalRating(newRating);
+    await fetch(`/api/user-games/${userGame.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personal_rating: newRating }),
+    });
+  }
+
   async function handleDelete() {
     if (!userGame) return;
     setDeleting(true);
@@ -123,7 +179,14 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     }
   }
 
-  const hasMeta = game.min_players || game.max_players || game.min_playtime || game.max_playtime;
+  const hasMeta = effMinPlayers || effMaxPlayers || effMinPlaytime || effMaxPlaytime;
+
+  // Plays summary data
+  const playCount = initialPlays.length;
+  const allPlayerNames = Array.from(
+    new Set(initialPlays.flatMap((p) => p.players?.map((pl) => pl.display_name) ?? []))
+  );
+  const recentPlays = initialPlays.slice(0, 3);
 
   return (
     <div className="flex flex-col min-h-dvh bg-background">
@@ -172,11 +235,73 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spieler Min</label>
+                <input
+                  type="number"
+                  value={draftMinPlayers}
+                  onChange={(e) => setDraftMinPlayers(e.target.value)}
+                  placeholder={game.min_players?.toString() ?? "–"}
+                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spieler Max</label>
+                <input
+                  type="number"
+                  value={draftMaxPlayers}
+                  onChange={(e) => setDraftMaxPlayers(e.target.value)}
+                  placeholder={game.max_players?.toString() ?? "–"}
+                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spielzeit Min</label>
+                <input
+                  type="number"
+                  value={draftMinPlaytime}
+                  onChange={(e) => setDraftMinPlaytime(e.target.value)}
+                  placeholder={game.min_playtime?.toString() ?? "–"}
+                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spielzeit Max</label>
+                <input
+                  type="number"
+                  value={draftMaxPlaytime}
+                  onChange={(e) => setDraftMaxPlaytime(e.target.value)}
+                  placeholder={game.max_playtime?.toString() ?? "–"}
+                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Kategorien (kommagetrennt)</label>
+              <input
+                value={draftCategories}
+                onChange={(e) => setDraftCategories(e.target.value)}
+                placeholder="z.B. Strategie, Familienspiel"
+                className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
             <div className="flex gap-2">
               <button onClick={handleSaveInfo} disabled={savingInfo} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold disabled:opacity-50">
                 <Check size={13} /> Speichern
               </button>
-              <button onClick={() => { setEditingInfo(false); setDraftName(displayName); setDraftDesc(displayDesc ?? ""); }} className="px-3 py-2 rounded-xl bg-muted text-sm font-medium">
+              <button onClick={() => {
+                setEditingInfo(false);
+                setDraftName(displayName);
+                setDraftDesc(displayDesc ?? "");
+                setDraftMinPlayers(customFields.min_players?.toString() ?? "");
+                setDraftMaxPlayers(customFields.max_players?.toString() ?? "");
+                setDraftMinPlaytime(customFields.min_playtime?.toString() ?? "");
+                setDraftMaxPlaytime(customFields.max_playtime?.toString() ?? "");
+                setDraftCategories(customFields.categories?.join(", ") ?? "");
+              }} className="px-3 py-2 rounded-xl bg-muted text-sm font-medium">
                 Abbrechen
               </button>
             </div>
@@ -240,20 +365,65 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         )}
 
+        {/* Rating Section */}
+        {userGame && (
+          <div className="flex flex-col gap-2 bg-muted/30 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Eigene Wertung</span>
+              {personalRating && (
+                <button onClick={() => handleRatingClick(personalRating)} className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors">
+                  Löschen
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => handleRatingClick(n)}
+                  className={cn(
+                    "w-7 h-7 rounded-lg text-xs font-bold transition-all",
+                    personalRating === n
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : personalRating && n <= personalRating
+                      ? "bg-amber-200 text-amber-800"
+                      : "bg-muted text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            {game.rating_avg != null && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <Star size={12} className="text-muted-foreground" strokeWidth={1.5} />
+                <span className="text-xs text-muted-foreground">BGG-Wertung: <span className="font-medium">{game.rating_avg.toFixed(1)}</span></span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Meta */}
         {hasMeta && (
           <div className="flex flex-wrap gap-2">
-            {(game.min_players || game.max_players) && (
-              <Stat icon={<Users size={14} />} label={formatPlayers(game.min_players, game.max_players)} />
+            {(effMinPlayers || effMaxPlayers) && (
+              <div className="relative">
+                <Stat icon={<Users size={14} />} label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)} />
+                {(customFields.min_players != null || customFields.max_players != null) && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                )}
+              </div>
             )}
-            {(game.min_playtime || game.max_playtime) && (
-              <Stat icon={<Clock size={14} />} label={formatTime(game.min_playtime, game.max_playtime)} />
+            {(effMinPlaytime || effMaxPlaytime) && (
+              <div className="relative">
+                <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />
+                {(customFields.min_playtime != null || customFields.max_playtime != null) && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                )}
+              </div>
             )}
             {game.complexity != null && (
               <Stat icon={<Star size={14} />} label={`${game.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
-            )}
-            {game.rating_avg != null && (
-              <Stat icon={<Star size={14} className="text-amber-500" />} label={game.rating_avg.toFixed(1)} sublabel="BGG-Wertung" />
             )}
           </div>
         )}
@@ -270,7 +440,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         {(categories.length > 0 || mechanics.length > 0) && (
           <section className="flex flex-col gap-3">
             {categories.length > 0 && (
-              <TagRow label="Kategorien" tags={categories} color="amber" />
+              <TagRow label="Kategorien" tags={categories} color="amber" hasCustom={!!customFields.categories} />
             )}
             {mechanics.length > 0 && (
               <TagRow label="Mechanismen" tags={mechanics.slice(0, 10)} color="slate" />
@@ -314,13 +484,46 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         {/* ── Mit wem gespielt ──────────────────────────────────────────────── */}
         <section>
           <SectionHeader icon={<Users size={15} />} title="Mit wem gespielt" />
-          <div className="mt-2 bg-muted/40 rounded-xl px-4 py-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              Wird automatisch aus deinen erfassten Partien befüllt.
-            </p>
-            <Link href="/plays" className="text-xs text-amber-600 font-medium mt-1 inline-block">
-              Partie erfassen →
-            </Link>
+          <div className="mt-2">
+            {playCount === 0 ? (
+              <div className="bg-muted/40 rounded-xl px-4 py-4 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Wird automatisch aus deinen erfassten Partien befüllt.
+                </p>
+                <Link href="/plays" className="text-xs text-amber-600 font-medium mt-1 inline-block">
+                  Partie erfassen →
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-foreground font-medium">
+                  {playCount} {playCount === 1 ? "Partie" : "Partien"} gespielt
+                  {allPlayerNames.length > 0 && (
+                    <span className="text-muted-foreground font-normal"> · {allPlayerNames.join(", ")}</span>
+                  )}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {recentPlays.map((play) => {
+                    const dateStr = new Date(play.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
+                    const playerNames = play.players?.map((p) => p.display_name).join(", ");
+                    return (
+                      <div key={play.id} className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 py-2">
+                        <span className="text-xs text-muted-foreground">{dateStr}</span>
+                        {playerNames && (
+                          <span className="text-xs text-foreground truncate flex-1">{playerNames}</span>
+                        )}
+                        {play.duration_minutes && (
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{play.duration_minutes} Min</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <Link href="/plays" className="text-xs text-amber-600 font-medium mt-1 inline-block">
+                  Alle Partien ansehen →
+                </Link>
+              </div>
+            )}
           </div>
         </section>
 
@@ -375,19 +578,12 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
 
 // ── Own Images Section ────────────────────────────────────────────────────────
 
-interface UserGameImage2 {
-  id: string;
-  url: string;
-  label: string | null;
-  storage_path: string;
-}
-
 function OwnImagesSection({
   gameId, images, setImages,
 }: {
   gameId: string;
-  images: UserGameImage2[];
-  setImages: React.Dispatch<React.SetStateAction<UserGameImage2[]>>;
+  images: UserGameImage[];
+  setImages: React.Dispatch<React.SetStateAction<UserGameImage[]>>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -652,10 +848,13 @@ function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }
   );
 }
 
-function TagRow({ label, tags, color }: { label: string; tags: string[]; color: "amber" | "slate" }) {
+function TagRow({ label, tags, color, hasCustom }: { label: string; tags: string[]; color: "amber" | "slate"; hasCustom?: boolean }) {
   return (
     <div>
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{label}</p>
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+        {hasCustom && <span className="text-[10px] text-amber-600 font-medium">(eigene Angabe)</span>}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {tags.map((t) => (
           <span
@@ -726,4 +925,3 @@ function formatTime(min: number | null, max: number | null): string {
   if (min || max) return `${min ?? max} Min`;
   return "";
 }
-
