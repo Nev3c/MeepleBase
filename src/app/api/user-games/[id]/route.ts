@@ -54,7 +54,7 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
   const body = await req.json();
-  const allowed = ["status", "personal_rating", "notes", "acquired_date"];
+  const allowed = ["status", "personal_rating", "notes", "acquired_date", "custom_fields"];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) updates[key] = body[key];

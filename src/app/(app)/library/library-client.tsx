@@ -57,8 +57,9 @@ export function LibraryClient({ initialGames, user, profile }: LibraryClientProp
           return (b.game?.max_players ?? -1) - (a.game?.max_players ?? -1);
         }
         case "rating":
-          // personal_rating first, fall back to BGG average rating
           return (b.personal_rating ?? b.game?.rating_avg ?? 0) - (a.personal_rating ?? a.game?.rating_avg ?? 0);
+        case "rating_asc":
+          return (a.personal_rating ?? a.game?.rating_avg ?? 0) - (b.personal_rating ?? b.game?.rating_avg ?? 0);
         default:
           return 0;
       }

@@ -57,6 +57,40 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [notes, setNotes] = useState<GameNote[]>(initialNotes);
   const [images, setImages] = useState<UserGameImage[]>(initialImages);
 
+  // Custom overrides stored in user_games.custom_fields
+  type CustomFields = { name?: string; description?: string };
+  const initialCustom: CustomFields = (userGame as { custom_fields?: CustomFields } | null)?.custom_fields ?? {};
+  const [customFields, setCustomFields] = useState<CustomFields>(initialCustom);
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [draftName, setDraftName] = useState(customFields.name ?? game.name);
+  const [draftDesc, setDraftDesc] = useState(customFields.description ?? game.description ?? "");
+  const [savingInfo, setSavingInfo] = useState(false);
+
+  const displayName = customFields.name ?? game.name;
+  const displayDesc = customFields.description ?? game.description;
+
+  async function handleSaveInfo() {
+    if (!userGame) return;
+    setSavingInfo(true);
+    const newCustom: CustomFields = {
+      ...customFields,
+      ...(draftName.trim() !== game.name ? { name: draftName.trim() } : {}),
+      ...(draftDesc.trim() !== (game.description ?? "") ? { description: draftDesc.trim() } : {}),
+    };
+    // Remove key if reset to original
+    if (newCustom.name === game.name) delete newCustom.name;
+    if (newCustom.description === game.description) delete newCustom.description;
+
+    await fetch(`/api/user-games/${userGame.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_fields: Object.keys(newCustom).length > 0 ? newCustom : null }),
+    });
+    setCustomFields(newCustom);
+    setEditingInfo(false);
+    setSavingInfo(false);
+  }
+
   const categories = translateCategories(game.categories);
   const mechanics = translateMechanics(game.mechanics);
 
@@ -118,11 +152,52 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
       </div>
 
       <div className="flex flex-col gap-5 px-4 pb-12 pt-4 relative z-10">
-        {/* Title */}
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{game.name}</h1>
-          {game.year_published && <p className="text-muted-foreground text-sm mt-0.5">{game.year_published}</p>}
-        </div>
+        {/* Title + Edit */}
+        {editingInfo ? (
+          <div className="flex flex-col gap-3 bg-muted/30 rounded-2xl p-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Name</label>
+              <input
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                className="w-full text-lg font-bold bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Beschreibung</label>
+              <textarea
+                value={draftDesc}
+                onChange={(e) => setDraftDesc(e.target.value)}
+                rows={5}
+                className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleSaveInfo} disabled={savingInfo} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold disabled:opacity-50">
+                <Check size={13} /> Speichern
+              </button>
+              <button onClick={() => { setEditingInfo(false); setDraftName(displayName); setDraftDesc(displayDesc ?? ""); }} className="px-3 py-2 rounded-xl bg-muted text-sm font-medium">
+                Abbrechen
+              </button>
+            </div>
+            {(customFields.name || customFields.description) && (
+              <p className="text-[11px] text-amber-600">Eigene Angaben aktiv — BGG-Daten werden beim Import nicht überschrieben.</p>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{displayName}</h1>
+              {game.year_published && <p className="text-muted-foreground text-sm mt-0.5">{game.year_published}</p>}
+              {customFields.name && <p className="text-[11px] text-amber-600 mt-0.5">Eigener Name</p>}
+            </div>
+            {userGame && (
+              <button onClick={() => setEditingInfo(true)} className="mt-1 w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0">
+                <Edit2 size={13} />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Status */}
         {userGame && (
@@ -184,7 +259,12 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         )}
 
         {/* Description */}
-        {game.description && <ExpandableDescription text={game.description} />}
+        {displayDesc && (
+          <div className="relative">
+            <ExpandableDescription text={displayDesc} />
+            {customFields.description && <p className="text-[11px] text-amber-600 mt-1">Eigene Beschreibung</p>}
+          </div>
+        )}
 
         {/* Categories + Mechanics */}
         {(categories.length > 0 || mechanics.length > 0) && (

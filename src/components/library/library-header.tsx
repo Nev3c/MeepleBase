@@ -24,7 +24,8 @@ const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: React.ReactNode 
   { key: "added_asc",    label: "Älteste zuerst",     icon: <Calendar size={14} /> },
   { key: "players_asc",  label: "Spieler ↑ (wenige)",  icon: <ArrowUp01 size={14} /> },
   { key: "players_desc", label: "Spieler ↓ (viele)",   icon: <ArrowDown01 size={14} /> },
-  { key: "rating",       label: "Bewertung (BGG)",      icon: <Star size={14} /> },
+  { key: "rating",       label: "Bewertung ↓ (beste)",   icon: <Star size={14} /> },
+  { key: "rating_asc",   label: "Bewertung ↑ (schlechte)", icon: <Star size={14} /> },
 ];
 
 export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) {

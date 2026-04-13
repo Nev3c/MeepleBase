@@ -72,12 +72,17 @@ export function GameCard({ userGame, view }: GameCardProps) {
 
         {/* Rating / Status */}
         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-          {userGame.personal_rating && (
+          {userGame.personal_rating ? (
             <span className="flex items-center gap-0.5 text-xs font-semibold text-amber-600">
               <Star size={11} fill="currentColor" />
               {userGame.personal_rating}
             </span>
-          )}
+          ) : game.rating_avg ? (
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+              <Star size={10} strokeWidth={2} />
+              {game.rating_avg.toFixed(1)}
+            </span>
+          ) : null}
           <Badge variant={userGame.status as keyof typeof STATUS_LABELS}>
             {STATUS_LABELS[userGame.status]}
           </Badge>
@@ -117,10 +122,12 @@ export function GameCard({ userGame, view }: GameCardProps) {
         )}
 
         {/* Rating overlay */}
-        {userGame.personal_rating && (
+        {(userGame.personal_rating || game.rating_avg) && (
           <div className="absolute top-2 right-2 flex items-center gap-0.5 bg-slate-900/80 backdrop-blur-sm text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md">
-            <Star size={9} fill="currentColor" className="text-amber-400" />
-            {userGame.personal_rating}
+            <Star size={9} fill={userGame.personal_rating ? "currentColor" : "none"} strokeWidth={1.5} className="text-amber-400" />
+            {userGame.personal_rating
+              ? userGame.personal_rating
+              : game.rating_avg!.toFixed(1)}
           </div>
         )}
       </div>

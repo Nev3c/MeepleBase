@@ -101,6 +101,40 @@ export async function POST(request: NextRequest) {
           gameData = { ...gameData, ...details, bgg_id: csvGame.bgg_id, last_synced_at: new Date().toISOString() };
         }
 
+        // Check if this game already has a user override — if so, don't overwrite name/description
+        const { data: existingGame } = await supabase
+          .from("games")
+          .select("id")
+          .eq("bgg_id", csvGame.bgg_id)
+          .single();
+
+        const { data: hasOverride } = existingGame
+          ? await supabase
+              .from("user_games")
+              .select("id")
+              .eq("game_id", existingGame.id)
+              .eq("user_id", user.id)
+              .not("custom_fields", "is", null)
+              .single()
+          : { data: null };
+
+        if (hasOverride) {
+          // Only update non-text fields (players, time, thumbnail) — never overwrite user edits
+          const safeData: Record<string, unknown> = {
+            bgg_id: csvGame.bgg_id,
+            last_synced_at: new Date().toISOString(),
+            ...(gameData.min_players != null ? { min_players: gameData.min_players } : {}),
+            ...(gameData.max_players != null ? { max_players: gameData.max_players } : {}),
+            ...(gameData.min_playtime != null ? { min_playtime: gameData.min_playtime } : {}),
+            ...(gameData.max_playtime != null ? { max_playtime: gameData.max_playtime } : {}),
+            ...(gameData.thumbnail_url != null ? { thumbnail_url: gameData.thumbnail_url } : {}),
+            ...(gameData.image_url != null ? { image_url: gameData.image_url } : {}),
+          };
+          await supabase.from("games").upsert(safeData, { onConflict: "bgg_id" });
+          skipped++;
+          return;
+        }
+
         const { data: game, error: gameErr } = await supabase
           .from("games")
           .upsert(gameData, { onConflict: "bgg_id" })

@@ -161,4 +161,4 @@ export type LibrarySortKey =
   | "name_asc" | "name_desc"
   | "added_desc" | "added_asc"
   | "players_asc" | "players_desc"
-  | "rating";
+  | "rating" | "rating_asc";
