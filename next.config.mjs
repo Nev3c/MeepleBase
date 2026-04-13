@@ -17,6 +17,11 @@ const nextConfig = {
         protocol: "https",
         hostname: "*.geekdo-images.com",
       },
+      {
+        // Supabase Storage (eigene Bilder)
+        protocol: "https",
+        hostname: "jzgurmmpbjjqhxdbefpc.supabase.co",
+      },
     ],
   },
 };

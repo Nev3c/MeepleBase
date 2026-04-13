@@ -24,7 +24,7 @@ const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: React.ReactNode 
   { key: "added_asc",    label: "Älteste zuerst",     icon: <Calendar size={14} /> },
   { key: "players_asc",  label: "Spieler ↑ (wenige)",  icon: <ArrowUp01 size={14} /> },
   { key: "players_desc", label: "Spieler ↓ (viele)",   icon: <ArrowDown01 size={14} /> },
-  { key: "rating",       label: "Bewertung",           icon: <Star size={14} /> },
+  { key: "rating",       label: "Bewertung (BGG)",      icon: <Star size={14} /> },
 ];
 
 export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) {
@@ -114,7 +114,7 @@ export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) 
               </Button>
 
               {sortOpen && (
-                <div className="absolute right-0 top-full mt-2 w-52 bg-popover border border-border rounded-2xl shadow-lg overflow-hidden z-50">
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl overflow-hidden z-50">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-3 pt-3 pb-1.5">
                     Sortierung
                   </p>

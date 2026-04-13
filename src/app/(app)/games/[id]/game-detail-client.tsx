@@ -107,7 +107,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         ) : (
           <PlaceholderHero name={game.name} />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
         <button
           onClick={() => router.back()}
           className="absolute top-4 left-4 w-9 h-9 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-md"
@@ -117,7 +117,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         </button>
       </div>
 
-      <div className="flex flex-col gap-5 px-4 pb-12 -mt-6 relative z-10">
+      <div className="flex flex-col gap-5 px-4 pb-12 pt-4 relative z-10">
         {/* Title */}
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{game.name}</h1>
