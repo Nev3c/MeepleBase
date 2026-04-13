@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, X, ArrowLeft, Check, Download, List, Plus } from "lucide-react";
+import { Search, X, ArrowLeft, Check, Download, List, Plus, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { GameStatus } from "@/types";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface SearchResult {
   bgg_id: number;
@@ -25,12 +27,25 @@ interface LookupResult extends SearchResult {
 type Step = "search" | "confirm";
 type Tab = "search" | "import";
 
-const STATUS_OPTIONS: { value: GameStatus; label: string; emoji: string }[] = [
-  { value: "owned", label: "Im Besitz", emoji: "🎲" },
-  { value: "wishlist", label: "Wunschliste", emoji: "⭐" },
-  { value: "want_to_play", label: "Möchte spielen", emoji: "👀" },
-  { value: "for_trade", label: "Zum Tausch", emoji: "🔄" },
+const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
+  { value: "owned", label: "Im Besitz" },
+  { value: "wishlist", label: "Wunschliste" },
+  { value: "want_to_play", label: "Möchte spielen" },
+  { value: "for_trade", label: "Zum Tausch" },
 ];
+
+// ── BGG URL parser ─────────────────────────────────────────────────────────────
+
+function extractBggId(input: string): number | null {
+  // Matches: boardgamegeek.com/boardgame/174430/... or just a plain number
+  const urlMatch = input.match(/boardgamegeek\.com\/boardgame\/(\d+)/i);
+  if (urlMatch) return Number(urlMatch[1]);
+  const numMatch = input.trim().match(/^\d+$/);
+  if (numMatch) return Number(numMatch[0]);
+  return null;
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 interface AddGameSheetProps {
   open: boolean;
@@ -47,7 +62,6 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const [selected, setSelected] = useState<LookupResult | null>(null);
   const [status, setStatus] = useState<GameStatus>("owned");
   const [adding, setAdding] = useState(false);
@@ -73,42 +87,71 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     }
   }, [open, initialTab]);
 
-  // Debounced search
+  // Search: detect BGG link first, otherwise text search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.trim().length < 2) {
+
+    const trimmed = query.trim();
+
+    // BGG link or ID → immediate lookup, no debounce
+    const bggId = extractBggId(trimmed);
+    if (bggId && trimmed.length > 3) {
+      setSearching(true);
+      setSearchError(false);
+      setResults([]);
+      fetch(`/api/bgg/lookup?id=${bggId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.bgg_id) {
+            // Jump straight to confirm
+            setSelected(data);
+            setStep("confirm");
+          } else {
+            setSearchError(true);
+          }
+        })
+        .catch(() => setSearchError(true))
+        .finally(() => setSearching(false));
+      return;
+    }
+
+    if (trimmed.length < 2) {
       setResults([]);
       setSearching(false);
       return;
     }
+
     setSearching(true);
     setSearchError(false);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/bgg/search?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/api/bgg/search?q=${encodeURIComponent(trimmed)}`);
         const data = await res.json();
         setResults(data.results ?? []);
-        if (data.error) setSearchError(true);
+        if (data.error || (data.results ?? []).length === 0) setSearchError(true);
       } catch {
         setSearchError(true);
         setResults([]);
       } finally {
         setSearching(false);
       }
-    }, retryCount > 0 ? 0 : 500);
+    }, 500);
+
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, retryCount]);
+  }, [query]);
 
   const handleSelectGame = useCallback(async (game: SearchResult) => {
     setAdding(false);
     setAddError(null);
-    // Vollständige Details via lookup
+    setSearching(true);
     try {
       const res = await fetch(`/api/bgg/lookup?id=${game.bgg_id}`);
       const data = await res.json();
       setSelected(res.ok && !data.error ? data : game);
     } catch {
       setSelected(game);
+    } finally {
+      setSearching(false);
     }
     setStep("confirm");
   }, []);
@@ -134,7 +177,7 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       if (!res.ok) { setAddError("Hinzufügen fehlgeschlagen. Bitte nochmal versuchen."); setAdding(false); return; }
       setAddSuccess(true);
       router.refresh();
-      setTimeout(() => onClose(), 1000);
+      setTimeout(() => onClose(), 1200);
     } catch {
       setAddError("Netzwerkfehler. Bitte nochmal versuchen.");
       setAdding(false);
@@ -185,32 +228,28 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
           </button>
         </div>
 
-        {/* Tabs (nur im Search-Step) */}
+        {/* Tabs */}
         {step === "search" && (
           <div className="flex px-4 pt-3 pb-0 gap-1 flex-shrink-0">
             <button
               onClick={() => setTab("search")}
               className={cn(
                 "flex-1 py-2 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5",
-                tab === "search"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-muted-foreground hover:bg-muted"
+                tab === "search" ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground hover:bg-muted"
               )}
             >
               <Search size={14} />
-              Suchen
+              Spiel suchen
             </button>
             <button
               onClick={() => setTab("import")}
               className={cn(
                 "flex-1 py-2 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5",
-                tab === "import"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-muted-foreground hover:bg-muted"
+                tab === "import" ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground hover:bg-muted"
               )}
             >
               <Download size={14} />
-              BGG importieren
+              Sammlung
             </button>
           </div>
         )}
@@ -224,7 +263,6 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
             searching={searching}
             searchError={searchError}
             onSelect={handleSelectGame}
-            onRetry={() => setRetryCount((c) => c + 1)}
             inputRef={inputRef}
           />
         )}
@@ -250,66 +288,140 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
 // ── Search tab ────────────────────────────────────────────────────────────────
 
 function SearchTab({
-  query, setQuery, results, searching, searchError, onSelect, onRetry, inputRef,
+  query, setQuery, results, searching, searchError, onSelect, inputRef,
 }: {
   query: string; setQuery: (q: string) => void; results: SearchResult[];
   searching: boolean; searchError: boolean;
-  onSelect: (g: SearchResult) => void; onRetry: () => void;
+  onSelect: (g: SearchResult) => void;
   inputRef: React.RefObject<HTMLInputElement>;
 }) {
+  const trimmed = query.trim();
+  const isBggLink = !!extractBggId(trimmed) && trimmed.length > 3;
+  const showBggFallback = searchError && !isBggLink && trimmed.length >= 2;
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="px-4 py-3 flex-shrink-0">
         <div className="relative">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          {/* Icon: link vs search */}
+          {isBggLink ? (
+            <ExternalLink size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-500 pointer-events-none" />
+          ) : (
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          )}
           {searching && (
             <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           )}
+          {query && !searching && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Eingabe löschen"
+            >
+              <X size={14} />
+            </button>
+          )}
           <input
             ref={inputRef}
             type="text"
-            placeholder="Spielname eingeben…"
+            placeholder="Spielname oder BGG-Link einfügen…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full h-11 pl-10 pr-4 rounded-xl border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all"
+            className={cn(
+              "w-full h-11 pl-10 pr-8 rounded-xl border bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-transparent transition-all",
+              isBggLink ? "border-amber-400 focus:ring-amber-400" : "border-border focus:ring-amber-400"
+            )}
             autoComplete="off" autoCorrect="off"
           />
         </div>
+
+        {/* BGG link detected hint */}
+        {isBggLink && (
+          <p className="text-xs text-amber-600 font-medium mt-1.5 px-1">
+            BGG-Link erkannt – lade Spieldaten…
+          </p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8">
-        {/* Search error */}
-        {searchError && query.trim().length >= 2 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-3 mb-3">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <p className="text-sm font-semibold text-amber-800">BGG-Suche nicht verfügbar</p>
-              <button onClick={onRetry} className="text-xs text-amber-700 font-semibold underline underline-offset-2 whitespace-nowrap">
-                Nochmal
-              </button>
+
+        {/* Empty state */}
+        {!trimmed && (
+          <div className="flex flex-col gap-3 py-6">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">So geht&apos;s</p>
+
+            {/* Option 1: name search */}
+            <div className="flex items-start gap-3 px-3 py-3 rounded-xl bg-muted/40">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Search size={15} className="text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Spielname eingeben</p>
+                <p className="text-xs text-muted-foreground mt-0.5">z.B. &quot;Gloomhaven&quot; oder &quot;Catan&quot;</p>
+              </div>
             </div>
-            <p className="text-xs text-amber-700 leading-relaxed">
-              BGG antwortet gerade nicht. Bitte versuche es nochmal oder wechsle zum Tab &quot;BGG importieren&quot; um deine ganze Sammlung zu laden.
-            </p>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 px-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">oder</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Option 2: BGG link */}
+            <div className="flex items-start gap-3 px-3 py-3 rounded-xl bg-muted/40">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <ExternalLink size={15} className="text-slate-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">BGG-Link einfügen</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Spiel auf <a href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline underline-offset-1">boardgamegeek.com</a> suchen → Link kopieren → hier einfügen. Funktioniert immer.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Empty hint */}
-        {query.trim().length < 2 && !searching && (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <Search size={32} className="text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground text-sm">Mindestens 2 Zeichen eingeben</p>
+        {/* BGG fallback when search fails */}
+        {showBggFallback && (
+          <div className="mb-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5">
+              <p className="text-sm font-semibold text-amber-900 mb-1">Suche nicht verfügbar</p>
+              <p className="text-xs text-amber-800 leading-relaxed mb-3">
+                BGG-Suche ist vom Server nicht erreichbar. Suche das Spiel direkt auf BGG und füge den Link ein – das funktioniert garantiert.
+              </p>
+              <a
+                href={`https://boardgamegeek.com/search?q=${encodeURIComponent(trimmed)}&objecttype=boardgame`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <ExternalLink size={12} />
+                &quot;{trimmed}&quot; auf BGG suchen
+              </a>
+            </div>
           </div>
         )}
 
-        {/* No results */}
-        {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
+        {/* No results (search worked but empty) */}
+        {!searching && !searchError && trimmed.length >= 2 && results.length === 0 && !isBggLink && (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <List size={32} className="text-muted-foreground/30 mb-3" />
             <p className="font-medium text-sm mb-1">Kein Spiel gefunden</p>
-            <p className="text-muted-foreground text-xs">Prüf die Schreibweise oder suche auf Englisch</p>
+            <p className="text-muted-foreground text-xs mb-3">Prüf die Schreibweise oder suche auf Englisch</p>
+            <a
+              href={`https://boardgamegeek.com/search?q=${encodeURIComponent(trimmed)}&objecttype=boardgame`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 underline underline-offset-2"
+            >
+              <ExternalLink size={12} />
+              Auf BGG suchen
+            </a>
           </div>
         )}
 
@@ -344,15 +456,12 @@ function SearchTab({
   );
 }
 
-// ── Import tab ────────────────────────────────────────────────────────────────
-
-// ── CSV parser ───────────────────────────────────────────────────────────────
+// ── CSV parser ────────────────────────────────────────────────────────────────
 
 interface CsvGame { bgg_id: number; name: string; year_published: number | null; status: string }
 
 function parseBggCsv(text: string): CsvGame[] {
   const lines = text.split(/\r?\n/);
-  // Find the header line (contains "objectid")
   const headerIdx = lines.findIndex((l) => l.toLowerCase().includes("objectid"));
   if (headerIdx === -1) return [];
 
@@ -425,7 +534,6 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ── Auto-import: server fetches BGG CSV export directly ──────────────────
   async function handleAutoImport() {
     if (!bggUsername) return;
     setMode("auto-loading");
@@ -433,9 +541,7 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     try {
       const res = await fetch("/api/bgg/import", { method: "POST" });
       const data = await res.json();
-
       if (data.needsManual) {
-        // BGG blocked server-side → fall back to CSV upload
         setMode("csv");
         setError("Automatischer Import nicht möglich. Bitte lade die CSV manuell herunter.");
         return;
@@ -449,7 +555,6 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
       setSkippedCount(data.skipped ?? 0);
       setMode("success");
       router.refresh();
-      // Auto-close after 2s
       setTimeout(() => onClose(), 2000);
     } catch {
       setMode("csv");
@@ -457,7 +562,6 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     }
   }
 
-  // ── CSV upload ────────────────────────────────────────────────────────────
   async function submitCsvGames(games: CsvGame[]) {
     setMode("csv-uploading");
     try {
@@ -478,7 +582,7 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
       router.refresh();
       setTimeout(() => onClose(), 2000);
     } catch {
-      setError("Netzwerkfehler. Bitte nochmal versuchen.");
+      setError("Netzwerkfehler.");
       setMode("csv");
     }
   }
@@ -501,7 +605,6 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     reader.readAsText(file);
   }
 
-  // ── Success ──
   if (mode === "success") {
     return (
       <div className="flex flex-col items-center justify-center flex-1 px-6 py-10 text-center">
@@ -518,11 +621,7 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     );
   }
 
-  // ── Loading spinner ──
   if (mode === "auto-loading" || mode === "csv-uploading") {
-    const label = mode === "csv-uploading"
-      ? `Importiere ${parsedGames?.length ?? "..."} Spiele…`
-      : "Lade Sammlung von BGG…";
     return (
       <div className="flex flex-col items-center justify-center flex-1 px-6 py-10 text-center gap-4">
         <div className="w-16 h-16 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
@@ -532,14 +631,15 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
           </svg>
         </div>
         <div>
-          <p className="font-semibold text-foreground text-base">{label}</p>
+          <p className="font-semibold text-foreground text-base">
+            {mode === "csv-uploading" ? `Importiere ${parsedGames?.length ?? "..."} Spiele…` : "Lade Sammlung von BGG…"}
+          </p>
           <p className="text-muted-foreground text-xs mt-1">Einen Moment bitte…</p>
         </div>
       </div>
     );
   }
 
-  // ── Options screen ──
   if (mode === "options") {
     return (
       <div className="flex flex-col flex-1 px-4 py-5 gap-3">
@@ -551,7 +651,6 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
           </div>
         )}
 
-        {/* Option 1: Auto (server fetches CSV from BGG) */}
         <button
           onClick={handleAutoImport}
           disabled={!bggUsername}
@@ -582,7 +681,6 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
           <div className="flex-1 h-px bg-border" />
         </div>
 
-        {/* Option 2: CSV */}
         <button
           onClick={() => { setMode("csv"); setError(null); }}
           className="w-full flex items-start gap-3.5 p-4 rounded-2xl border border-border bg-card hover:bg-muted/50 active:scale-[0.99] text-left transition-all"
@@ -601,16 +699,14 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     );
   }
 
-  // ── CSV upload screen ──
+  // CSV upload screen
   return (
     <div className="flex flex-col flex-1 overflow-y-auto px-4 py-4 gap-4">
       <button
         onClick={() => { setMode("options"); setError(null); setParsedGames(null); }}
         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors self-start -ml-1 px-1"
       >
-        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-          <path fillRule="evenodd" d="M9.78 4.22a.75.75 0 010 1.06L7.06 8l2.72 2.72a.75.75 0 11-1.06 1.06L5.47 8.53a.75.75 0 010-1.06l3.25-3.25a.75.75 0 011.06 0z" clipRule="evenodd"/>
-        </svg>
+        <ArrowLeft size={13} />
         Zurück
       </button>
 
@@ -691,12 +787,12 @@ function ConfirmStep({ selected, status, setStatus, onAdd, adding, addError, add
             {selected.year_published && <span className="text-xs text-muted-foreground">{selected.year_published}</span>}
             {(selected.min_players || selected.max_players) && (
               <span className="text-xs text-muted-foreground">
-                👥 {selected.min_players}{selected.max_players !== selected.min_players ? `–${selected.max_players}` : ""}
+                {selected.min_players}{selected.max_players !== selected.min_players ? `–${selected.max_players}` : ""} Spieler
               </span>
             )}
             {(selected.min_playtime || selected.max_playtime) && (
               <span className="text-xs text-muted-foreground">
-                ⏱ {selected.min_playtime}{selected.max_playtime !== selected.min_playtime ? `–${selected.max_playtime}` : ""} Min.
+                {selected.min_playtime}{selected.max_playtime !== selected.min_playtime ? `–${selected.max_playtime}` : ""} Min.
               </span>
             )}
           </div>
@@ -722,7 +818,6 @@ function ConfirmStep({ selected, status, setStatus, onAdd, adding, addError, add
                   : "border-border bg-card hover:bg-muted/50"
               )}
             >
-              <span className="text-xl leading-none">{opt.emoji}</span>
               <span className="text-sm font-medium">{opt.label}</span>
               {status === opt.value && <Check size={14} className="text-amber-600 ml-auto" />}
             </button>
@@ -740,13 +835,13 @@ function ConfirmStep({ selected, status, setStatus, onAdd, adding, addError, add
           disabled={adding || addSuccess}
           className={cn(
             "w-full rounded-xl font-semibold text-base transition-all duration-200 flex items-center justify-center gap-2",
-            addSuccess ? "bg-green-500 text-white" : "bg-amber-500 hover:bg-amber-600 text-white shadow-amber disabled:opacity-60"
+            addSuccess ? "bg-green-500 text-white" : "bg-amber-500 hover:bg-amber-600 text-white shadow-sm disabled:opacity-60"
           )}
           style={{ height: "52px" }}
         >
           {addSuccess ? <><Check size={20} /> Hinzugefügt!</> :
            adding ? <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Wird hinzugefügt…</> :
-           <><span className="text-lg">+</span> Zur Bibliothek hinzufügen</>}
+           <>+ Zur Bibliothek hinzufügen</>}
         </button>
       </div>
     </div>
