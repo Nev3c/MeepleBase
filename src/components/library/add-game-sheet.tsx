@@ -125,10 +125,10 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     setSearchError(false);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/bgg/search?q=${encodeURIComponent(trimmed)}`);
+        const res = await fetch(`/api/games/search?q=${encodeURIComponent(trimmed)}`);
         const data = await res.json();
         setResults(data.results ?? []);
-        if (data.error || (data.results ?? []).length === 0) setSearchError(true);
+        if (data.results?.length === 0) setSearchError(true);
       } catch {
         setSearchError(true);
         setResults([]);
@@ -386,13 +386,13 @@ function SearchTab({
           </div>
         )}
 
-        {/* BGG fallback when search fails */}
+        {/* Fallback when search returns no results */}
         {showBggFallback && (
           <div className="mb-3">
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5">
-              <p className="text-sm font-semibold text-amber-900 mb-1">Suche nicht verfügbar</p>
+              <p className="text-sm font-semibold text-amber-900 mb-1">Kein Ergebnis</p>
               <p className="text-xs text-amber-800 leading-relaxed mb-3">
-                BGG-Suche ist vom Server nicht erreichbar. Suche das Spiel direkt auf BGG und füge den Link ein – das funktioniert garantiert.
+                Nicht gefunden. Suche das Spiel auf BGG, kopiere den Link und füge ihn hier ein.
               </p>
               <a
                 href={`https://boardgamegeek.com/search?q=${encodeURIComponent(trimmed)}&objecttype=boardgame`}
@@ -523,44 +523,16 @@ function parseBggCsv(text: string): CsvGame[] {
 
 // ── Import tab ────────────────────────────────────────────────────────────────
 
-type ImportMode = "options" | "auto-loading" | "csv" | "csv-uploading" | "success";
+type ImportMode = "csv" | "csv-uploading" | "success";
 
-function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onClose: () => void }) {
+function ImportTab({ bggUsername: _bggUsername, onClose }: { bggUsername?: string | null; onClose: () => void }) {
   const router = useRouter();
-  const [mode, setMode] = useState<ImportMode>("options");
+  const [mode, setMode] = useState<ImportMode>("csv");
   const [parsedGames, setParsedGames] = useState<CsvGame[] | null>(null);
   const [importCount, setImportCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  async function handleAutoImport() {
-    if (!bggUsername) return;
-    setMode("auto-loading");
-    setError(null);
-    try {
-      const res = await fetch("/api/bgg/import", { method: "POST" });
-      const data = await res.json();
-      if (data.needsManual) {
-        setMode("csv");
-        setError("Automatischer Import nicht möglich. Bitte lade die CSV manuell herunter.");
-        return;
-      }
-      if (!res.ok) {
-        setMode("csv");
-        setError(data.error ?? "Import fehlgeschlagen.");
-        return;
-      }
-      setImportCount(data.imported ?? 0);
-      setSkippedCount(data.skipped ?? 0);
-      setMode("success");
-      router.refresh();
-      setTimeout(() => onClose(), 2000);
-    } catch {
-      setMode("csv");
-      setError("Netzwerkfehler. Bitte lade die CSV manuell herunter.");
-    }
-  }
 
   async function submitCsvGames(games: CsvGame[]) {
     setMode("csv-uploading");
@@ -621,7 +593,7 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     );
   }
 
-  if (mode === "auto-loading" || mode === "csv-uploading") {
+  if (mode === "csv-uploading") {
     return (
       <div className="flex flex-col items-center justify-center flex-1 px-6 py-10 text-center gap-4">
         <div className="w-16 h-16 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
@@ -632,7 +604,7 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
         </div>
         <div>
           <p className="font-semibold text-foreground text-base">
-            {mode === "csv-uploading" ? `Importiere ${parsedGames?.length ?? "..."} Spiele…` : "Lade Sammlung von BGG…"}
+            Importiere {parsedGames?.length ?? "..."} Spiele…
           </p>
           <p className="text-muted-foreground text-xs mt-1">Einen Moment bitte…</p>
         </div>
@@ -640,76 +612,9 @@ function ImportTab({ bggUsername, onClose }: { bggUsername?: string | null; onCl
     );
   }
 
-  if (mode === "options") {
-    return (
-      <div className="flex flex-col flex-1 px-4 py-5 gap-3">
-        {!bggUsername && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 text-xs text-amber-800 leading-relaxed">
-            Trag deinen BGG-Benutzernamen in den{" "}
-            <a href="/settings" onClick={onClose} className="font-semibold underline underline-offset-1">Einstellungen</a>{" "}
-            ein für den Auto-Import.
-          </div>
-        )}
-
-        <button
-          onClick={handleAutoImport}
-          disabled={!bggUsername}
-          className={cn(
-            "w-full flex items-start gap-3.5 p-4 rounded-2xl border-2 text-left transition-all",
-            bggUsername
-              ? "border-amber-300 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 active:scale-[0.99]"
-              : "border-border bg-muted/30 opacity-50 cursor-not-allowed"
-          )}
-        >
-          <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white">
-              <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-foreground mb-0.5">Automatisch importieren</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Ein Klick – wir holen deine Sammlung direkt von BGG.
-              {bggUsername && <span className="text-amber-700 font-medium"> @{bggUsername}</span>}
-            </p>
-          </div>
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-muted-foreground font-medium">oder manuell</span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
-
-        <button
-          onClick={() => { setMode("csv"); setError(null); }}
-          className="w-full flex items-start gap-3.5 p-4 rounded-2xl border border-border bg-card hover:bg-muted/50 active:scale-[0.99] text-left transition-all"
-        >
-          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <Download size={18} className="text-slate-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-foreground mb-0.5">CSV-Datei hochladen</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              BGG-Sammlung als CSV exportieren und hier hochladen. Funktioniert immer.
-            </p>
-          </div>
-        </button>
-      </div>
-    );
-  }
-
   // CSV upload screen
   return (
     <div className="flex flex-col flex-1 overflow-y-auto px-4 py-4 gap-4">
-      <button
-        onClick={() => { setMode("options"); setError(null); setParsedGames(null); }}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors self-start -ml-1 px-1"
-      >
-        <ArrowLeft size={13} />
-        Zurück
-      </button>
-
       <div className="bg-slate-50 border border-border rounded-2xl p-4 flex flex-col gap-2.5">
         <p className="text-xs font-semibold text-foreground">So geht&apos;s:</p>
         {([
