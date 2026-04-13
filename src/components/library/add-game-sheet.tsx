@@ -377,9 +377,9 @@ function SearchTab({
                 <ExternalLink size={15} className="text-slate-500" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">BGG-Link einfügen</p>
+                <p className="text-sm font-semibold text-foreground">BGG-Link oder Item-ID einfügen</p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Spiel auf <a href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline underline-offset-1">boardgamegeek.com</a> suchen → Link kopieren → hier einfügen. Funktioniert immer.
+                  Spiel auf <a href="https://boardgamegeek.com" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline underline-offset-1">boardgamegeek.com</a> suchen → Link oder BGG Item ID oben in die Suche einfügen. Funktioniert immer.
                 </p>
               </div>
             </div>

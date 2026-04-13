@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Wikidata SPARQL endpoint — public, no auth, CORS-open
 const WIKIDATA_SPARQL = "https://query.wikidata.org/sparql";
 
-// Board game type in Wikidata: Q131436
 function buildQuery(q: string): string {
   const escaped = q.toLowerCase().replace(/"/g, '\\"');
   return `
@@ -14,8 +12,30 @@ SELECT DISTINCT ?itemLabel ?bggId WHERE {
   FILTER(CONTAINS(LCASE(?itemLabel), "${escaped}"))
   FILTER(LANG(?itemLabel) = "en")
 }
-LIMIT 15
+LIMIT 12
 `.trim();
+}
+
+async function fetchThumbnail(bggId: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://boardgamegeek.com/api/geekitems?objectid=${bggId}&objecttype=thing&subtype=boardgame`,
+      {
+        signal: AbortSignal.timeout(4000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/json",
+          "Referer": "https://boardgamegeek.com/",
+        },
+        next: { revalidate: 86400 },
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.item?.imageurl ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -42,12 +62,17 @@ export async function GET(req: NextRequest) {
     const bindings: Array<{ itemLabel: { value: string }; bggId: { value: string } }> =
       data.results?.bindings ?? [];
 
-    const results = bindings
-      .map((b) => ({
-        bgg_id: Number(b.bggId.value),
-        name: b.itemLabel.value,
-      }))
+    const base = bindings
+      .map((b) => ({ bgg_id: Number(b.bggId.value), name: b.itemLabel.value }))
       .filter((r) => r.bgg_id > 0);
+
+    // Fetch thumbnails in parallel
+    const thumbnails = await Promise.all(base.map((r) => fetchThumbnail(r.bgg_id)));
+
+    const results = base.map((r, i) => ({
+      ...r,
+      thumbnail_url: thumbnails[i] ?? null,
+    }));
 
     return NextResponse.json({ results });
   } catch {
