@@ -525,7 +525,7 @@ function parseBggCsv(text: string): CsvGame[] {
 
 type ImportMode = "csv" | "csv-uploading" | "success";
 
-function ImportTab({ bggUsername: _bggUsername, onClose }: { bggUsername?: string | null; onClose: () => void }) {
+function ImportTab({ onClose }: { bggUsername?: string | null; onClose: () => void }) {
   const router = useRouter();
   const [mode, setMode] = useState<ImportMode>("csv");
   const [parsedGames, setParsedGames] = useState<CsvGame[] | null>(null);
