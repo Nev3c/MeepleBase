@@ -1,27 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// MyMemory free translation API – no key required, 5000 chars/day anonymous,
+// 30 000 chars/day with free account (set MYMEMORY_EMAIL env var)
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.DEEPL_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "DEEPL_API_KEY nicht konfiguriert" }, { status: 503 });
-
-  const { text, target_lang = "DE" } = await req.json();
+  const { text } = await req.json();
   if (!text) return NextResponse.json({ error: "text ist erforderlich" }, { status: 400 });
 
-  const res = await fetch("https://api-free.deepl.com/v2/translate", {
-    method: "POST",
-    headers: {
-      "Authorization": `DeepL-Auth-Key ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ text: [text], target_lang, source_lang: "EN" }),
-  });
+  const email = process.env.MYMEMORY_EMAIL ?? "";
+  const truncated = (text as string).slice(0, 500); // MyMemory limit per request
+  const url = new URL("https://api.mymemory.translated.net/get");
+  url.searchParams.set("q", truncated);
+  url.searchParams.set("langpair", "en|de");
+  if (email) url.searchParams.set("de", email);
 
-  if (!res.ok) {
-    const err = await res.text();
-    return NextResponse.json({ error: err }, { status: res.status });
-  }
+  const res = await fetch(url.toString());
+  if (!res.ok) return NextResponse.json({ error: "Übersetzung fehlgeschlagen" }, { status: 502 });
 
-  const data = await res.json();
-  const translated = (data.translations as Array<{ text: string }> | undefined)?.[0]?.text ?? "";
+  const data = await res.json() as { responseData?: { translatedText?: string }; responseStatus?: number };
+  const translated = data.responseData?.translatedText ?? "";
   return NextResponse.json({ translated });
 }

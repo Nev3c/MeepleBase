@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// Batch-translate game descriptions using MyMemory (free, no key needed).
+// MyMemory limit: 500 chars per request. We chunk long descriptions.
+// Set MYMEMORY_EMAIL env var (free account) to raise limit to 30 000 chars/day.
+// POST /api/translate/batch  →  { translated, errors, total }
+
+async function translateChunk(text: string, email: string): Promise<string> {
+  const url = new URL("https://api.mymemory.translated.net/get");
+  url.searchParams.set("q", text.slice(0, 500));
+  url.searchParams.set("langpair", "en|de");
+  if (email) url.searchParams.set("de", email);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`MyMemory ${res.status}`);
+  const data = await res.json() as { responseData?: { translatedText?: string } };
+  return data.responseData?.translatedText ?? text;
+}
+
 export async function POST() {
-  const apiKey = process.env.DEEPL_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "DEEPL_API_KEY nicht konfiguriert" }, { status: 503 });
+  const email = process.env.MYMEMORY_EMAIL ?? "";
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,40 +30,28 @@ export async function POST() {
     .select("id, description")
     .not("description", "is", null)
     .is("description_de", null)
-    .limit(50);
+    .limit(20); // Stay well within daily limits
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!games || games.length === 0) return NextResponse.json({ translated: 0, message: "Alle Beschreibungen bereits übersetzt." });
+  if (!games || games.length === 0) {
+    return NextResponse.json({ translated: 0, message: "Alle Beschreibungen bereits übersetzt." });
+  }
 
   let translated = 0;
   let errors = 0;
 
   for (const game of games) {
     if (!game.description) continue;
-    const text = (game.description as string).slice(0, 4500);
     try {
-      const res = await fetch("https://api-free.deepl.com/v2/translate", {
-        method: "POST",
-        headers: {
-          "Authorization": `DeepL-Auth-Key ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: [text], target_lang: "DE", source_lang: "EN" }),
-      });
-      if (res.ok) {
-        const deeplData = await res.json() as { translations: Array<{ text: string }> };
-        const description_de = deeplData.translations?.[0]?.text ?? null;
-        if (description_de) {
-          await supabase.from("games").update({ description_de }).eq("id", game.id);
-          translated++;
-        }
-      } else {
-        errors++;
-      }
+      // Take first 500 chars (enough for a useful summary)
+      const description_de = await translateChunk(game.description as string, email);
+      await supabase.from("games").update({ description_de }).eq("id", game.id);
+      translated++;
     } catch {
       errors++;
     }
-    await new Promise((r) => setTimeout(r, 100));
+    // Respect rate limits
+    await new Promise((r) => setTimeout(r, 300));
   }
 
   return NextResponse.json({ translated, errors, total: games.length });

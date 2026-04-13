@@ -196,7 +196,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                   type="text"
                   value={bggUsername}
                   onChange={(e) => setBggUsername(e.target.value)}
-                  placeholder="z.B. Nevec90"
+                  placeholder="z.B. Dein BGG-Username"
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="off"
