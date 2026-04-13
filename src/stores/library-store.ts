@@ -19,7 +19,7 @@ export const useLibraryStore = create<LibraryState>()(
     (set) => ({
       view: "grid",
       filter: defaultFilter,
-      sortKey: "name",
+      sortKey: "name_asc",
       setView: (view) => set({ view }),
       setFilter: (filter) => set({ filter }),
       setSortKey: (sortKey) => set({ sortKey }),

@@ -157,4 +157,8 @@ export type LibraryFilter = {
   search?: string;
 };
 
-export type LibrarySortKey = "name" | "recently_played" | "rating" | "added";
+export type LibrarySortKey =
+  | "name_asc" | "name_desc"
+  | "added_desc" | "added_asc"
+  | "players_asc" | "players_desc"
+  | "rating";

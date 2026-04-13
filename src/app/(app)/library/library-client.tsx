@@ -36,10 +36,26 @@ export function LibraryClient({ initialGames, user, profile }: LibraryClientProp
 
     games.sort((a, b) => {
       switch (sortKey) {
-        case "name":
+        case "name_asc":
           return (a.game?.name ?? "").localeCompare(b.game?.name ?? "", "de");
-        case "added":
+        case "name_desc":
+          return (b.game?.name ?? "").localeCompare(a.game?.name ?? "", "de");
+        case "added_desc":
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case "added_asc":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case "players_asc": {
+          const aMin = a.game?.min_players ?? 999;
+          const bMin = b.game?.min_players ?? 999;
+          if (aMin !== bMin) return aMin - bMin;
+          return (a.game?.max_players ?? 999) - (b.game?.max_players ?? 999);
+        }
+        case "players_desc": {
+          const aMin = a.game?.min_players ?? -1;
+          const bMin = b.game?.min_players ?? -1;
+          if (aMin !== bMin) return bMin - aMin;
+          return (b.game?.max_players ?? -1) - (a.game?.max_players ?? -1);
+        }
         case "rating":
           return (b.personal_rating ?? 0) - (a.personal_rating ?? 0);
         default:
