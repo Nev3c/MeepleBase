@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, Users, Clock, Star, Plus, Check, ChevronRight, Dices, BookOpen, UserSearch } from "lucide-react";
+import { Search, Users, Clock, Star, Check, ChevronRight, Dices, BookOpen, UserSearch } from "lucide-react";
 import { cn, formatPlayerCount, formatPlaytime } from "@/lib/utils";
 import type { GameStatus } from "@/types";
 
@@ -35,14 +35,6 @@ interface SearchResult {
 
 type DiscoverTab = "spiele" | "spieler";
 type SpielTab = "suche" | "ungemspielt" | "heute";
-
-const STATUS_LABELS: Record<GameStatus, string> = {
-  owned: "Besitz",
-  wishlist: "Wunschliste",
-  previously_owned: "Ehemalig",
-  for_trade: "Zum Tausch",
-  want_to_play: "Möchte spielen",
-};
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -274,7 +266,7 @@ function GameSearchTab({ libraryGameIds }: { libraryGameIds: Set<string> }) {
       )}
 
       {!loading && query.trim().length >= 2 && results.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground py-12">Keine Ergebnisse für „{query}"</p>
+        <p className="text-center text-sm text-muted-foreground py-12">{`Keine Ergebnisse für "${query}"`}</p>
       )}
     </div>
   );
