@@ -1,14 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useDeferredValue, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import dynamic from "next/dynamic";
 import { LibraryHeader } from "@/components/library/library-header";
 import { LibraryEmptyState } from "@/components/library/library-empty-state";
 import { GameCard } from "@/components/library/game-card";
-import { AddGameSheet } from "@/components/library/add-game-sheet";
 import { useLibraryStore } from "@/stores/library-store";
 import type { UserGame, Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
+
+// Lazy-load the heavy AddGameSheet (CSV parser + search + upload logic)
+const AddGameSheet = dynamic(
+  () => import("@/components/library/add-game-sheet").then((m) => ({ default: m.AddGameSheet })),
+  { ssr: false }
+);
 
 interface LibraryClientProps {
   initialGames: UserGame[];
@@ -22,7 +29,9 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetInitialTab, setSheetInitialTab] = useState<"search" | "import">("search");
 
-  // Client-side filter + sort (will move to React Query + server when Supabase is wired)
+  // Defer search input so typing stays instant while filter catches up
+  const deferredSearch = useDeferredValue(filter.search);
+
   const filteredGames = useMemo(() => {
     let games = [...initialGames];
 
@@ -30,8 +39,8 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       games = games.filter((g) => g.status === filter.status);
     }
 
-    if (filter.search) {
-      const q = filter.search.toLowerCase();
+    if (deferredSearch) {
+      const q = deferredSearch.toLowerCase();
       games = games.filter((g) => g.game?.name.toLowerCase().includes(q));
     }
 
@@ -71,10 +80,13 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
     });
 
     return games;
-  }, [initialGames, filter, sortKey, playCounts]);
+  }, [initialGames, filter.status, deferredSearch, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
   const isFiltered = !!(filter.search || filter.status);
+
+  const openAdd = useCallback(() => { setSheetInitialTab("search"); setSheetOpen(true); }, []);
+  const openImport = useCallback(() => { setSheetInitialTab("import"); setSheetOpen(true); }, []);
 
   return (
     <>
@@ -82,60 +94,40 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
         <LibraryHeader
           user={user}
           profile={profile}
-          onAddGame={() => { setSheetInitialTab("search"); setSheetOpen(true); }}
+          onAddGame={openAdd}
         />
 
-        {/* Content */}
         {isEmpty ? (
           isFiltered ? (
-            // Filtered empty state
             <div className="flex flex-col items-center justify-center flex-1 px-6 py-16 text-center">
               <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-8 h-8 text-muted-foreground" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 15.803M10.5 7.5v6m3-3h-6" />
                 </svg>
               </div>
-              <h3 className="font-display text-lg font-semibold text-foreground mb-2">
-                Kein Spiel gefunden
-              </h3>
+              <h3 className="font-display text-lg font-semibold text-foreground mb-2">Kein Spiel gefunden</h3>
               <p className="text-muted-foreground text-sm max-w-xs">
                 Versuch einen anderen Suchbegriff oder entferne den Filter.
               </p>
             </div>
           ) : (
-            <LibraryEmptyState
-              onAddGame={() => { setSheetInitialTab("search"); setSheetOpen(true); }}
-            />
+            <LibraryEmptyState onAddGame={openAdd} />
           )
         ) : (
           <div className="px-4 py-4 max-w-2xl mx-auto w-full">
-            {/* Game count */}
             <p className="text-xs text-muted-foreground mb-3 font-medium">
               {filteredGames.length} {filteredGames.length === 1 ? "Spiel" : "Spiele"}
             </p>
 
-            {/* Grid or List */}
-            <div
-              className={cn(
-                view === "grid"
-                  ? "grid grid-cols-2 sm:grid-cols-3 gap-3"
-                  : "flex flex-col gap-2"
-              )}
-            >
-              {filteredGames.map((userGame) => (
-                <GameCard
-                  key={userGame.id}
-                  userGame={userGame}
-                  view={view}
-                  playCount={playCounts?.[userGame.game_id] ?? 0}
-                />
-              ))}
-            </div>
+            {view === "grid" ? (
+              <GridView games={filteredGames} playCounts={playCounts} />
+            ) : (
+              <ListView games={filteredGames} playCounts={playCounts} />
+            )}
           </div>
         )}
       </div>
 
-      {/* Add Game Sheet */}
       <AddGameSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
@@ -143,5 +135,108 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
         initialTab={sheetInitialTab}
       />
     </>
+  );
+}
+
+// ── Virtualized List View ──────────────────────────────────────────────────────
+
+function ListView({ games, playCounts }: { games: UserGame[]; playCounts?: Record<string, number> }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: games.length,
+    getScrollElement: () => document.documentElement, // use window scroll
+    estimateSize: () => 84, // estimated row height in px (list card + gap)
+    overscan: 8,
+  });
+
+  const items = virtualizer.getVirtualItems();
+
+  return (
+    <div
+      ref={parentRef}
+      style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+      className="flex flex-col"
+    >
+      {items.map((vItem) => (
+        <div
+          key={vItem.key}
+          data-index={vItem.index}
+          ref={virtualizer.measureElement}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            transform: `translateY(${vItem.start}px)`,
+            paddingBottom: 8,
+          }}
+        >
+          <GameCard
+            userGame={games[vItem.index]}
+            view="list"
+            playCount={playCounts?.[games[vItem.index].game_id] ?? 0}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Virtualized Grid View ──────────────────────────────────────────────────────
+
+function GridView({ games, playCounts }: { games: UserGame[]; playCounts?: Record<string, number> }) {
+  // For grid: group into rows of 2, virtualize rows
+  const COLS = 2;
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rows = useMemo(() => {
+    const result: UserGame[][] = [];
+    for (let i = 0; i < games.length; i += COLS) {
+      result.push(games.slice(i, i + COLS));
+    }
+    return result;
+  }, [games]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => document.documentElement,
+    estimateSize: () => 220, // estimated grid row height
+    overscan: 4,
+  });
+
+  const items = virtualizer.getVirtualItems();
+
+  return (
+    <div
+      ref={parentRef}
+      style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+    >
+      {items.map((vItem) => (
+        <div
+          key={vItem.key}
+          data-index={vItem.index}
+          ref={virtualizer.measureElement}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            transform: `translateY(${vItem.start}px)`,
+            paddingBottom: 12,
+          }}
+          className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+        >
+          {rows[vItem.index].map((userGame) => (
+            <GameCard
+              key={userGame.id}
+              userGame={userGame}
+              view="grid"
+              playCount={playCounts?.[userGame.game_id] ?? 0}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }

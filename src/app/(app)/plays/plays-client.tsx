@@ -297,7 +297,7 @@ function PlayCard({
       {play.image_url && (
         <Link href={`/plays/${play.id}`} className="block">
           <div className="relative w-full h-32 overflow-hidden">
-            <img src={play.image_url} alt="" className="w-full h-full object-cover" />
+            <Image src={play.image_url} alt="" fill className="object-cover" sizes="(max-width: 672px) 100vw, 640px" loading="lazy" />
           </div>
         </Link>
       )}
