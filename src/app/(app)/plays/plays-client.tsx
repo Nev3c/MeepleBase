@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown, Edit2, SlidersHorizontal, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -212,7 +213,7 @@ function PlayCard({
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
-      <div className="flex items-start gap-3 p-3">
+      <Link href={`/plays/${play.id}`} className="flex items-start gap-3 p-3 hover:bg-muted/30 transition-colors active:bg-muted/50">
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
           {play.game?.thumbnail_url ? (
             <Image src={play.game.thumbnail_url} alt={play.game?.name ?? ""} fill className="object-cover" sizes="56px" />
@@ -274,20 +275,31 @@ function PlayCard({
           )}
         </div>
 
+        {/* Action buttons — stop propagation so they don't trigger navigation */}
         <div className="flex flex-col gap-1.5 flex-shrink-0 mt-0.5">
-          <button onClick={onEdit} className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Bearbeiten">
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(); }}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Bearbeiten"
+          >
             <Edit2 size={14} />
           </button>
-          <button onClick={onDelete} className="text-muted-foreground hover:text-red-400 transition-colors" aria-label="Löschen">
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
+            className="text-muted-foreground hover:text-red-400 transition-colors"
+            aria-label="Löschen"
+          >
             <Trash2 size={14} />
           </button>
         </div>
-      </div>
+      </Link>
 
       {play.image_url && (
-        <div className="relative w-full h-32 overflow-hidden">
-          <img src={play.image_url} alt="" className="w-full h-full object-cover" />
-        </div>
+        <Link href={`/plays/${play.id}`} className="block">
+          <div className="relative w-full h-32 overflow-hidden">
+            <img src={play.image_url} alt="" className="w-full h-full object-cover" />
+          </div>
+        </Link>
       )}
 
       {showDeleteConfirm && (
@@ -392,11 +404,15 @@ function PlaySheet({
     if (imageFile) {
       const form = new FormData();
       form.append("file", imageFile, `${Date.now()}.jpg`);
-      form.append("play_id", isEdit ? editPlay!.id : "pending");
       const uploadRes = await fetch("/api/play-images", { method: "POST", body: form });
       if (uploadRes.ok) {
         const uploadData = await uploadRes.json() as { url: string };
         image_url = uploadData.url;
+      } else {
+        const errData = await uploadRes.json().catch(() => ({})) as { error?: string };
+        setError(`Foto-Upload fehlgeschlagen: ${errData.error ?? "Supabase-Bucket 'play-images' fehlt – bitte in Supabase Dashboard anlegen"}`);
+        setSaving(false);
+        return;
       }
     }
 
@@ -528,17 +544,20 @@ function PlaySheet({
               onClick={() => {
                 setCooperative((c) => {
                   const next = !c;
-                  // clear winner flags when switching to cooperative mode
                   if (next) setPlayers((prev) => prev.map((p) => ({ ...p, winner: false })));
                   return next;
                 });
               }}
-              className={cn("rounded-full transition-colors relative flex-shrink-0", cooperative ? "bg-amber-500" : "bg-border")}
-              style={{ width: "40px", height: "22px" }}
+              className={cn("rounded-full transition-colors relative flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400", cooperative ? "bg-amber-500" : "bg-border")}
+              style={{ width: 44, height: 26 }}
               aria-checked={cooperative}
               role="switch"
             >
-              <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform pointer-events-none", cooperative ? "translate-x-5" : "translate-x-0.5")} />
+              {/* Use style.left instead of translate — more reliable inside <button> across browsers */}
+              <span
+                className="absolute rounded-full bg-white shadow pointer-events-none"
+                style={{ width: 20, height: 20, top: 3, left: cooperative ? 21 : 3, transition: "left 0.15s ease" }}
+              />
             </button>
           </div>
 
