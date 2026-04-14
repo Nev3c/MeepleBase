@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .single();
 
   if (!data) return { title: "Partie" };
-  const game = data.game as { name: string } | null;
+  const game = data.game as unknown as { name: string } | null;
   const date = new Date(data.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
   return { title: game?.name ? `${game.name} · ${date}` : `Partie · ${date}` };
 }
