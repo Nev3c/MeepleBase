@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
   const body = await req.json();
-  const { game_id, played_at, duration_minutes, location, notes, cooperative, players } = body;
+  const { game_id, played_at, duration_minutes, location, notes, cooperative, players, image_url } = body;
 
   const updateData: Record<string, unknown> = {};
   if (game_id !== undefined) updateData.game_id = game_id;
@@ -40,6 +40,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (location !== undefined) updateData.location = location;
   if (notes !== undefined) updateData.notes = notes;
   if (cooperative !== undefined) updateData.cooperative = cooperative;
+  if (image_url !== undefined) updateData.image_url = image_url;
 
   if (Object.keys(updateData).length > 0) {
     const { error } = await supabase.from("plays").update(updateData).eq("id", params.id).eq("user_id", user.id);

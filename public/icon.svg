@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="geometricPrecision">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="60%" stop-color="#E8821A"/>
+      <stop offset="100%" stop-color="#B45309"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="110" ry="110" fill="url(#grad)"/>
+  <!-- Meeple figure: white -->
+  <!-- Head -->
+  <circle cx="256" cy="138" r="76" fill="white"/>
+  <!-- Left arm -->
+  <circle cx="94" cy="262" r="62" fill="white"/>
+  <!-- Right arm -->
+  <circle cx="418" cy="262" r="62" fill="white"/>
+  <!-- Body + legs as one unified shape -->
+  <!-- Shoulders down to hips, then two legs -->
+  <path d="
+    M 152 228
+    Q 256 298 360 228
+    L 356 330
+    L 302 330
+    L 296 440
+    L 216 440
+    L 210 330
+    L 156 330
+    Z
+  " fill="white"/>
+</svg>

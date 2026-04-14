@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown, Edit2 } from "lucide-react";
+import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown, Edit2, SlidersHorizontal, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LibraryGame {
@@ -29,6 +29,7 @@ interface Play {
   location: string | null;
   notes: string | null;
   cooperative: boolean;
+  image_url?: string | null;
   game?: LibraryGame | null;
   players?: PlayPlayer[];
 }
@@ -38,6 +39,8 @@ interface DraftPlayer {
   score: string;
   winner: boolean;
 }
+
+type PlaySortKey = "date_desc" | "date_asc" | "game_asc";
 
 export function PlaysClient({
   initialPlays,
@@ -51,6 +54,28 @@ export function PlaysClient({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editPlay, setEditPlay] = useState<Play | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<PlaySortKey>("date_desc");
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false);
+      }
+    }
+    if (sortOpen) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [sortOpen]);
+
+  const sortedPlays = [...plays].sort((a, b) => {
+    switch (sortKey) {
+      case "date_desc": return new Date(b.played_at).getTime() - new Date(a.played_at).getTime();
+      case "date_asc": return new Date(a.played_at).getTime() - new Date(b.played_at).getTime();
+      case "game_asc": return (a.game?.name ?? "").localeCompare(b.game?.name ?? "", "de");
+      default: return 0;
+    }
+  });
 
   async function handleDelete(id: string) {
     await fetch(`/api/plays/${id}`, { method: "DELETE" });
@@ -86,13 +111,46 @@ export function PlaysClient({
                 </p>
               )}
             </div>
-            <button
-              onClick={() => setSheetOpen(true)}
-              className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-colors"
-              aria-label="Partie erfassen"
-            >
-              <Plus size={18} strokeWidth={2.5} />
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative" ref={sortRef}>
+                <button
+                  type="button"
+                  onClick={() => setSortOpen((o) => !o)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <SlidersHorizontal size={14} />
+                </button>
+                {sortOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-44 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl overflow-hidden z-50">
+                    {[
+                      { key: "date_desc" as PlaySortKey, label: "Neueste zuerst" },
+                      { key: "date_asc" as PlaySortKey, label: "Älteste zuerst" },
+                      { key: "game_asc" as PlaySortKey, label: "Spiel A → Z" },
+                    ].map((opt) => (
+                      <button
+                        type="button"
+                        key={opt.key}
+                        onClick={() => { setSortKey(opt.key); setSortOpen(false); }}
+                        className={cn(
+                          "w-full px-3 py-2.5 text-sm text-left transition-colors",
+                          sortKey === opt.key ? "bg-amber-50 text-amber-700 font-medium" : "hover:bg-muted text-foreground"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(true)}
+                className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-colors"
+                aria-label="Partie erfassen"
+              >
+                <Plus size={18} strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -101,7 +159,7 @@ export function PlaysClient({
             <EmptyState onAdd={() => setSheetOpen(true)} />
           ) : (
             <div className="flex flex-col gap-2">
-              {plays.map((play) => (
+              {sortedPlays.map((play) => (
                 <PlayCard
                   key={play.id}
                   play={play}
@@ -226,6 +284,12 @@ function PlayCard({
         </div>
       </div>
 
+      {play.image_url && (
+        <div className="relative w-full h-32 overflow-hidden">
+          <img src={play.image_url} alt="" className="w-full h-full object-cover" />
+        </div>
+      )}
+
       {showDeleteConfirm && (
         <div className="border-t border-border px-3 py-2.5 bg-red-50 flex items-center justify-between gap-3">
           <p className="text-xs text-red-700 font-medium">Partie wirklich löschen?</p>
@@ -266,6 +330,10 @@ function PlaySheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(editPlay?.image_url ?? null);
+
   const selectedGame = libraryGames.find((g) => g.id === gameId);
   const filteredGames = gameSearch
     ? libraryGames.filter((g) => g.name.toLowerCase().includes(gameSearch.toLowerCase()))
@@ -288,6 +356,13 @@ function PlaySheet({
       ...p,
       winner: idx === i ? !p.winner : false,
     })));
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
   }
 
   async function handleSave() {
@@ -313,16 +388,30 @@ function PlaySheet({
       players: validPlayers,
     };
 
+    let image_url: string | null = editPlay?.image_url ?? null;
+    if (imageFile) {
+      const form = new FormData();
+      form.append("file", imageFile, `${Date.now()}.jpg`);
+      form.append("play_id", isEdit ? editPlay!.id : "pending");
+      const uploadRes = await fetch("/api/play-images", { method: "POST", body: form });
+      if (uploadRes.ok) {
+        const uploadData = await uploadRes.json() as { url: string };
+        image_url = uploadData.url;
+      }
+    }
+
+    const finalPayload = { ...payload, image_url };
+
     const res = isEdit
       ? await fetch(`/api/plays/${editPlay!.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(finalPayload),
         })
       : await fetch("/api/plays", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(finalPayload),
         });
 
     const data = await res.json();
@@ -435,13 +524,21 @@ function PlaySheet({
           <div className="flex items-center justify-between px-3 py-2.5 bg-muted/40 rounded-xl">
             <span className="text-sm font-medium">Kooperativ gespielt</span>
             <button
-              onClick={() => setCooperative((c) => !c)}
+              type="button"
+              onClick={() => {
+                setCooperative((c) => {
+                  const next = !c;
+                  // clear winner flags when switching to cooperative mode
+                  if (next) setPlayers((prev) => prev.map((p) => ({ ...p, winner: false })));
+                  return next;
+                });
+              }}
               className={cn("rounded-full transition-colors relative flex-shrink-0", cooperative ? "bg-amber-500" : "bg-border")}
               style={{ width: "40px", height: "22px" }}
               aria-checked={cooperative}
               role="switch"
             >
-              <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform", cooperative ? "translate-x-5" : "translate-x-0.5")} />
+              <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform pointer-events-none", cooperative ? "translate-x-5" : "translate-x-0.5")} />
             </button>
           </div>
 
@@ -490,6 +587,36 @@ function PlaySheet({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Photo */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              Foto (optional)
+            </label>
+            {imagePreview ? (
+              <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-muted">
+                <img src={imagePreview} alt="Vorschau" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setImageFile(null); setImagePreview(null); }}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <>
+                <input ref={photoRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                <button
+                  type="button"
+                  onClick={() => photoRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-border hover:border-amber-400 hover:bg-amber-50 transition-all text-sm text-muted-foreground hover:text-amber-700 self-start"
+                >
+                  <Camera size={14} /> Foto hinzufügen
+                </button>
+              </>
+            )}
           </div>
 
           <div>

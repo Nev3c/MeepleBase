@@ -91,6 +91,7 @@ export interface Play {
   notes: string | null;
   incomplete: boolean;
   cooperative: boolean;
+  image_url: string | null;
   bgg_play_id: number | null;
   created_at: string;
   updated_at: string;
