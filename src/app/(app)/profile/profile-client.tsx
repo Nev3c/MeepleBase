@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
-import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 interface ProfileClientProps {
   user: User;
@@ -22,6 +23,12 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [qrModal, setQrModal] = useState<"app" | "friend" | null>(null);
+  const [appUrl, setAppUrl] = useState("https://meeplebase.app");
+
+  useEffect(() => {
+    setAppUrl(window.location.origin);
+  }, []);
 
   const displayName = profile?.display_name ?? profile?.username ?? user.email?.split("@")[0] ?? "Spieler";
   const username = profile?.username ?? "–";
@@ -63,10 +70,21 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
 
   const favoriteSub = favoriteGame ? `${favoriteGame.count}×` : undefined;
 
+  const friendUrl = `${appUrl}/profile/${profile?.username ?? user.id}`;
+
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
+      {/* App-Name Header */}
+      <div className="flex items-center justify-center gap-2 pt-6 pb-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon.svg" alt="" className="w-6 h-6" aria-hidden="true" />
+        <span className="font-display text-base font-semibold text-foreground/60 tracking-tight">
+          Meeple<span className="text-amber-500">Base</span>
+        </span>
+      </div>
+
       {/* Header mit Avatar */}
-      <div className="relative px-4 pt-10 pb-6 text-center">
+      <div className="relative px-4 pt-4 pb-6 text-center">
         {/* Hintergrund-Gradient */}
         <div
           className="absolute inset-0 pointer-events-none"
@@ -118,6 +136,39 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
           <StatCard icon={<Library size={18} className="text-amber-500" />} value={gameCount.toString()} label="Spiele" />
           <StatCard icon={<Dices size={18} className="text-amber-500" />} value={playCount.toString()} label="Partien" />
           <StatCard icon={<Star size={18} className="text-amber-500" />} value={favoriteLabel} label="Lieblingsspiel" sub={favoriteSub} />
+        </div>
+      </div>
+
+      {/* QR Codes */}
+      <div className="px-4 mb-3">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setQrModal("app")}
+            className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 shadow-card hover:shadow-card-hover active:scale-[0.98] transition-all"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+              <Share2 size={18} className="text-amber-600" />
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-semibold text-foreground">App teilen</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">MeepleBase einladen</p>
+            </div>
+            <QrCode size={12} className="text-muted-foreground" />
+          </button>
+
+          <button
+            onClick={() => setQrModal("friend")}
+            className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 shadow-card hover:shadow-card-hover active:scale-[0.98] transition-all"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+              <UserPlus size={18} className="text-amber-600" />
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-semibold text-foreground">Kontakt-QR</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">@{username}</p>
+            </div>
+            <QrCode size={12} className="text-muted-foreground" />
+          </button>
         </div>
       </div>
 
@@ -202,6 +253,52 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
           MeepleBase · Phase 1 MVP
         </p>
       </div>
+
+      {/* QR Modal */}
+      {qrModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-6"
+          onClick={() => setQrModal(null)}
+        >
+          <div
+            className="bg-card rounded-3xl p-6 w-full max-w-xs shadow-xl flex flex-col items-center gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div>
+                <p className="font-display text-lg font-semibold text-foreground">
+                  {qrModal === "app" ? "App teilen" : "Kontakt-QR"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {qrModal === "app"
+                    ? "Lass Freunde MeepleBase scannen"
+                    : `Profil von @${username}`}
+                </p>
+              </div>
+              <button
+                onClick={() => setQrModal(null)}
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 shadow-inner">
+              <QRCodeSVG
+                value={qrModal === "app" ? appUrl : friendUrl}
+                size={200}
+                fgColor="#1E2A3A"
+                bgColor="#FFFFFF"
+                level="M"
+              />
+            </div>
+
+            <p className="text-[10px] text-muted-foreground text-center break-all px-2">
+              {qrModal === "app" ? appUrl : friendUrl}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

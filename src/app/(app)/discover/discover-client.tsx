@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Search, Users, Clock, Star, Check, ChevronRight, Dices, BookOpen, UserSearch } from "lucide-react";
+import { Users, Clock, Star, ChevronRight, Dices, BookOpen, UserSearch } from "lucide-react";
 import { cn, formatPlayerCount, formatPlaytime } from "@/lib/utils";
 import type { GameStatus } from "@/types";
 
@@ -26,15 +26,8 @@ interface LibraryGame {
   } | null;
 }
 
-interface SearchResult {
-  bgg_id: number;
-  name: string;
-  year_published: number | null;
-  thumbnail_url?: string | null;
-}
-
 type DiscoverTab = "spiele" | "spieler";
-type SpielTab = "suche" | "ungemspielt" | "heute";
+type SpielTab = "ungespielt" | "heute";
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -46,7 +39,7 @@ export function DiscoverClient({
   playCountMap: Record<string, number>;
 }) {
   const [tab, setTab] = useState<DiscoverTab>("spiele");
-  const [spielTab, setSpielTab] = useState<SpielTab>("suche");
+  const [spielTab, setSpielTab] = useState<SpielTab>("ungespielt");
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)]">
@@ -110,15 +103,12 @@ function SpielTab({
   userGames: LibraryGame[];
   playCountMap: Record<string, number>;
 }) {
-  const libraryGameIds = new Set(userGames.map((ug) => ug.game_id));
-
   return (
     <div className="flex flex-col">
       {/* Sub-tabs */}
       <div className="flex gap-1 px-4 pt-3 pb-2">
         {([
-          { key: "suche" as SpielTab, label: "Suche" },
-          { key: "ungemspielt" as SpielTab, label: "Ungemspielt" },
+          { key: "ungespielt" as SpielTab, label: "Ungespielt" },
           { key: "heute" as SpielTab, label: "Was heute spielen?" },
         ] as const).map(({ key, label }) => (
           <button
@@ -137,142 +127,13 @@ function SpielTab({
         ))}
       </div>
 
-      {activeTab === "suche" && <GameSearchTab libraryGameIds={libraryGameIds} />}
-      {activeTab === "ungemspielt" && <UngespieltTab userGames={userGames} playCountMap={playCountMap} />}
+      {activeTab === "ungespielt" && <UngespieltTab userGames={userGames} playCountMap={playCountMap} />}
       {activeTab === "heute" && <HeuteTab userGames={userGames} playCountMap={playCountMap} />}
     </div>
   );
 }
 
-// ── Spielesuche ────────────────────────────────────────────────────────────────
-
-function GameSearchTab({ libraryGameIds }: { libraryGameIds: Set<string> }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
-  const [addingId, setAddingId] = useState<number | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const search = useCallback(async (q: string) => {
-    if (q.trim().length < 2) { setResults([]); return; }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json() as { results: SearchResult[] };
-      setResults(data.results ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(query), 400);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, search]);
-
-  async function handleAdd(result: SearchResult, status: GameStatus = "owned") {
-    setAddingId(result.bgg_id);
-    try {
-      const res = await fetch("/api/games/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bgg_id: result.bgg_id, name: result.name, status }),
-      });
-      if (res.ok) {
-        setAddedIds((prev) => new Set(prev).add(result.bgg_id));
-      }
-    } finally {
-      setAddingId(null);
-    }
-  }
-
-  return (
-    <div className="px-4 pb-8">
-      {/* Search input */}
-      <div className="relative mb-4">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Spiel suchen…"
-          className="w-full pl-9 pr-4 py-2.5 rounded-2xl border border-border bg-muted/40 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
-          autoFocus
-        />
-        {loading && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            <svg className="animate-spin h-4 w-4 text-amber-500" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-            </svg>
-          </div>
-        )}
-      </div>
-
-      {query.trim().length < 2 && (
-        <p className="text-center text-sm text-muted-foreground py-12">Mindestens 2 Zeichen eingeben…</p>
-      )}
-
-      {results.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {results.map((r) => {
-            const inLib = libraryGameIds.has(String(r.bgg_id));
-            const added = addedIds.has(r.bgg_id);
-            const busy = addingId === r.bgg_id;
-            return (
-              <div key={r.bgg_id} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
-                <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                  {r.thumbnail_url ? (
-                    <Image src={r.thumbnail_url} alt={r.name} width={48} height={48} className="object-cover w-full h-full" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-amber-100">
-                      <span className="text-amber-600 font-bold text-lg">{r.name[0]}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{r.name}</p>
-                  {r.year_published && (
-                    <p className="text-xs text-muted-foreground">{r.year_published}</p>
-                  )}
-                </div>
-                {inLib || added ? (
-                  <span className="flex items-center gap-1 text-xs text-green-600 font-medium bg-green-50 px-2.5 py-1 rounded-full">
-                    <Check size={11} /> In Bibliothek
-                  </span>
-                ) : (
-                  <div className="flex gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => handleAdd(r, "owned")}
-                      disabled={busy}
-                      className="text-xs px-3 py-1.5 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-50 transition-colors"
-                    >
-                      {busy ? "…" : "+ Besitz"}
-                    </button>
-                    <button
-                      onClick={() => handleAdd(r, "wishlist")}
-                      disabled={busy}
-                      className="text-xs px-3 py-1.5 rounded-xl bg-muted text-muted-foreground font-medium hover:bg-muted/80 disabled:opacity-50 transition-colors"
-                    >
-                      ♡
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {!loading && query.trim().length >= 2 && results.length === 0 && (
-        <p className="text-center text-sm text-muted-foreground py-12">{`Keine Ergebnisse für "${query}"`}</p>
-      )}
-    </div>
-  );
-}
-
-// ── Ungemspielt ────────────────────────────────────────────────────────────────
+// ── Ungespielt ────────────────────────────────────────────────────────────────
 
 function UngespieltTab({
   userGames,
