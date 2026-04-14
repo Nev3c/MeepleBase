@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { translateCategories, translateMechanics } from "@/lib/bgg-translations";
 import type { Game, UserGame, GameStatus, GameNote, NoteType, CustomFields } from "@/types";
+import { ImageLightbox } from "@/components/shared/image-lightbox";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -639,18 +640,27 @@ function OwnImagesSection({
     setImages((prev) => prev.filter((i) => i.id !== id));
   }
 
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const imageUrls = images.map((img) => img.url);
+
   return (
     <section>
       <SectionHeader icon={<Camera size={15} />} title="Eigene Bilder" />
       <div className="mt-2 flex flex-col gap-2">
         {images.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
-            {images.map((img) => (
+            {images.map((img, i) => (
               <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden bg-muted group">
-                <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
+                <button
+                  className="absolute inset-0 w-full h-full"
+                  onClick={() => setLightboxIndex(i)}
+                  aria-label={`Bild ${i + 1} vergrößern`}
+                >
+                  <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
+                </button>
                 <button
                   onClick={() => handleDelete(img.id)}
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                   aria-label="Bild löschen"
                 >
                   <X size={11} />
@@ -658,6 +668,14 @@ function OwnImagesSection({
               </div>
             ))}
           </div>
+        )}
+        {lightboxIndex !== null && (
+          <ImageLightbox
+            images={imageUrls}
+            currentIndex={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+            onNavigate={setLightboxIndex}
+          />
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />

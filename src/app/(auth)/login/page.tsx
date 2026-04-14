@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LoginForm } from "./login-form";
+import { AppLogo } from "@/components/shared/app-logo";
 
 export const metadata: Metadata = { title: "Anmelden" };
 
@@ -7,20 +8,16 @@ export default function LoginPage() {
   return (
     <div className="flex flex-col gap-8 animate-slide-up">
       {/* Logo + Headline */}
-      <div className="text-center">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500 shadow-amber mb-4">
-          {/* Meeple icon */}
-          <svg viewBox="0 0 32 32" fill="none" className="w-8 h-8" aria-hidden="true">
-            <circle cx="16" cy="10" r="5" fill="white" />
-            <path d="M8 22 C8 18 11 16 16 16 C21 16 24 18 24 22 L24 28 L8 28 Z" fill="white" />
-          </svg>
+      <div className="text-center flex flex-col items-center gap-3">
+        <AppLogo size={64} />
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            Willkommen zurück
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Meld dich an und zu deiner Base.
+          </p>
         </div>
-        <h1 className="font-display text-3xl font-semibold text-foreground">
-          Willkommen zurück
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Meld dich an und zu deiner Base.
-        </p>
       </div>
 
       {/* Form card */}

@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Edit2, Users, Clock, MapPin, Handshake, FileText, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ImageLightbox } from "@/components/shared/image-lightbox";
 
 interface PlayPlayer {
   id: string;
@@ -37,6 +39,7 @@ interface Play {
 
 export function PlayDetailClient({ play }: { play: Play; libraryGames?: unknown[] }) {
   const router = useRouter();
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const { game, players = [] } = play;
 
   const date = new Date(play.played_at);
@@ -183,14 +186,30 @@ export function PlayDetailClient({ play }: { play: Play; libraryGames?: unknown[
               <Camera size={11} />
               Foto
             </h2>
-            <div className="rounded-2xl overflow-hidden border border-border">
-              <img
-                src={play.image_url}
-                alt="Partien-Foto"
-                className="w-full object-cover"
-                style={{ maxHeight: 320 }}
+            <button
+              className="w-full rounded-2xl overflow-hidden border border-border block"
+              onClick={() => setLightboxOpen(true)}
+              aria-label="Foto vergrößern"
+            >
+              <div className="relative w-full" style={{ maxHeight: 320 }}>
+                <Image
+                  src={play.image_url}
+                  alt="Partien-Foto"
+                  width={640}
+                  height={320}
+                  className="w-full object-cover"
+                  sizes="(max-width: 672px) 100vw, 640px"
+                />
+              </div>
+            </button>
+            {lightboxOpen && (
+              <ImageLightbox
+                images={[play.image_url]}
+                currentIndex={0}
+                onClose={() => setLightboxOpen(false)}
+                onNavigate={() => {}}
               />
-            </div>
+            )}
           </section>
         )}
 
