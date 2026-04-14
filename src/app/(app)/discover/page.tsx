@@ -1,12 +1,36 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { DiscoverClient } from "./discover-client";
 
 export const metadata: Metadata = { title: "Entdecken" };
 
-export default function DiscoverPage() {
+export default async function DiscoverPage() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const [{ data: userGames }, { data: plays }] = await Promise.all([
+    supabase
+      .from("user_games")
+      .select("game_id, status, personal_rating, game:games(id, name, thumbnail_url, min_players, max_players, min_playtime, max_playtime, rating_avg, year_published)")
+      .eq("user_id", user.id),
+    supabase
+      .from("plays")
+      .select("game_id")
+      .eq("user_id", user.id),
+  ]);
+
+  // play counts per game
+  const playCountMap: Record<string, number> = {};
+  for (const p of (plays ?? [])) {
+    playCountMap[p.game_id] = (playCountMap[p.game_id] ?? 0) + 1;
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-200px)] px-6 text-center">
-      <h1 className="font-display text-3xl font-semibold text-foreground mb-2">Entdecken</h1>
-      <p className="text-muted-foreground">Kommt in Phase 2 – Spieler & Gruppen finden.</p>
-    </div>
+    <DiscoverClient
+      userGames={userGames ?? []}
+      playCountMap={playCountMap}
+    />
   );
 }
