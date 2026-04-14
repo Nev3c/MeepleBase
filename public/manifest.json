@@ -1,6 +1,6 @@
 {
   "name": "MeepleBase",
-  "short_name": "MeepleBase",
+  "short_name": "Meeple",
   "description": "Deine Brettspielwelt. Alles an einer Base.",
   "start_url": "/library",
   "display": "standalone",

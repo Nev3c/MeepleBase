@@ -158,7 +158,7 @@ function GameSearchTab({ libraryGameIds }: { libraryGameIds: Set<string> }) {
     if (q.trim().length < 2) { setResults([]); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/api/bgg/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`);
       const data = await res.json() as { results: SearchResult[] };
       setResults(data.results ?? []);
     } finally {
