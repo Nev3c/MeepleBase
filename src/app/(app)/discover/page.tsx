@@ -29,7 +29,8 @@ export default async function DiscoverPage() {
 
   return (
     <DiscoverClient
-      userGames={userGames ?? []}
+      // Supabase join returns game as array — cast via unknown to our type
+      userGames={(userGames ?? []) as unknown as Parameters<typeof DiscoverClient>[0]["userGames"]}
       playCountMap={playCountMap}
     />
   );
