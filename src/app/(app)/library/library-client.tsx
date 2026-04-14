@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useDeferredValue, useCallback } from "react";
+import { useMemo, useState, useRef, useDeferredValue } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { LibraryHeader } from "@/components/library/library-header";
@@ -9,7 +9,6 @@ import { GameCard } from "@/components/library/game-card";
 import { useLibraryStore } from "@/stores/library-store";
 import type { UserGame, Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
-import { cn } from "@/lib/utils";
 
 // Lazy-load the heavy AddGameSheet (CSV parser + search + upload logic)
 const AddGameSheet = dynamic(
@@ -85,8 +84,7 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   const isEmpty = filteredGames.length === 0;
   const isFiltered = !!(filter.search || filter.status);
 
-  const openAdd = useCallback(() => { setSheetInitialTab("search"); setSheetOpen(true); }, []);
-  const openImport = useCallback(() => { setSheetInitialTab("import"); setSheetOpen(true); }, []);
+  function openAdd() { setSheetInitialTab("search"); setSheetOpen(true); }
 
   return (
     <>

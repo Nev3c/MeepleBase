@@ -615,6 +615,7 @@ function PlaySheet({
             </label>
             {imagePreview ? (
               <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imagePreview} alt="Vorschau" className="w-full h-full object-cover" />
                 <button
                   type="button"
