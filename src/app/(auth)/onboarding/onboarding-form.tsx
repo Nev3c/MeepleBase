@@ -139,8 +139,8 @@ function InstallStep({ step, total, onNext, onBack }: { step: number; total: num
               <p className="text-sm font-semibold text-foreground mb-1">Android (Chrome)</p>
               <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                 <li>Menü <span className="font-mono bg-muted px-1 rounded">⋮</span> oben rechts tippen</li>
-                <li>„<strong>Zum Startbildschirm hinzufügen</strong>" wählen</li>
-                <li>„Installieren" bestätigen</li>
+                <li>&bdquo;<strong>Zum Startbildschirm hinzufügen</strong>&ldquo; wählen</li>
+                <li>&bdquo;Installieren&ldquo; bestätigen</li>
               </ol>
             </div>
           </div>
@@ -152,8 +152,8 @@ function InstallStep({ step, total, onNext, onBack }: { step: number; total: num
               <p className="text-sm font-semibold text-foreground mb-1">iPhone / iPad (Safari)</p>
               <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                 <li>Teilen-Symbol <span className="font-mono bg-muted px-1 rounded">⬆</span> unten tippen</li>
-                <li>„<strong>Zum Home-Bildschirm</strong>" wählen</li>
-                <li>„Hinzufügen" bestätigen</li>
+                <li>&bdquo;<strong>Zum Home-Bildschirm</strong>&ldquo; wählen</li>
+                <li>&bdquo;Hinzufügen&ldquo; bestätigen</li>
               </ol>
             </div>
           </div>
