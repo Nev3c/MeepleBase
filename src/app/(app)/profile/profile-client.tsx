@@ -77,7 +77,7 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
       {/* App-Name Header */}
       <div className="flex items-center justify-center gap-2 pt-6 pb-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.svg" alt="" className="w-6 h-6" aria-hidden="true" />
+        <img src="/icon-192.png" alt="" className="w-6 h-6 rounded-lg" aria-hidden="true" />
         <span className="font-display text-base font-semibold text-foreground/60 tracking-tight">
           Meeple<span className="text-amber-500">Base</span>
         </span>

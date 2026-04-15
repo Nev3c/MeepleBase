@@ -12,7 +12,7 @@ export function AppLogo({ size = 56 }: { size?: number }) {
           alt="MeepleBase"
           width={size}
           height={size}
-          className="object-cover"
+          className="object-cover w-full h-full"
           priority
         />
       </div>

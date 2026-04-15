@@ -3,7 +3,7 @@ export default function AppLoading() {
     <div className="flex flex-col items-center justify-center min-h-dvh bg-background gap-4">
       <div className="flex flex-col items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.svg" alt="MeepleBase" className="w-16 h-16 animate-pulse" />
+        <img src="/icon-192.png" alt="MeepleBase" className="w-16 h-16 rounded-2xl animate-pulse" />
         <h1 className="font-display text-2xl font-semibold text-foreground tracking-tight">
           Meeple<span className="text-amber-500">Base</span>
         </h1>
