@@ -33,7 +33,7 @@ export function RegisterForm() {
       password,
       options: {
         data: { username },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
       },
     });
 
@@ -57,7 +57,7 @@ export function RegisterForm() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/onboarding`,
       },
     });
   }

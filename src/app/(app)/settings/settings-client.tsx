@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
@@ -10,6 +10,7 @@ import Link from "next/link";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+type TranslateStatus = "idle" | "running" | "done" | "error";
 
 interface SettingsClientProps {
   user: User;
@@ -24,6 +25,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const [bggStatus, setBggStatus] = useState<BggStatus>("idle");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [translateStatus, setTranslateStatus] = useState<TranslateStatus>("idle");
+  const [translateResult, setTranslateResult] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const originalBgg = profile?.bgg_username ?? "";
@@ -108,6 +111,25 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     setSaveStatus("saved");
     router.refresh();
     setTimeout(() => setSaveStatus("idle"), 2500);
+  }
+
+  async function handleTranslate() {
+    setTranslateStatus("running");
+    setTranslateResult(null);
+    try {
+      const res = await fetch("/api/translate/batch", { method: "POST" });
+      const data = await res.json() as { translated?: number; errors?: number; message?: string };
+      if (!res.ok) throw new Error(data.message ?? "Fehler");
+      if (data.message) {
+        setTranslateResult(data.message);
+      } else {
+        setTranslateResult(`${data.translated ?? 0} Beschreibungen übersetzt, ${data.errors ?? 0} Fehler.`);
+      }
+      setTranslateStatus("done");
+    } catch (e) {
+      setTranslateResult(e instanceof Error ? e.message : "Unbekannter Fehler");
+      setTranslateStatus("error");
+    }
   }
 
   const hasChanges =
@@ -255,6 +277,35 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
             {saveError}
           </div>
         )}
+
+        {/* ── Beschreibungen übersetzen ──────────────────────── */}
+        <section>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Bibliothek</p>
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-0.5">Beschreibungen übersetzen</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Übersetzt bis zu 20 englische Spielbeschreibungen auf Deutsch. Kannst du mehrmals aufrufen.
+              </p>
+            </div>
+            {translateResult && (
+              <p className={`text-xs font-medium ${translateStatus === "error" ? "text-red-600" : "text-green-700"}`}>
+                {translateResult}
+              </p>
+            )}
+            <button
+              onClick={handleTranslate}
+              disabled={translateStatus === "running"}
+              className="flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-50"
+            >
+              {translateStatus === "running" ? (
+                <><SpinnerIcon /> Übersetze…</>
+              ) : (
+                <><Languages size={15} /> 20 Beschreibungen übersetzen</>
+              )}
+            </button>
+          </div>
+        </section>
 
         {/* ── Speichern-Button ───────────────────────────────── */}
         <button

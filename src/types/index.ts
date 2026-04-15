@@ -50,6 +50,7 @@ export interface Game {
   mechanics: string[] | null;
   designers: string[] | null;
   publishers: string[] | null;
+  best_players: number[] | null;
   last_synced_at: string | null;
   created_at: string;
 }

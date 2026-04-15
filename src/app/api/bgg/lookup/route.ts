@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
     const getNames = (arr: LinkItem[] | undefined) =>
       (arr ?? []).map((l) => l.name).filter(Boolean);
 
+    const stats = item.stats as Record<string, unknown> | undefined;
+    const rawWeight = stats?.avgweight ?? stats?.averageweight ?? stats?.average_weight ?? null;
+    const complexity = rawWeight ? parseFloat(String(rawWeight)) : null;
+
     return NextResponse.json({
       bgg_id: Number(item.objectid),
       name: item.name ?? item.primaryname?.name ?? `BGG #${id}`,
@@ -42,6 +46,7 @@ export async function GET(request: NextRequest) {
       max_players: item.maxplayers ? Number(item.maxplayers) : null,
       min_playtime: item.minplaytime ? Number(item.minplaytime) : null,
       max_playtime: item.maxplaytime ? Number(item.maxplaytime) : null,
+      complexity: complexity && !isNaN(complexity) ? complexity : null,
       thumbnail_url: item.imageurl ?? null,
       image_url: item.topimageurl ?? null,
       description: item.short_description ?? null,

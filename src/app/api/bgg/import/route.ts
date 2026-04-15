@@ -22,6 +22,45 @@ interface CsvGame {
 
 interface GeekItemLink { name: string }
 
+// Parse BGG "suggested_numplayers" poll → array of player counts where "Best" vote plurality
+function parseBestPlayers(polls: unknown): number[] | null {
+  if (!polls) return null;
+  // polls may be an array or an object with a "boardgamepoll" array
+  const pollArr: unknown[] = Array.isArray(polls)
+    ? polls
+    : Array.isArray((polls as Record<string, unknown>)?.boardgamepoll)
+    ? (polls as Record<string, unknown>).boardgamepoll as unknown[]
+    : [];
+
+  const numPlayersPoll = pollArr.find((p) => {
+    const poll = p as Record<string, unknown>;
+    return poll.name === "suggested_numplayers" || poll.title?.toString().toLowerCase().includes("numplayers");
+  }) as Record<string, unknown> | undefined;
+
+  if (!numPlayersPoll) return null;
+
+  // results may be an array of {numplayers, result:[{value,numvotes}]} or an object keyed by numplayers
+  const results = numPlayersPoll.results;
+  const best: number[] = [];
+
+  if (Array.isArray(results)) {
+    for (const entry of results as Record<string, unknown>[]) {
+      const num = parseInt(String(entry.numplayers));
+      if (isNaN(num)) continue;
+      const votes = Array.isArray(entry.result)
+        ? entry.result as Record<string, unknown>[]
+        : [];
+      const bestVotes = Number(votes.find((v) => v.value === "Best")?.numvotes ?? 0);
+      const recVotes  = Number(votes.find((v) => v.value === "Recommended")?.numvotes ?? 0);
+      const notVotes  = Number(votes.find((v) => v.value === "Not Recommended")?.numvotes ?? 0);
+      const total = bestVotes + recVotes + notVotes;
+      if (total > 5 && bestVotes / total > 0.25) best.push(num);
+    }
+  }
+
+  return best.length > 0 ? best.sort((a, b) => a - b) : null;
+}
+
 function parseBggCsv(text: string): CsvGame[] {
   const lines = text.split(/\r?\n/);
   const headerIdx = lines.findIndex((l) => l.toLowerCase().includes("objectid"));
@@ -95,6 +134,14 @@ async function enrichGame(bggId: number): Promise<Record<string, unknown> | null
     if (!item) return null;
     const links = item.links ?? {};
     const names = (arr: GeekItemLink[] | undefined) => (arr ?? []).map((l) => l.name).filter(Boolean);
+    // Weight/complexity: BGG geekitems returns it under item.stats
+    const stats = item.stats as Record<string, unknown> | undefined;
+    const rawWeight = stats?.avgweight ?? stats?.averageweight ?? stats?.average_weight ?? null;
+    const complexity = rawWeight ? parseFloat(String(rawWeight)) : null;
+
+    // Best players: parse "suggested_numplayers" poll
+    const bestPlayers = parseBestPlayers(item.polls);
+
     return {
       name: item.name ?? `BGG #${bggId}`,
       year_published: item.yearpublished ? Number(item.yearpublished) : null,
@@ -102,6 +149,7 @@ async function enrichGame(bggId: number): Promise<Record<string, unknown> | null
       max_players: item.maxplayers ? Number(item.maxplayers) : null,
       min_playtime: item.minplaytime ? Number(item.minplaytime) : null,
       max_playtime: item.maxplaytime ? Number(item.maxplaytime) : null,
+      complexity: complexity && !isNaN(complexity) ? complexity : null,
       thumbnail_url: item.imageurl ?? null,
       image_url: item.topimageurl ?? null,
       description: item.short_description ?? null,
@@ -109,6 +157,7 @@ async function enrichGame(bggId: number): Promise<Record<string, unknown> | null
       mechanics: names(links.boardgamemechanic).length ? names(links.boardgamemechanic) : null,
       designers: names(links.boardgamedesigner).length ? names(links.boardgamedesigner) : null,
       publishers: names(links.boardgamepublisher).length ? names(links.boardgamepublisher) : null,
+      ...(bestPlayers ? { best_players: bestPlayers } : {}),
     };
   } catch {
     return null;

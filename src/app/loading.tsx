@@ -1,12 +1,13 @@
-export default function AppLoading() {
+// Root-level loading — shown during initial app startup / SSR hydration
+export default function RootLoading() {
   return (
     <div className="flex flex-col items-center justify-center min-h-dvh bg-[#FDFAF6] gap-4">
       <div className="flex flex-col items-center gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon-192.png" alt="MeepleBase" className="w-16 h-16 rounded-2xl animate-pulse" />
-        <h1 className="font-display text-2xl font-semibold text-[#1E2A3A] tracking-tight">
-          Meeple<span className="text-amber-500">Base</span>
-        </h1>
+        <p className="font-display text-2xl font-semibold text-[#1E2A3A] tracking-tight">
+          Meeple<span className="text-[#E8821A]">Base</span>
+        </p>
       </div>
       <div className="flex gap-1.5 mt-2">
         {[0, 1, 2].map((i) => (
