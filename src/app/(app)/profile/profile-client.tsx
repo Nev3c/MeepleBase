@@ -63,8 +63,8 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
   }
 
   const favoriteLabel = favoriteGame
-    ? favoriteGame.name.length > 10
-      ? favoriteGame.name.slice(0, 10) + "…"
+    ? favoriteGame.name.length > 8
+      ? favoriteGame.name.slice(0, 8) + "…"
       : favoriteGame.name
     : "–";
 
@@ -302,10 +302,13 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
 
 // Kleine Stat-Karte
 function StatCard({ icon, value, label, sub }: { icon: React.ReactNode; value: string; label: string; sub?: string }) {
+  const isLong = value.length > 4;
   return (
     <div className="bg-card rounded-xl border border-border shadow-card p-3 flex flex-col items-center gap-1">
       {icon}
-      <span className="font-display text-xl font-semibold text-foreground leading-tight">{value}</span>
+      <span className={`font-display font-semibold text-foreground leading-tight text-center w-full truncate ${isLong ? "text-sm" : "text-xl"}`}>
+        {value}
+      </span>
       {sub && <span className="text-[10px] text-amber-600 font-medium leading-none">{sub}</span>}
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>

@@ -2,16 +2,18 @@
 
 import { useEffect, useCallback } from "react";
 import Image from "next/image";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 interface ImageLightboxProps {
   images: string[];
   currentIndex: number;
   onClose: () => void;
   onNavigate: (index: number) => void;
+  /** Called with the current image index when the user confirms delete */
+  onDelete?: (index: number) => void;
 }
 
-export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: ImageLightboxProps) {
+export function ImageLightbox({ images, currentIndex, onClose, onNavigate, onDelete }: ImageLightboxProps) {
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < images.length - 1;
 
@@ -35,14 +37,25 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
       onClick={onClose}
     >
-      {/* Close */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-        aria-label="Schließen"
-      >
-        <X size={20} />
-      </button>
+      {/* Top-right controls */}
+      <div className="absolute top-4 right-4 z-10 flex gap-2">
+        {onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); if (confirm("Bild löschen?")) { onDelete(currentIndex); onClose(); } }}
+            className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-red-500/70 transition-colors"
+            aria-label="Bild löschen"
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
+        <button
+          onClick={onClose}
+          className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+          aria-label="Schließen"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
       {/* Counter */}
       {images.length > 1 && (

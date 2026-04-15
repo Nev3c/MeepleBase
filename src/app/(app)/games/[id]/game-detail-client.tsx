@@ -650,22 +650,14 @@ function OwnImagesSection({
         {images.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
             {images.map((img, i) => (
-              <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden bg-muted group">
-                <button
-                  className="absolute inset-0 w-full h-full"
-                  onClick={() => setLightboxIndex(i)}
-                  aria-label={`Bild ${i + 1} vergrößern`}
-                >
-                  <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
-                </button>
-                <button
-                  onClick={() => handleDelete(img.id)}
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                  aria-label="Bild löschen"
-                >
-                  <X size={11} />
-                </button>
-              </div>
+              <button
+                key={img.id}
+                className="relative aspect-square rounded-xl overflow-hidden bg-muted"
+                onClick={() => setLightboxIndex(i)}
+                aria-label={`Bild ${i + 1} vergrößern`}
+              >
+                <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
+              </button>
             ))}
           </div>
         )}
@@ -675,6 +667,7 @@ function OwnImagesSection({
             currentIndex={lightboxIndex}
             onClose={() => setLightboxIndex(null)}
             onNavigate={setLightboxIndex}
+            onDelete={(i) => handleDelete(images[i].id)}
           />
         )}
         {error && <p className="text-xs text-red-500">{error}</p>}
