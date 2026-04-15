@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Languages } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
@@ -10,7 +10,7 @@ import Link from "next/link";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-type TranslateStatus = "idle" | "running" | "done" | "error";
+type TranslatePhase = "idle" | "counting" | "running" | "done" | "error";
 
 interface SettingsClientProps {
   user: User;
@@ -25,8 +25,13 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const [bggStatus, setBggStatus] = useState<BggStatus>("idle");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [translateStatus, setTranslateStatus] = useState<TranslateStatus>("idle");
-  const [translateResult, setTranslateResult] = useState<string | null>(null);
+  const [translatePhase, setTranslatePhase] = useState<TranslatePhase>("idle");
+  const [translatePending, setTranslatePending] = useState<number | null>(null);
+  const [translateTotal, setTranslateTotal] = useState(0);
+  const [translateDone, setTranslateDone] = useState(0);
+  const [translateNames, setTranslateNames] = useState<string[]>([]);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  const translateAbort = useRef(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const originalBgg = profile?.bgg_username ?? "";
@@ -113,23 +118,62 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     setTimeout(() => setSaveStatus("idle"), 2500);
   }
 
-  async function handleTranslate() {
-    setTranslateStatus("running");
-    setTranslateResult(null);
+  // Fetch pending count once on component mount and after translation
+  const fetchPending = useCallback(async () => {
     try {
-      const res = await fetch("/api/translate/batch", { method: "POST" });
-      const data = await res.json() as { translated?: number; errors?: number; message?: string };
-      if (!res.ok) throw new Error(data.message ?? "Fehler");
-      if (data.message) {
-        setTranslateResult(data.message);
-      } else {
-        setTranslateResult(`${data.translated ?? 0} Beschreibungen übersetzt, ${data.errors ?? 0} Fehler.`);
-      }
-      setTranslateStatus("done");
-    } catch (e) {
-      setTranslateResult(e instanceof Error ? e.message : "Unbekannter Fehler");
-      setTranslateStatus("error");
+      const res = await fetch("/api/translate/batch");
+      const data = await res.json() as { pending?: number };
+      setTranslatePending(data.pending ?? 0);
+    } catch {
+      // ignore — non-critical
     }
+  }, []);
+
+  useEffect(() => { fetchPending(); }, [fetchPending]);
+
+  async function handleStartTranslate() {
+    translateAbort.current = false;
+    const pending = translatePending ?? 0;
+    if (pending === 0) return;
+
+    setTranslatePhase("running");
+    setTranslateTotal(pending);
+    setTranslateDone(0);
+    setTranslateNames([]);
+    setTranslateError(null);
+
+    let totalDone = 0;
+
+    while (!translateAbort.current) {
+      try {
+        const res = await fetch("/api/translate/batch", { method: "POST" });
+        const data = await res.json() as {
+          translated?: number; errors?: number; names?: string[];
+          remaining?: number; done?: boolean; error?: string;
+        };
+        if (!res.ok) throw new Error(data.error ?? "Serverfehler");
+
+        totalDone += data.translated ?? 0;
+        setTranslateDone(totalDone);
+        setTranslateNames((prev) => [...(data.names ?? []), ...prev].slice(0, 40));
+
+        if (data.done || (data.remaining ?? 0) === 0) {
+          setTranslatePhase("done");
+          setTranslatePending(0);
+          break;
+        }
+      } catch (e) {
+        setTranslateError(e instanceof Error ? e.message : "Unbekannter Fehler");
+        setTranslatePhase("error");
+        break;
+      }
+    }
+  }
+
+  function handleStopTranslate() {
+    translateAbort.current = true;
+    setTranslatePhase("idle");
+    fetchPending();
   }
 
   const hasChanges =
@@ -283,27 +327,95 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Bibliothek</p>
           <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
             <div>
-              <p className="text-sm font-medium text-foreground mb-0.5">Beschreibungen übersetzen</p>
+              <p className="text-sm font-medium text-foreground mb-0.5">Spielbeschreibungen übersetzen</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Übersetzt bis zu 20 englische Spielbeschreibungen auf Deutsch. Kannst du mehrmals aufrufen.
+                Übersetzt englische Spielbeschreibungen automatisch auf Deutsch (Google Translate).
               </p>
             </div>
-            {translateResult && (
-              <p className={`text-xs font-medium ${translateStatus === "error" ? "text-red-600" : "text-green-700"}`}>
-                {translateResult}
-              </p>
+
+            {/* Idle / pending count */}
+            {translatePhase === "idle" && (
+              <>
+                {translatePending === null ? (
+                  <p className="text-xs text-muted-foreground">Lade…</p>
+                ) : translatePending === 0 ? (
+                  <p className="text-xs text-green-700 font-medium flex items-center gap-1.5">
+                    <Check size={13} /> Alle Beschreibungen bereits auf Deutsch
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{translatePending}</span> Spiele ohne deutsche Beschreibung
+                  </p>
+                )}
+                <button
+                  onClick={handleStartTranslate}
+                  disabled={!translatePending}
+                  className="flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-50"
+                >
+                  <Languages size={15} />
+                  {translatePending ? `Alle ${translatePending} Spiele übersetzen` : "Nichts zu übersetzen"}
+                </button>
+              </>
             )}
-            <button
-              onClick={handleTranslate}
-              disabled={translateStatus === "running"}
-              className="flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-50"
-            >
-              {translateStatus === "running" ? (
-                <><SpinnerIcon /> Übersetze…</>
-              ) : (
-                <><Languages size={15} /> 20 Beschreibungen übersetzen</>
-              )}
-            </button>
+
+            {/* Running */}
+            {translatePhase === "running" && (
+              <div className="flex flex-col gap-2.5">
+                {/* Progress bar */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{translateDone} / {translateTotal} übersetzt</span>
+                  <button onClick={handleStopTranslate} className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                    <X size={12} /> Stopp
+                  </button>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                    style={{ width: `${translateTotal > 0 ? Math.round((translateDone / translateTotal) * 100) : 0}%` }}
+                  />
+                </div>
+                {/* Translated names */}
+                {translateNames.length > 0 && (
+                  <div className="bg-muted/50 rounded-xl p-2.5 max-h-28 overflow-y-auto">
+                    {translateNames.map((n, i) => (
+                      <p key={i} className="text-xs text-muted-foreground leading-snug flex items-center gap-1.5">
+                        <Check size={11} className="text-green-500 flex-shrink-0" /> {n}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground animate-pulse">Übersetze…</p>
+              </div>
+            )}
+
+            {/* Done */}
+            {translatePhase === "done" && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-semibold text-green-700 flex items-center gap-1.5">
+                  <Check size={15} /> {translateDone} Spiele übersetzt!
+                </p>
+                {translateNames.length > 0 && (
+                  <div className="bg-muted/50 rounded-xl p-2.5 max-h-28 overflow-y-auto">
+                    {translateNames.map((n, i) => (
+                      <p key={i} className="text-xs text-muted-foreground leading-snug">✓ {n}</p>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => { setTranslatePhase("idle"); fetchPending(); }} className="text-xs text-amber-600 underline underline-offset-2 text-left">
+                  Zurücksetzen
+                </button>
+              </div>
+            )}
+
+            {/* Error */}
+            {translatePhase === "error" && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-red-600 font-medium">{translateError}</p>
+                <button onClick={() => { setTranslatePhase("idle"); fetchPending(); }} className="text-xs text-amber-600 underline underline-offset-2 text-left">
+                  Erneut versuchen
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

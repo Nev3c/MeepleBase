@@ -38,10 +38,17 @@ export function RegisterForm() {
     });
 
     if (error) {
-      if (error.message.includes("already registered")) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes("already registered") || msg.includes("already been registered")) {
         setError("Diese E-Mail ist bereits registriert. Versuch dich anzumelden.");
+      } else if (msg.includes("rate limit") || msg.includes("too many") || error.status === 429) {
+        setError("Zu viele Versuche – bitte warte 60 Sekunden und versuche es erneut.");
+      } else if (msg.includes("invalid email") || msg.includes("unable to validate")) {
+        setError("Ungültige E-Mail-Adresse.");
+      } else if (msg.includes("weak password") || msg.includes("password should")) {
+        setError("Passwort zu schwach – mindestens 8 Zeichen.");
       } else {
-        setError("Registrierung fehlgeschlagen. Bitte versuche es nochmal.");
+        setError(`Registrierung fehlgeschlagen: ${error.message}`);
       }
       setLoading(false);
       return;
