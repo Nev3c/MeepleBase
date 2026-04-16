@@ -12,7 +12,7 @@ function isAdmin(email: string | undefined) {
   return email.toLowerCase() === adminEmail.toLowerCase();
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
