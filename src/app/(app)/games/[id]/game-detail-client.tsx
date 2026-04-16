@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Users, Clock, Star, ExternalLink, Trash2,
   Edit2, Check, X, Plus, Camera, FileText, BookOpen,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { translateCategories, translateMechanics } from "@/lib/bgg-translations";
@@ -81,15 +81,35 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [draftMaxPlaytime, setDraftMaxPlaytime] = useState(customFields.max_playtime?.toString() ?? "");
   const [draftCategories, setDraftCategories] = useState(customFields.categories?.join(", ") ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [gameData, setGameData] = useState(game);
 
-  const displayName = customFields.name ?? game.name;
-  const displayDesc = customFields.description ?? game.description_de ?? game.description;
+  async function handleRefreshBGG() {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`/api/games/${game.id}/refresh`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json() as { complexity?: number; publishers?: string[]; best_players?: number[] };
+        setGameData((prev) => ({
+          ...prev,
+          ...(data.complexity != null ? { complexity: data.complexity } : {}),
+          ...(data.publishers != null ? { publishers: data.publishers } : {}),
+          ...(data.best_players != null ? { best_players: data.best_players } : {}),
+        }));
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const displayName = customFields.name ?? gameData.name;
+  const displayDesc = customFields.description ?? gameData.description_de ?? gameData.description;
 
   // Effective player/playtime values (custom overrides BGG)
-  const effMinPlayers = customFields.min_players ?? game.min_players;
-  const effMaxPlayers = customFields.max_players ?? game.max_players;
-  const effMinPlaytime = customFields.min_playtime ?? game.min_playtime;
-  const effMaxPlaytime = customFields.max_playtime ?? game.max_playtime;
+  const effMinPlayers = customFields.min_players ?? gameData.min_players;
+  const effMaxPlayers = customFields.max_players ?? gameData.max_players;
+  const effMinPlaytime = customFields.min_playtime ?? gameData.min_playtime;
+  const effMaxPlaytime = customFields.max_playtime ?? gameData.max_playtime;
 
   async function handleSaveInfo() {
     if (!userGame) return;
@@ -137,8 +157,8 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     setSavingInfo(false);
   }
 
-  const categories = customFields.categories ?? translateCategories(game.categories);
-  const mechanics = translateMechanics(game.mechanics);
+  const categories = customFields.categories ?? translateCategories(gameData.categories);
+  const mechanics = translateMechanics(gameData.mechanics);
 
   async function handleStatusSave(newStatus: GameStatus) {
     if (!userGame) return;
@@ -180,7 +200,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     }
   }
 
-  const hasMeta = effMinPlayers || effMaxPlayers || effMinPlaytime || effMaxPlaytime;
+  const hasMeta = effMinPlayers || effMaxPlayers || effMinPlaytime || effMaxPlaytime || gameData.complexity != null;
 
   // Plays summary data
   const playCount = initialPlays.length;
@@ -193,10 +213,10 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     <div className="flex flex-col min-h-dvh bg-background">
       {/* Hero */}
       <div className="relative w-full aspect-[16/9] bg-muted overflow-hidden">
-        {game.image_url || game.thumbnail_url ? (
+        {gameData.image_url || gameData.thumbnail_url ? (
           <Image
-            src={(game.image_url ?? game.thumbnail_url)!}
-            alt={game.name}
+            src={(gameData.image_url ?? gameData.thumbnail_url)!}
+            alt={gameData.name}
             fill
             className="object-cover"
             sizes="100vw"
@@ -314,7 +334,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
               <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{displayName}</h1>
-              {game.year_published && <p className="text-muted-foreground text-sm mt-0.5">{game.year_published}</p>}
+              {gameData.year_published && <p className="text-muted-foreground text-sm mt-0.5">{gameData.year_published}</p>}
               {customFields.name && <p className="text-[11px] text-amber-600 mt-0.5">Eigener Name</p>}
             </div>
             {userGame && (
@@ -395,10 +415,10 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 </button>
               ))}
             </div>
-            {game.rating_avg != null && (
+            {gameData.rating_avg != null && (
               <div className="flex items-center gap-1.5 mt-1">
                 <Star size={12} className="text-muted-foreground" strokeWidth={1.5} />
-                <span className="text-xs text-muted-foreground">BGG-Wertung: <span className="font-medium">{game.rating_avg.toFixed(1)}</span></span>
+                <span className="text-xs text-muted-foreground">BGG-Wertung: <span className="font-medium">{gameData.rating_avg.toFixed(1)}</span></span>
               </div>
             )}
           </div>
@@ -423,8 +443,11 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 )}
               </div>
             )}
-            {game.complexity != null && (
-              <Stat icon={<Star size={14} />} label={`${game.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
+            {gameData.complexity != null && (
+              <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
+            )}
+            {gameData.best_players != null && gameData.best_players.length > 0 && (
+              <Stat icon={<Users size={14} />} label={`Best: ${gameData.best_players.join(", ")}`} sublabel="Community" />
             )}
           </div>
         )}
@@ -450,10 +473,18 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         )}
 
         {/* Designers */}
-        {game.designers && game.designers.length > 0 && (
+        {gameData.designers && gameData.designers.length > 0 && (
           <section>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Designer</p>
-            <p className="text-sm text-foreground">{game.designers.join(", ")}</p>
+            <p className="text-sm text-foreground">{gameData.designers.join(", ")}</p>
+          </section>
+        )}
+
+        {/* Publishers */}
+        {gameData.publishers && gameData.publishers.length > 0 && (
+          <section>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Verlag</p>
+            <p className="text-sm text-foreground">{gameData.publishers.slice(0, 3).join(", ")}</p>
           </section>
         )}
 
@@ -528,16 +559,29 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         </section>
 
-        {/* BGG Link */}
-        <a
-          href={`https://boardgamegeek.com/boardgame/${game.bgg_id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm text-amber-600 font-medium"
-        >
-          <ExternalLink size={14} />
-          Auf BoardGameGeek ansehen
-        </a>
+        {/* BGG Link + Refresh */}
+        <div className="flex items-center justify-between">
+          <a
+            href={`https://boardgamegeek.com/boardgame/${gameData.bgg_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-amber-600 font-medium"
+          >
+            <ExternalLink size={14} />
+            Auf BoardGameGeek ansehen
+          </a>
+          {gameData.bgg_id && (
+            <button
+              onClick={handleRefreshBGG}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              title="BGG-Daten aktualisieren"
+            >
+              <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+              {refreshing ? "Lädt…" : "BGG aktualisieren"}
+            </button>
+          )}
+        </div>
 
         {/* Delete */}
         {userGame && (
@@ -545,7 +589,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             {deleteConfirm ? (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-foreground font-medium">
-                  &quot;{game.name}&quot; wirklich entfernen?
+                  &quot;{gameData.name}&quot; wirklich entfernen?
                 </p>
                 <div className="flex gap-2">
                   <button
