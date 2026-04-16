@@ -189,7 +189,7 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Einstellungen</SectionHeader>
           <MenuRow label="Einstellungen & BGG-Sync" href="/settings" showChevron />
-          <MenuRow label="App-Tour wiederholen" href="/onboarding" showChevron />
+          <MenuRow label="App Tour" href="/onboarding" showChevron />
         </div>
 
         {/* Abmelden */}

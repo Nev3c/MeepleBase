@@ -82,21 +82,38 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [draftCategories, setDraftCategories] = useState(customFields.categories?.join(", ") ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState<"idle" | "ok" | "error">("idle");
   const [gameData, setGameData] = useState(game);
 
   async function handleRefreshBGG() {
     setRefreshing(true);
+    setRefreshStatus("idle");
     try {
       const res = await fetch(`/api/games/${game.id}/refresh`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json() as { complexity?: number; publishers?: string[]; best_players?: number[] };
+      const data = await res.json() as {
+        success?: boolean;
+        error?: string;
+        complexity?: number | null;
+        publishers?: string[];
+        best_players?: number[] | null;
+      };
+      if (res.ok && data.success) {
         setGameData((prev) => ({
           ...prev,
           ...(data.complexity != null ? { complexity: data.complexity } : {}),
-          ...(data.publishers != null ? { publishers: data.publishers } : {}),
+          ...(data.publishers != null && data.publishers.length > 0 ? { publishers: data.publishers } : {}),
           ...(data.best_players != null ? { best_players: data.best_players } : {}),
         }));
+        setRefreshStatus("ok");
+        setTimeout(() => setRefreshStatus("idle"), 3000);
+      } else {
+        console.error("[refresh]", data.error);
+        setRefreshStatus("error");
+        setTimeout(() => setRefreshStatus("idle"), 4000);
       }
+    } catch {
+      setRefreshStatus("error");
+      setTimeout(() => setRefreshStatus("idle"), 4000);
     } finally {
       setRefreshing(false);
     }
@@ -574,11 +591,19 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             <button
               onClick={handleRefreshBGG}
               disabled={refreshing}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              className={cn(
+                "flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50",
+                refreshStatus === "ok"    ? "text-emerald-600" :
+                refreshStatus === "error" ? "text-red-500" :
+                "text-muted-foreground hover:text-foreground"
+              )}
               title="BGG-Daten aktualisieren"
             >
               <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-              {refreshing ? "Lädt…" : "BGG aktualisieren"}
+              {refreshing       ? "Lädt…"        :
+               refreshStatus === "ok"    ? "Aktualisiert ✓" :
+               refreshStatus === "error" ? "Fehler – nochmal?" :
+               "BGG aktualisieren"}
             </button>
           )}
         </div>

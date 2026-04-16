@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 // POST /api/games/[id]/refresh
-// Re-fetches BGG data for a game and updates complexity, publishers, best_players.
+// Re-fetches BGG data (complexity, publishers, best_players) and updates the games table.
+// Uses service-role key for the DB update so it works regardless of RLS state on games.
+
+const GEEKITEMS_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "application/json",
+  "Referer": "https://boardgamegeek.com/",
+};
 
 function parseBestPlayers(polls: unknown): number[] | null {
   if (!polls) return null;
@@ -43,6 +51,7 @@ export async function POST(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
+  // Auth check via user session
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,8 +71,13 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-  // Get the game's bgg_id
-  const { data: game, error: gameError } = await supabase
+  // Use service-role client for reads + writes on games (bypasses RLS)
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { data: game, error: gameError } = await admin
     .from("games")
     .select("id, bgg_id")
     .eq("id", params.id)
@@ -82,27 +96,27 @@ export async function POST(
   let bggData: Record<string, unknown>;
   try {
     const res = await fetch(bggUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-        "Referer": "https://boardgamegeek.com/",
-      },
+      signal: AbortSignal.timeout(10000),
+      cache: "no-store",
+      headers: GEEKITEMS_HEADERS,
     });
     if (!res.ok) throw new Error(`BGG HTTP ${res.status}`);
     bggData = await res.json() as Record<string, unknown>;
   } catch (e) {
-    return NextResponse.json({ error: `BGG-Anfrage fehlgeschlagen: ${e}` }, { status: 502 });
+    return NextResponse.json({ error: `BGG nicht erreichbar: ${e}` }, { status: 502 });
   }
 
   const item = bggData?.item as Record<string, unknown> | undefined;
   if (!item) {
-    return NextResponse.json({ error: "BGG hat kein item zurückgegeben" }, { status: 502 });
+    return NextResponse.json({ error: "BGG hat keine Spieldaten zurückgegeben" }, { status: 502 });
   }
 
   // Extract complexity
   const stats = item.stats as Record<string, unknown> | undefined;
   const rawWeight = stats?.avgweight ?? stats?.averageweight ?? stats?.average_weight ?? null;
-  const complexity = rawWeight ? parseFloat(String(rawWeight)) : null;
+  const complexity = rawWeight && parseFloat(String(rawWeight)) > 0
+    ? parseFloat(String(rawWeight))
+    : null;
 
   // Extract publishers
   interface GeekItemLink { name: string }
@@ -113,24 +127,37 @@ export async function POST(
   // Extract best players poll
   const best_players = parseBestPlayers(item.polls);
 
-  // Update the games table
+  // Build update object — always update what we got (even if null, it overwrites stale data)
   const updates: Record<string, unknown> = {};
   if (complexity !== null) updates.complexity = complexity;
   if (publishers.length > 0) updates.publishers = publishers;
   if (best_players !== null) updates.best_players = best_players;
 
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ message: "Keine neuen Daten von BGG" });
+    return NextResponse.json({
+      success: true,
+      message: "BGG hat keine Daten für dieses Spiel geliefert",
+      complexity: null,
+      publishers: [],
+      best_players: null,
+    });
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await admin
     .from("games")
     .update(updates)
     .eq("id", params.id);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    console.error("[BGG refresh] DB update failed:", updateError);
+    return NextResponse.json({ error: `DB-Fehler: ${updateError.message}` }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, updated: Object.keys(updates), complexity, publishers, best_players });
+  return NextResponse.json({
+    success: true,
+    updated: Object.keys(updates),
+    complexity: complexity ?? null,
+    publishers,
+    best_players: best_players ?? null,
+  });
 }
