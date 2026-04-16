@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Languages, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
@@ -11,6 +11,7 @@ import Link from "next/link";
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type TranslatePhase = "idle" | "counting" | "running" | "done" | "error";
+type RefreshPhase   = "idle" | "running" | "done" | "error";
 
 interface SettingsClientProps {
   user: User;
@@ -32,6 +33,15 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const [translateNames, setTranslateNames] = useState<string[]>([]);
   const [translateError, setTranslateError] = useState<string | null>(null);
   const translateAbort = useRef(false);
+
+  // ── BGG Bulk Refresh state ─────────────────────────────────────────────────
+  const [refreshPhase, setRefreshPhase]   = useState<RefreshPhase>("idle");
+  const [refreshPending, setRefreshPending] = useState<number | null>(null);
+  const [refreshTotal, setRefreshTotal]   = useState(0);
+  const [refreshDone, setRefreshDone]     = useState(0);
+  const [refreshNames, setRefreshNames]   = useState<string[]>([]);
+  const [refreshErrors, setRefreshErrors] = useState(0);
+  const refreshAbort = useRef(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const originalBgg = profile?.bgg_username ?? "";
@@ -130,6 +140,59 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   }, []);
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
+
+  // ── BGG Bulk Refresh functions ─────────────────────────────────────────────
+  const fetchRefreshPending = useCallback(async () => {
+    try {
+      const res = await fetch("/api/games/refresh-bulk");
+      const data = await res.json() as { pending?: number };
+      setRefreshPending(data.pending ?? 0);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchRefreshPending(); }, [fetchRefreshPending]);
+
+  async function handleStartRefresh() {
+    refreshAbort.current = false;
+    const pending = refreshPending ?? 0;
+    if (pending === 0) return;
+
+    setRefreshPhase("running");
+    setRefreshTotal(pending);
+    setRefreshDone(0);
+    setRefreshNames([]);
+    setRefreshErrors(0);
+
+    let remaining = pending;
+    while (remaining > 0 && !refreshAbort.current) {
+      try {
+        const res = await fetch("/api/games/refresh-bulk", { method: "POST" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as {
+          refreshed: number; errors: number; names: string[]; remaining: number; done: boolean;
+        };
+        setRefreshDone((d) => d + data.refreshed);
+        setRefreshErrors((e) => e + data.errors);
+        setRefreshNames((n) => [...n, ...data.names]);
+        remaining = data.remaining;
+        if (data.done) break;
+      } catch {
+        setRefreshPhase("error");
+        return;
+      }
+    }
+
+    if (!refreshAbort.current) {
+      setRefreshPhase("done");
+      setRefreshPending(0);
+    }
+  }
+
+  function handleStopRefresh() {
+    refreshAbort.current = true;
+    setRefreshPhase("idle");
+    fetchRefreshPending();
+  }
 
   async function handleStartTranslate() {
     translateAbort.current = false;
@@ -412,6 +475,100 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
               <div className="flex flex-col gap-2">
                 <p className="text-xs text-red-600 font-medium">{translateError}</p>
                 <button onClick={() => { setTranslatePhase("idle"); fetchPending(); }} className="text-xs text-amber-600 underline underline-offset-2 text-left">
+                  Erneut versuchen
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── BGG-Daten aktualisieren ────────────────────────── */}
+        <section>
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-0.5">BGG-Daten aktualisieren</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Holt Komplexität, Verlag und Community-Spielerempfehlung (Best: X) für alle Spiele deiner Bibliothek von BGG.
+              </p>
+            </div>
+
+            {/* Idle */}
+            {refreshPhase === "idle" && (
+              <>
+                {refreshPending === null ? (
+                  <p className="text-xs text-muted-foreground">Lade…</p>
+                ) : refreshPending === 0 ? (
+                  <p className="text-xs text-green-700 font-medium flex items-center gap-1.5">
+                    <Check size={13} /> Alle Spiele bereits aktuell
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">{refreshPending}</span> Spiele ohne Community-Daten
+                  </p>
+                )}
+                <button
+                  onClick={handleStartRefresh}
+                  disabled={!refreshPending}
+                  className="flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={15} />
+                  {refreshPending ? `Alle ${refreshPending} Spiele aktualisieren` : "Nichts zu aktualisieren"}
+                </button>
+              </>
+            )}
+
+            {/* Running */}
+            {refreshPhase === "running" && (
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{refreshDone} / {refreshTotal} aktualisiert</span>
+                  <button onClick={handleStopRefresh} className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                    <X size={12} /> Stopp
+                  </button>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                    style={{ width: `${refreshTotal > 0 ? Math.round((refreshDone / refreshTotal) * 100) : 0}%` }}
+                  />
+                </div>
+                {refreshNames.length > 0 && (
+                  <div className="bg-muted/50 rounded-xl p-2.5 max-h-28 overflow-y-auto">
+                    {refreshNames.map((n, i) => (
+                      <p key={i} className="text-xs text-muted-foreground leading-snug flex items-center gap-1.5">
+                        <Check size={11} className="text-green-500 flex-shrink-0" /> {n}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground animate-pulse">Frage BGG an… (ca. {Math.ceil((refreshTotal - refreshDone) / 5 * 3)} Sek.)</p>
+              </div>
+            )}
+
+            {/* Done */}
+            {refreshPhase === "done" && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-semibold text-green-700 flex items-center gap-1.5">
+                  <Check size={15} /> {refreshDone} Spiele aktualisiert{refreshErrors > 0 ? `, ${refreshErrors} Fehler` : ""}
+                </p>
+                {refreshNames.length > 0 && (
+                  <div className="bg-muted/50 rounded-xl p-2.5 max-h-28 overflow-y-auto">
+                    {refreshNames.map((n, i) => (
+                      <p key={i} className="text-xs text-muted-foreground leading-snug">✓ {n}</p>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => { setRefreshPhase("idle"); fetchRefreshPending(); }} className="text-xs text-amber-600 underline underline-offset-2 text-left">
+                  Zurücksetzen
+                </button>
+              </div>
+            )}
+
+            {/* Error */}
+            {refreshPhase === "error" && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-red-600 font-medium">BGG nicht erreichbar — bitte erneut versuchen.</p>
+                <button onClick={() => { setRefreshPhase("idle"); fetchRefreshPending(); }} className="text-xs text-amber-600 underline underline-offset-2 text-left">
                   Erneut versuchen
                 </button>
               </div>
