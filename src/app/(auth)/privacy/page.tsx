@@ -7,94 +7,172 @@ export default function PrivacyPage() {
       <div className="space-y-6 text-sm text-foreground">
 
         <section>
-          <h2 className="font-semibold text-base mb-2">1. Verantwortlicher</h2>
+          <h2 className="font-semibold text-base mb-2">1. Verantwortlicher (Art. 13 DSGVO)</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Verantwortlicher im Sinne der DSGVO ist [Name, Adresse, E-Mail — siehe Impressum].
+            Dennis Rau<br />
+            Gehrengrabenstraße 1b, 77886 Lauf<br />
+            E-Mail: <a href="mailto:dennis_rau@outlook.de" className="text-amber-600 underline">dennis_rau@outlook.de</a><br />
+            Telefon: 07841 668067
           </p>
         </section>
 
         <section>
-          <h2 className="font-semibold text-base mb-2">2. Welche Daten wir erheben</h2>
-          <ul className="list-disc pl-5 space-y-1 text-muted-foreground leading-relaxed">
-            <li><strong>Account-Daten:</strong> E-Mail-Adresse, (optionaler) Benutzername, Profilfoto (nur bei Google-Login)</li>
-            <li><strong>Nutzungsdaten:</strong> Spielebibliothek, erfasste Partien, Spielnotizen, eigene Fotos</li>
-            <li><strong>Technische Daten:</strong> IP-Adresse (von Vercel-Infrastruktur, max. 30 Tage gespeichert), Browser-Typ</li>
-          </ul>
+          <h2 className="font-semibold text-base mb-2">2. Erhobene Daten und Zwecke</h2>
+          <div className="space-y-4">
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Account-Registrierung</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> E-Mail-Adresse, Passwort (gehasht), optionaler Benutzername<br />
+                <strong>Zweck:</strong> Authentifizierung und Kontoverwaltung<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung)<br />
+                <strong>Speicherdauer:</strong> Bis zur Kontolöschung
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Google-Login (optional)</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> E-Mail-Adresse, Profilname, Profilfoto von Google<br />
+                <strong>Zweck:</strong> Vereinfachte Anmeldung ohne separates Passwort<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. a DSGVO (Einwilligung durch aktive Nutzung)<br />
+                <strong>Hinweis:</strong> Google verarbeitet dabei Daten gemäß eigener Datenschutzerklärung
+                (<a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">policies.google.com/privacy</a>)
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Nutzungsdaten</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> Spielebibliothek, Partienhistorie, Spielnotizen, eigene Fotos<br />
+                <strong>Zweck:</strong> Kernfunktion der App — persönliche Brettspiel-Verwaltung<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO<br />
+                <strong>Speicherdauer:</strong> Bis zur Kontolöschung. Fotos werden in Supabase Storage gespeichert.
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Spielbeschreibungen übersetzen (optional)</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> Englische Spielbeschreibungen (kein Personenbezug)<br />
+                <strong>Zweck:</strong> Automatische Übersetzung ins Deutsche<br />
+                <strong>Dienst:</strong> Google Translate API (unoffizielle, schlüssellose Schnittstelle)<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse — kein Personenbezug)<br />
+                <strong>Hinweis:</strong> Es werden ausschließlich BGG-Spielbeschreibungen übermittelt, keine Nutzerdaten.
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Serverzugriffsdaten</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> IP-Adresse, Browser-Typ, Zeitstempel (durch Vercel-Infrastruktur)<br />
+                <strong>Zweck:</strong> Technischer Betrieb, Fehlerdiagnose, Missbrauchsabwehr<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse)<br />
+                <strong>Speicherdauer:</strong> Max. 30 Tage (Vercel-Standardeinstellung)
+              </p>
+            </div>
+
+          </div>
         </section>
 
         <section>
-          <h2 className="font-semibold text-base mb-2">3. Zweck der Verarbeitung</h2>
-          <ul className="list-disc pl-5 space-y-1 text-muted-foreground leading-relaxed">
-            <li>Bereitstellung der App-Funktionen (Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung)</li>
-            <li>Authentifizierung und Accountverwaltung</li>
-            <li>Kein Einsatz von Tracking, Werbung oder Analysetools</li>
-          </ul>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">4. Drittanbieter &amp; Datenübertragung</h2>
+          <h2 className="font-semibold text-base mb-2">3. Auftragsverarbeiter und Drittanbieter</h2>
           <div className="space-y-3 text-muted-foreground leading-relaxed">
-            <div>
-              <p className="font-medium text-foreground">Supabase (Auth + Datenbank)</p>
-              <p>Supabase Inc., San Francisco, USA. Daten werden auf EU-Servern gespeichert (Frankfurt).
-              Datenschutz: <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">supabase.com/privacy</a></p>
+            <div className="border-l-2 border-amber-200 pl-3">
+              <p className="font-medium text-foreground text-xs">Supabase (Datenbank, Auth, Dateispeicher)</p>
+              <p className="text-xs">Supabase Inc., 970 Toa Payoh North, Singapur. Datenspeicherung auf EU-Servern
+              (AWS Frankfurt, Region eu-central-1). Auftragsverarbeitungsvertrag (DPA) abgeschlossen.
+              &rarr; <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">supabase.com/privacy</a></p>
             </div>
-            <div>
-              <p className="font-medium text-foreground">Vercel (Hosting)</p>
-              <p>Vercel Inc., San Francisco, USA. Standardvertragsklauseln (SCC) für Drittlandübertragung.
-              Datenschutz: <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">vercel.com/legal/privacy-policy</a></p>
+            <div className="border-l-2 border-amber-200 pl-3">
+              <p className="font-medium text-foreground text-xs">Vercel (Hosting, CDN)</p>
+              <p className="text-xs">Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, USA.
+              Drittlandübertragung auf Basis von Standardvertragsklauseln (SCC gem. Art. 46 DSGVO).
+              &rarr; <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">vercel.com/legal/privacy-policy</a></p>
             </div>
-            <div>
-              <p className="font-medium text-foreground">Google OAuth (optional)</p>
-              <p>Bei Anmeldung über Google: Datenverarbeitung durch Google Ireland Ltd. gemäß Google-Datenschutzerklärung.
-              Nur bei expliziter Nutzung des &quot;Mit Google registrieren&quot;-Buttons.</p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground">BoardGameGeek API</p>
-              <p>Spieledaten werden von boardgamegeek.com abgerufen. Dabei wird keine persönliche Information übermittelt.</p>
+            <div className="border-l-2 border-amber-200 pl-3">
+              <p className="font-medium text-foreground text-xs">BoardGameGeek API</p>
+              <p className="text-xs">BoardGameGeek, LLC, USA. Es werden ausschließlich öffentliche
+              Spieledaten abgerufen. Dabei werden keine personenbezogenen Daten der Nutzer übermittelt.
+              &rarr; <a href="https://boardgamegeek.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">boardgamegeek.com/privacy</a></p>
             </div>
           </div>
         </section>
 
         <section>
-          <h2 className="font-semibold text-base mb-2">5. Speicherdauer</h2>
+          <h2 className="font-semibold text-base mb-2">4. Keine Weitergabe an Dritte</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Deine Daten werden gespeichert, solange dein Account besteht. Bei Accountlöschung (in der App möglich)
-            werden alle personenbezogenen Daten innerhalb von 30 Tagen unwiderruflich gelöscht.
+            Personenbezogene Daten werden nicht an Dritte verkauft, vermietet oder zu Werbezwecken
+            weitergegeben. Eine Weitergabe erfolgt ausschließlich an die oben genannten Auftragsverarbeiter
+            im Rahmen des Betriebs der App.
           </p>
         </section>
 
         <section>
-          <h2 className="font-semibold text-base mb-2">6. Deine Rechte (DSGVO Art. 15–21)</h2>
-          <ul className="list-disc pl-5 space-y-1 text-muted-foreground leading-relaxed">
-            <li><strong>Auskunft</strong> über gespeicherte Daten</li>
-            <li><strong>Berichtigung</strong> unrichtiger Daten (in den App-Einstellungen möglich)</li>
-            <li><strong>Löschung</strong> deines Accounts (direkt in der App unter Profil)</li>
-            <li><strong>Einschränkung</strong> der Verarbeitung</li>
-            <li><strong>Datenübertragbarkeit</strong></li>
-            <li><strong>Widerspruch</strong> gegen die Verarbeitung</li>
-          </ul>
-          <p className="text-muted-foreground mt-2">
-            Anfragen an: <a href="mailto:[deine@email.de]" className="text-amber-600 underline">[deine@email.de]</a>
-          </p>
-          <p className="text-muted-foreground mt-1">
-            Du hast außerdem das Recht, dich bei der zuständigen Datenschutzbehörde zu beschweren
-            (Deutschland: <a href="https://www.bfdi.bund.de" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">bfdi.bund.de</a>).
+          <h2 className="font-semibold text-base mb-2">5. Cookies</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            MeepleBase verwendet ausschließlich technisch notwendige Session-Cookies für die
+            Authentifizierung (Supabase Auth-Token). Es werden keine Marketing-, Tracking- oder
+            Analyse-Cookies gesetzt. Ein Cookie-Banner ist daher nicht erforderlich.
           </p>
         </section>
 
         <section>
-          <h2 className="font-semibold text-base mb-2">7. Cookies</h2>
+          <h2 className="font-semibold text-base mb-2">6. Speicherdauer</h2>
           <p className="text-muted-foreground leading-relaxed">
-            Diese App verwendet ausschließlich technisch notwendige Session-Cookies für die Authentifizierung (Supabase Auth).
-            Es werden keine Marketing- oder Tracking-Cookies gesetzt.
+            Daten werden gespeichert, solange dein Account besteht. Bei Accountlöschung
+            (unter Profil → &ldquo;Account löschen&rdquo;) werden alle personenbezogenen Daten
+            einschließlich Bibliothek, Partien, Notizen und Fotos unwiderruflich gelöscht.
+            Die Löschung erfolgt innerhalb von 30 Tagen.
           </p>
         </section>
 
-        <p className="text-xs text-muted-foreground pt-4">
-          <a href="/impressum" className="text-amber-600 underline mr-4">Impressum</a>
-          <a href="/terms" className="text-amber-600 underline">Nutzungsbedingungen</a>
-        </p>
+        <section>
+          <h2 className="font-semibold text-base mb-2">7. Deine Rechte (Art. 15–21 DSGVO)</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["Auskunft", "Art. 15"],
+              ["Berichtigung", "Art. 16"],
+              ["Löschung", "Art. 17"],
+              ["Einschränkung", "Art. 18"],
+              ["Datenübertragbarkeit", "Art. 20"],
+              ["Widerspruch", "Art. 21"],
+            ].map(([right, article]) => (
+              <div key={right} className="bg-muted/40 rounded-lg px-3 py-2">
+                <p className="text-xs font-medium">{right}</p>
+                <p className="text-[10px] text-muted-foreground">{article} DSGVO</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-muted-foreground text-xs mt-3">
+            Anfragen richten an:{" "}
+            <a href="mailto:dennis_rau@outlook.de" className="text-amber-600 underline">
+              dennis_rau@outlook.de
+            </a>
+          </p>
+          <p className="text-muted-foreground text-xs mt-2">
+            Beschwerderecht bei der zuständigen Aufsichtsbehörde:{" "}
+            <a href="https://www.lfd.bw.de" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">
+              Landesbeauftragter für Datenschutz Baden-Württemberg (lfd.bw.de)
+            </a>
+          </p>
+        </section>
+
+        <section>
+          <h2 className="font-semibold text-base mb-2">8. Minderjährige</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            MeepleBase richtet sich an Nutzer ab 16 Jahren. Für Nutzer unter 16 Jahren
+            ist die Einwilligung der Erziehungsberechtigten erforderlich (Art. 8 DSGVO).
+          </p>
+        </section>
+
+        <div className="border-t border-border pt-4">
+          <p className="text-xs text-muted-foreground">
+            <a href="/impressum" className="text-amber-600 underline mr-4">Impressum</a>
+            <a href="/terms" className="text-amber-600 underline">Nutzungsbedingungen</a>
+          </p>
+        </div>
+
       </div>
     </div>
   );

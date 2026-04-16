@@ -179,7 +179,8 @@ export function RegisterForm() {
           <a href="/terms" className="underline hover:text-foreground">Nutzungsbedingungen</a>{" "}
           und der{" "}
           <a href="/privacy" className="underline hover:text-foreground">Datenschutzerklärung</a>{" "}
-          zu.
+          zu.{" "}
+          <a href="/impressum" className="underline hover:text-foreground">Impressum</a>
         </p>
       </form>
     </div>
