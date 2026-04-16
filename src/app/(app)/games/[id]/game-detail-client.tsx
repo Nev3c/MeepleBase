@@ -83,6 +83,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [savingInfo, setSavingInfo] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "ok" | "error">("idle");
+  const [refreshLabel, setRefreshLabel] = useState("BGG aktualisieren");
   const [gameData, setGameData] = useState(game);
 
   async function handleRefreshBGG() {
@@ -93,6 +94,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
       const data = await res.json() as {
         success?: boolean;
         error?: string;
+        updated?: string[];
         complexity?: number | null;
         publishers?: string[];
         best_players?: number[] | null;
@@ -104,12 +106,19 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           ...(data.publishers != null && data.publishers.length > 0 ? { publishers: data.publishers } : {}),
           ...(data.best_players != null ? { best_players: data.best_players } : {}),
         }));
+        const LABELS: Record<string, string> = { complexity: "Komplexität", publishers: "Verlag", best_players: "Best" };
+        const updated = (data.updated ?? []) as string[];
+        const msg = updated.length > 0
+          ? updated.map((k) => LABELS[k] ?? k).join(", ") + " ✓"
+          : "Keine neuen BGG-Daten ✓";
+        setRefreshLabel(msg);
         setRefreshStatus("ok");
-        setTimeout(() => setRefreshStatus("idle"), 3000);
+        setTimeout(() => { setRefreshStatus("idle"); setRefreshLabel("BGG aktualisieren"); }, 4000);
       } else {
         console.error("[refresh]", data.error);
+        setRefreshLabel("Fehler – nochmal?");
         setRefreshStatus("error");
-        setTimeout(() => setRefreshStatus("idle"), 4000);
+        setTimeout(() => { setRefreshStatus("idle"); setRefreshLabel("BGG aktualisieren"); }, 4000);
       }
     } catch {
       setRefreshStatus("error");
@@ -600,10 +609,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               title="BGG-Daten aktualisieren"
             >
               <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
-              {refreshing       ? "Lädt…"        :
-               refreshStatus === "ok"    ? "Aktualisiert ✓" :
-               refreshStatus === "error" ? "Fehler – nochmal?" :
-               "BGG aktualisieren"}
+              {refreshing ? "Lädt…" : refreshLabel}
             </button>
           )}
         </div>

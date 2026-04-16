@@ -2,7 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Seiten die ohne Login erreichbar sind
-const PUBLIC_ROUTES = ["/login", "/register", "/onboarding", "/auth"];
+const PUBLIC_ROUTES = [
+  "/login", "/register", "/onboarding", "/auth",
+  "/waiting", "/terms", "/privacy", "/impressum",
+];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -46,6 +49,24 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/library";
     return NextResponse.redirect(url);
+  }
+
+  // Freigabe-Check: wenn REQUIRE_APPROVAL aktiv, unapproved User → /waiting
+  if (user && !isPublicRoute && path !== "/waiting") {
+    const requireApproval = process.env.REQUIRE_APPROVAL === "true";
+    if (requireApproval) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("approved")
+        .eq("id", user.id)
+        .single();
+
+      if (profile && profile.approved === false) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/waiting";
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return supabaseResponse;
