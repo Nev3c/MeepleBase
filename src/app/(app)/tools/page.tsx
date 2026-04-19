@@ -446,7 +446,7 @@ export default function ToolsPage() {
   ];
 
   return (
-    <div className="flex flex-col bg-background">
+    <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
       {/* Header */}
       <div className="bg-background border-b border-border px-4 pt-5 pb-0">
         <h1 className="font-display text-2xl font-semibold text-[#1E2A3A] mb-3">Tools</h1>
