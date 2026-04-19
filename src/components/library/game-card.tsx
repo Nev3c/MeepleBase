@@ -25,6 +25,8 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
   const { game } = userGame;
   if (!game) return null;
 
+  const displayName = userGame.custom_fields?.name ?? game.name;
+
   if (view === "list") {
     return (
       <Link
@@ -36,21 +38,21 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
           {game.thumbnail_url ? (
             <Image
               src={game.thumbnail_url}
-              alt={game.name}
+              alt={displayName}
               fill
               className="object-cover"
               sizes="64px"
               loading="lazy"
             />
           ) : (
-            <PlaceholderCover name={game.name} size="sm" />
+            <PlaceholderCover name={displayName} size="sm" />
           )}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-foreground text-sm leading-tight truncate">
-            {game.name}
+            {displayName}
           </h3>
           {game.year_published && (
             <span className="text-muted-foreground text-xs">{game.year_published}</span>
@@ -114,14 +116,14 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
         {game.thumbnail_url ? (
           <Image
             src={game.thumbnail_url}
-            alt={game.name}
+            alt={displayName}
             fill
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             sizes="(max-width: 640px) 45vw, 200px"
             loading="lazy"
           />
         ) : (
-          <PlaceholderCover name={game.name} size="lg" />
+          <PlaceholderCover name={displayName} size="lg" />
         )}
 
         {/* Status badge overlay */}
@@ -155,7 +157,7 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
       {/* Card body */}
       <div className="p-2.5 flex flex-col gap-1">
         <h3 className="font-medium text-foreground text-xs leading-tight line-clamp-2">
-          {game.name}
+          {displayName}
         </h3>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           {(game.min_players || game.max_players) && (

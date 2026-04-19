@@ -128,6 +128,33 @@ export function parseBestPlayers(polls: unknown): number[] | null {
   return best.length > 0 ? best.sort((a, b) => a - b) : null;
 }
 
+// ── Wikidata multilingual names ───────────────────────────────────────────────
+// Query Wikidata by BGG ID (P2339) to get translated game names (DE, FR, NL, etc.)
+
+async function fetchWikidataNames(bggId: number): Promise<string[]> {
+  try {
+    const sparql = `
+SELECT ?label WHERE {
+  ?item wdt:P2339 "${bggId}" .
+  ?item rdfs:label ?label .
+  FILTER(LANG(?label) IN ("de","fr","nl","pl","cs","it","es","pt","hu","ko","ja","zh"))
+}`;
+    const url = `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql.trim())}&format=json`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "Accept": "application/sparql-results+json",
+        "User-Agent": "MeepleBase/1.0 (https://meeplebase.app)",
+      },
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { results: { bindings: Array<{ label: { value: string } }> } };
+    return data.results.bindings.map((b) => b.label.value).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // ── fetchGeekItem ─────────────────────────────────────────────────────────────
 
 export interface GeekItemData {
@@ -139,14 +166,16 @@ export interface GeekItemData {
 }
 
 export async function fetchGeekItem(bggId: number): Promise<GeekItemData | null> {
-  // Run both API calls in parallel
-  const [geekResult, xmlResult] = await Promise.allSettled([
+  // Run all API calls in parallel
+  const [geekResult, xmlResult, wikidataResult] = await Promise.allSettled([
     fetchGeekItems(bggId),
     fetchXmlApi(bggId),
+    fetchWikidataNames(bggId),
   ]);
 
-  const geek = geekResult.status === "fulfilled" ? geekResult.value : null;
-  const xml  = xmlResult.status  === "fulfilled" ? xmlResult.value  : null;
+  const geek     = geekResult.status     === "fulfilled" ? geekResult.value     : null;
+  const xml      = xmlResult.status      === "fulfilled" ? xmlResult.value      : null;
+  const wikidata = wikidataResult.status === "fulfilled" ? wikidataResult.value : [];
 
   if (!geek && !xml) return null;
 
@@ -155,12 +184,12 @@ export async function fetchGeekItem(bggId: number): Promise<GeekItemData | null>
   const best_players = xml?.best_players ?? geek?.best_players ?? null;
   const publishers   = geek?.publishers  ?? [];
 
-  // Merge alternate names from both sources, deduplicate
-  const xmlNames  = xml?.alternate_names  ?? [];
-  const geekNames = geek?.alternate_names ?? [];
+  // Merge alternate names from all sources, deduplicate (XML first = highest quality)
+  const xmlNames      = xml?.alternate_names  ?? [];
+  const geekNames     = geek?.alternate_names ?? [];
   const seen = new Set<string>();
   const alternate_names: string[] = [];
-  for (const n of [...xmlNames, ...geekNames]) {
+  for (const n of [...xmlNames, ...geekNames, ...wikidata]) {
     const key = n.toLowerCase().trim();
     if (key && !seen.has(key)) { seen.add(key); alternate_names.push(n); }
   }
