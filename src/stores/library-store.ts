@@ -6,9 +6,11 @@ interface LibraryState {
   view: LibraryView;
   filter: LibraryFilter;
   sortKey: LibrarySortKey;
+  tagLang: "de" | "en";
   setView: (view: LibraryView) => void;
   setFilter: (filter: LibraryFilter) => void;
   setSortKey: (key: LibrarySortKey) => void;
+  setTagLang: (lang: "de" | "en") => void;
   resetFilter: () => void;
 }
 
@@ -20,14 +22,16 @@ export const useLibraryStore = create<LibraryState>()(
       view: "grid",
       filter: defaultFilter,
       sortKey: "name_asc",
+      tagLang: "de",
       setView: (view) => set({ view }),
       setFilter: (filter) => set({ filter }),
       setSortKey: (sortKey) => set({ sortKey }),
+      setTagLang: (tagLang) => set({ tagLang }),
       resetFilter: () => set({ filter: defaultFilter }),
     }),
     {
       name: "meeplebase-library",
-      partialize: (state) => ({ view: state.view, sortKey: state.sortKey }),
+      partialize: (state) => ({ view: state.view, sortKey: state.sortKey, tagLang: state.tagLang }),
     }
   )
 );

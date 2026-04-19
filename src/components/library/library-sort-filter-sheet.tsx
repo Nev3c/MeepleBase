@@ -1,22 +1,33 @@
 "use client";
 
-import { X } from "lucide-react";
+import {
+  X,
+  ArrowUpAZ, ArrowDownAZ,
+  Clock, Star, Dices, Users,
+  TrendingUp, TrendingDown,
+} from "lucide-react";
 import { useLibraryStore } from "@/stores/library-store";
 import { translateCategory, translateMechanic } from "@/lib/bgg-translations";
 import { cn } from "@/lib/utils";
 import type { LibrarySortKey } from "@/types";
 
-const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: string }[] = [
-  { key: "name_asc",     label: "Name A → Z",          icon: "🔤" },
-  { key: "name_desc",    label: "Name Z → A",          icon: "🔤" },
-  { key: "added_desc",   label: "Neueste zuerst",       icon: "🕐" },
-  { key: "added_asc",    label: "Älteste zuerst",       icon: "🕐" },
-  { key: "rating",       label: "Bewertung ↓",          icon: "⭐" },
-  { key: "rating_asc",   label: "Bewertung ↑",          icon: "⭐" },
-  { key: "plays_desc",   label: "Meist gespielt",       icon: "🎲" },
-  { key: "plays_asc",    label: "Wenigst gespielt",     icon: "🎲" },
-  { key: "players_asc",  label: "Wenigste Spieler",     icon: "👤" },
-  { key: "players_desc", label: "Meiste Spieler",       icon: "👥" },
+interface SortOption {
+  key: LibrarySortKey;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const SORT_OPTIONS: SortOption[] = [
+  { key: "name_asc",     label: "Name A → Z",      icon: <ArrowUpAZ   size={14} strokeWidth={2} /> },
+  { key: "name_desc",    label: "Name Z → A",      icon: <ArrowDownAZ size={14} strokeWidth={2} /> },
+  { key: "added_desc",   label: "Neueste zuerst",  icon: <Clock       size={14} strokeWidth={2} /> },
+  { key: "added_asc",    label: "Älteste zuerst",  icon: <Clock       size={14} strokeWidth={2} /> },
+  { key: "rating",       label: "Bewertung ↓",     icon: <Star        size={14} strokeWidth={2} /> },
+  { key: "rating_asc",   label: "Bewertung ↑",     icon: <Star        size={14} strokeWidth={2} /> },
+  { key: "plays_desc",   label: "Meist gespielt",  icon: <TrendingUp  size={14} strokeWidth={2} /> },
+  { key: "plays_asc",    label: "Wenigst gespielt", icon: <TrendingDown size={14} strokeWidth={2} /> },
+  { key: "players_asc",  label: "Wenigste Spieler", icon: <Users      size={14} strokeWidth={2} /> },
+  { key: "players_desc", label: "Meiste Spieler",  icon: <Users       size={14} strokeWidth={2} /> },
 ];
 
 interface Props {
@@ -32,7 +43,7 @@ export function LibrarySortFilterSheet({
   filteredCount,
   onClose,
 }: Props) {
-  const { filter, setFilter, sortKey, setSortKey } = useLibraryStore();
+  const { filter, setFilter, sortKey, setSortKey, tagLang, setTagLang } = useLibraryStore();
   const selectedCategories = filter.categories ?? [];
   const selectedMechanics = filter.mechanics ?? [];
 
@@ -57,6 +68,8 @@ export function LibrarySortFilterSheet({
     setSortKey("name_asc");
     setFilter({ ...filter, categories: undefined, mechanics: undefined });
   }
+
+  const hasTagSections = availableCategories.length > 0 || availableMechanics.length > 0;
 
   return (
     <>
@@ -111,12 +124,47 @@ export function LibrarySortFilterSheet({
                       : "bg-muted/60 text-foreground hover:bg-muted"
                   )}
                 >
-                  <span className="text-base leading-none">{opt.icon}</span>
+                  <span className="flex-shrink-0">{opt.icon}</span>
                   <span className="truncate">{opt.label}</span>
                 </button>
               ))}
             </div>
           </section>
+
+          {/* Language toggle — only when tags are available */}
+          {hasTagSections && (
+            <section>
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Tags
+                </h3>
+                <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
+                  <button
+                    onClick={() => setTagLang("de")}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded-md transition-all",
+                      tagLang === "de"
+                        ? "bg-white shadow-sm text-amber-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    DE
+                  </button>
+                  <button
+                    onClick={() => setTagLang("en")}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded-md transition-all",
+                      tagLang === "en"
+                        ? "bg-white shadow-sm text-amber-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    EN
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Categories */}
           {availableCategories.length > 0 && (
@@ -141,7 +189,7 @@ export function LibrarySortFilterSheet({
                         : "bg-background text-foreground border-border hover:border-amber-300 hover:bg-amber-50"
                     )}
                   >
-                    {translateCategory(cat)}
+                    {tagLang === "de" ? translateCategory(cat) : cat}
                   </button>
                 ))}
               </div>
@@ -171,7 +219,7 @@ export function LibrarySortFilterSheet({
                         : "bg-background text-foreground border-border hover:border-slate-400 hover:bg-slate-50"
                     )}
                   >
-                    {translateMechanic(mech)}
+                    {tagLang === "de" ? translateMechanic(mech) : mech}
                   </button>
                 ))}
               </div>

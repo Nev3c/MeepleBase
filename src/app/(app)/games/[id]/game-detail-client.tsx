@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { translateCategories, translateMechanics } from "@/lib/bgg-translations";
+import { useLibraryStore } from "@/stores/library-store";
 import type { Game, UserGame, GameStatus, GameNote, NoteType, CustomFields } from "@/types";
 import { ImageLightbox } from "@/components/shared/image-lightbox";
 
@@ -186,8 +187,17 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     setSavingInfo(false);
   }
 
-  const categories = customFields.categories ?? translateCategories(gameData.categories);
-  const mechanics = translateMechanics(gameData.mechanics);
+  const { tagLang, setTagLang } = useLibraryStore();
+
+  // Raw BGG values (English strings)
+  const rawCategories = gameData.categories ?? [];
+  const rawMechanics = gameData.mechanics ?? [];
+
+  // Language-aware display values (custom categories always shown as-is)
+  const categories = customFields.categories
+    ? customFields.categories
+    : tagLang === "de" ? translateCategories(rawCategories) : rawCategories;
+  const mechanics = tagLang === "de" ? translateMechanics(rawMechanics) : rawMechanics;
 
   async function handleStatusSave(newStatus: GameStatus) {
     if (!userGame) return;
@@ -240,8 +250,8 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
 
   return (
     <div className="flex flex-col min-h-dvh bg-background">
-      {/* Hero */}
-      <div className="relative w-full aspect-[16/9] bg-muted overflow-hidden">
+      {/* ── Hero with title overlay ─────────────────────────────────────────── */}
+      <div className="relative w-full bg-muted overflow-hidden" style={{ aspectRatio: "4/3", maxHeight: "60vw" }}>
         {gameData.image_url || gameData.thumbnail_url ? (
           <Image
             src={(gameData.image_url ?? gameData.thumbnail_url)!}
@@ -254,26 +264,59 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         ) : (
           <PlaceholderHero name={game.name} />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
+        {/* Gradient scrim — bottom 60% */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+
+        {/* Back button */}
         <button
           onClick={() => router.back()}
-          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center shadow-md"
+          className="absolute top-4 left-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center shadow-md text-white"
           aria-label="Zurück"
         >
           <ArrowLeft size={18} />
         </button>
+
+        {/* Edit button (top-right) */}
+        {userGame && !editingInfo && (
+          <button
+            onClick={() => setEditingInfo(true)}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center shadow-md text-white"
+            aria-label="Bearbeiten"
+          >
+            <Edit2 size={14} />
+          </button>
+        )}
+
+        {/* Title at bottom of hero */}
+        {!editingInfo && (
+          <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-8">
+            <h1 className="font-display text-xl font-bold text-white leading-tight drop-shadow-sm">
+              {displayName}
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              {gameData.year_published && (
+                <span className="text-white/65 text-sm">{gameData.year_published}</span>
+              )}
+              {customFields.name && (
+                <span className="text-amber-300 text-xs font-medium">Eigener Name</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col gap-5 px-4 pb-12 pt-4 relative z-10">
-        {/* Title + Edit */}
-        {editingInfo ? (
+      <div className="flex flex-col gap-4 px-4 pb-12 pt-4 relative z-10">
+
+        {/* ── Edit form (inline, shown below hero when active) ──────────────── */}
+        {editingInfo && (
           <div className="flex flex-col gap-3 bg-muted/30 rounded-2xl p-4">
+            <h2 className="text-sm font-semibold text-foreground">Infos bearbeiten</h2>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Name</label>
               <input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
-                className="w-full text-lg font-bold bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full text-base font-semibold bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
             <div>
@@ -288,55 +331,26 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spieler Min</label>
-                <input
-                  type="number"
-                  value={draftMinPlayers}
-                  onChange={(e) => setDraftMinPlayers(e.target.value)}
-                  placeholder={game.min_players?.toString() ?? "–"}
-                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                <input type="number" value={draftMinPlayers} onChange={(e) => setDraftMinPlayers(e.target.value)} placeholder={game.min_players?.toString() ?? "–"} className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spieler Max</label>
-                <input
-                  type="number"
-                  value={draftMaxPlayers}
-                  onChange={(e) => setDraftMaxPlayers(e.target.value)}
-                  placeholder={game.max_players?.toString() ?? "–"}
-                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                <input type="number" value={draftMaxPlayers} onChange={(e) => setDraftMaxPlayers(e.target.value)} placeholder={game.max_players?.toString() ?? "–"} className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spielzeit Min</label>
-                <input
-                  type="number"
-                  value={draftMinPlaytime}
-                  onChange={(e) => setDraftMinPlaytime(e.target.value)}
-                  placeholder={game.min_playtime?.toString() ?? "–"}
-                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                <input type="number" value={draftMinPlaytime} onChange={(e) => setDraftMinPlaytime(e.target.value)} placeholder={game.min_playtime?.toString() ?? "–"} className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Spielzeit Max</label>
-                <input
-                  type="number"
-                  value={draftMaxPlaytime}
-                  onChange={(e) => setDraftMaxPlaytime(e.target.value)}
-                  placeholder={game.max_playtime?.toString() ?? "–"}
-                  className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
+                <input type="number" value={draftMaxPlaytime} onChange={(e) => setDraftMaxPlaytime(e.target.value)} placeholder={game.max_playtime?.toString() ?? "–"} className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
               </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Kategorien (kommagetrennt)</label>
-              <input
-                value={draftCategories}
-                onChange={(e) => setDraftCategories(e.target.value)}
-                placeholder="z.B. Strategie, Familienspiel"
-                className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
+              <input value={draftCategories} onChange={(e) => setDraftCategories(e.target.value)} placeholder="z.B. Strategie, Familienspiel" className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
             <div className="flex gap-2">
               <button onClick={handleSaveInfo} disabled={savingInfo} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold disabled:opacity-50">
@@ -359,102 +373,157 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               <p className="text-[11px] text-amber-600">Eigene Angaben aktiv — BGG-Daten werden beim Import nicht überschrieben.</p>
             )}
           </div>
-        ) : (
-          <div className="flex items-start gap-2">
-            <div className="flex-1 min-w-0">
-              <h1 className="font-display text-2xl font-bold text-foreground leading-tight">{displayName}</h1>
-              {gameData.year_published && <p className="text-muted-foreground text-sm mt-0.5">{gameData.year_published}</p>}
-              {customFields.name && <p className="text-[11px] text-amber-600 mt-0.5">Eigener Name</p>}
-            </div>
-            {userGame && (
-              <button onClick={() => setEditingInfo(true)} className="mt-1 w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0">
-                <Edit2 size={13} />
-              </button>
-            )}
-          </div>
         )}
 
-        {/* Status */}
+        {/* ── Overview card: status + meta ─────────────────────────────────── */}
         {userGame && (
-          <div className="flex items-center gap-2">
-            {editingStatus ? (
-              <div className="flex flex-col gap-2 w-full">
-                <div className="flex flex-wrap gap-2">
-                  {STATUS_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleStatusSave(opt.value)}
-                      disabled={saving}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
-                        status === opt.value ? "bg-amber-500 text-white" : "bg-muted text-foreground hover:bg-muted/80"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {/* Status row */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              {editingStatus ? (
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex flex-wrap gap-2">
+                    {STATUS_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleStatusSave(opt.value)}
+                        disabled={saving}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          status === opt.value ? "bg-amber-500 text-white" : "bg-muted text-foreground hover:bg-muted/80"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setEditingStatus(false)} className="self-start text-xs text-muted-foreground flex items-center gap-1">
+                    <X size={12} /> Abbrechen
+                  </button>
                 </div>
-                <button onClick={() => setEditingStatus(false)} className="self-start text-xs text-muted-foreground flex items-center gap-1">
-                  <X size={12} /> Abbrechen
-                </button>
-              </div>
-            ) : (
-              <>
-                <span className={cn("px-3 py-1 rounded-full text-sm font-medium", STATUS_COLORS[status])}>
-                  {STATUS_OPTIONS.find((o) => o.value === status)?.label}
-                </span>
-                <button
-                  onClick={() => setEditingStatus(true)}
-                  className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Status ändern"
-                >
-                  <Edit2 size={13} />
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Rating Section */}
-        {userGame && (
-          <div className="flex flex-col gap-2 bg-muted/30 rounded-xl px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Eigene Wertung</span>
-              {personalRating && (
-                <button onClick={() => handleRatingClick(personalRating)} className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors">
-                  Löschen
-                </button>
+              ) : (
+                <>
+                  <span className={cn("px-3 py-1 rounded-full text-sm font-medium", STATUS_COLORS[status])}>
+                    {STATUS_OPTIONS.find((o) => o.value === status)?.label}
+                  </span>
+                  <button
+                    onClick={() => setEditingStatus(true)}
+                    className="ml-auto w-7 h-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Status ändern"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                </>
               )}
             </div>
-            <div className="flex items-center gap-1 flex-wrap">
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => handleRatingClick(n)}
-                  className={cn(
-                    "w-7 h-7 rounded-lg text-xs font-bold transition-all",
-                    personalRating === n
-                      ? "bg-amber-500 text-white shadow-sm"
-                      : personalRating && n <= personalRating
-                      ? "bg-amber-200 text-amber-800"
-                      : "bg-muted text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-            {gameData.rating_avg != null && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <Star size={12} className="text-muted-foreground" strokeWidth={1.5} />
-                <span className="text-xs text-muted-foreground">BGG-Wertung: <span className="font-medium">{gameData.rating_avg.toFixed(1)}</span></span>
+
+            {/* Meta chips */}
+            {hasMeta && (
+              <div className="flex flex-wrap gap-2 px-4 py-3">
+                {(effMinPlayers || effMaxPlayers) && (
+                  <div className="relative">
+                    <Stat icon={<Users size={14} />} label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)} />
+                    {(customFields.min_players != null || customFields.max_players != null) && (
+                      <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                    )}
+                  </div>
+                )}
+                {(effMinPlaytime || effMaxPlaytime) && (
+                  <div className="relative">
+                    <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />
+                    {(customFields.min_playtime != null || customFields.max_playtime != null) && (
+                      <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                    )}
+                  </div>
+                )}
+                {gameData.complexity != null && (
+                  <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
+                )}
+                {gameData.best_players != null && gameData.best_players.length > 0 && (
+                  <Stat icon={<Users size={14} />} label={`Best: ${gameData.best_players.join(", ")}`} sublabel="Community" />
+                )}
+                {customFields.best_players_override && customFields.best_players_override.length > 0 && (
+                  <div className="relative">
+                    <Stat icon={<Users size={14} />} label={`Best: ${customFields.best_players_override.join(", ")}`} sublabel="Meine Wahl" />
+                    <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                  </div>
+                )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Meta chips for non-library games */}
+        {!userGame && hasMeta && (
+          <div className="flex flex-wrap gap-2">
+            {(effMinPlayers || effMaxPlayers) && <Stat icon={<Users size={14} />} label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)} />}
+            {(effMinPlaytime || effMaxPlaytime) && <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />}
+            {gameData.complexity != null && <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />}
+          </div>
+        )}
+
+        {/* ── Personal card: rating + best players + price ──────────────────── */}
+        {userGame && (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {/* Rating */}
+            <div className="px-4 py-3 border-b border-border">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Eigene Wertung</span>
+                {personalRating && (
+                  <button onClick={() => handleRatingClick(personalRating)} className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors">
+                    Löschen
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => handleRatingClick(n)}
+                    className={cn(
+                      "w-8 h-8 rounded-lg text-xs font-bold transition-all",
+                      personalRating === n
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : personalRating && n <= personalRating
+                        ? "bg-amber-200 text-amber-800"
+                        : "bg-muted text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              {gameData.rating_avg != null && (
+                <div className="flex items-center gap-1.5 mt-2.5">
+                  <Star size={11} className="text-amber-400" strokeWidth={2} />
+                  <span className="text-xs text-muted-foreground">BGG: <span className="font-medium text-foreground">{gameData.rating_avg.toFixed(1)}</span></span>
+                </div>
+              )}
+            </div>
+
+            {/* Best-players override */}
+            <div className="px-4 py-3 border-b border-border">
+              <BestPlayersOverride
+                value={customFields.best_players_override ?? []}
+                onChange={async (newVal) => {
+                  const newCustom = { ...customFields };
+                  if (newVal.length > 0) newCustom.best_players_override = newVal;
+                  else delete newCustom.best_players_override;
+                  await fetch(`/api/user-games/${userGame.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ custom_fields: Object.keys(newCustom).length > 0 ? newCustom : null }),
+                  });
+                  setCustomFields(newCustom);
+                }}
+              />
+            </div>
+
             {/* Purchase price */}
-            <div className="flex items-center gap-2 mt-1 pt-2 border-t border-border/50">
-              <span className="text-xs text-muted-foreground flex-1">Kaufpreis</span>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-sm text-muted-foreground">Kaufpreis</span>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">€</span>
+                <span className="text-sm text-muted-foreground">€</span>
                 <input
                   type="number"
                   min="0"
@@ -481,61 +550,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         )}
 
-        {/* Meta */}
-        {hasMeta && (
-          <div className="flex flex-wrap gap-2">
-            {(effMinPlayers || effMaxPlayers) && (
-              <div className="relative">
-                <Stat icon={<Users size={14} />} label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)} />
-                {(customFields.min_players != null || customFields.max_players != null) && (
-                  <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
-                )}
-              </div>
-            )}
-            {(effMinPlaytime || effMaxPlaytime) && (
-              <div className="relative">
-                <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />
-                {(customFields.min_playtime != null || customFields.max_playtime != null) && (
-                  <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
-                )}
-              </div>
-            )}
-            {gameData.complexity != null && (
-              <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
-            )}
-            {gameData.best_players != null && gameData.best_players.length > 0 && (
-              <div className="relative">
-                <Stat icon={<Users size={14} />} label={`Best: ${gameData.best_players.join(", ")}`} sublabel="Community" />
-              </div>
-            )}
-            {customFields.best_players_override && customFields.best_players_override.length > 0 && (
-              <div className="relative">
-                <Stat icon={<Users size={14} />} label={`Best: ${customFields.best_players_override.join(", ")}`} sublabel="Meine Wahl" />
-                <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Manual best-players picker (always visible when in library) */}
-        {userGame && (
-          <BestPlayersOverride
-            value={customFields.best_players_override ?? []}
-            onChange={async (newVal) => {
-              const newCustom = { ...customFields };
-              if (newVal.length > 0) newCustom.best_players_override = newVal;
-              else delete newCustom.best_players_override;
-              await fetch(`/api/user-games/${userGame.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ custom_fields: Object.keys(newCustom).length > 0 ? newCustom : null }),
-              });
-              setCustomFields(newCustom);
-            }}
-          />
-        )}
-
-        {/* Description */}
+        {/* ── Description ──────────────────────────────────────────────────── */}
         {displayDesc && (
           <div className="relative">
             <ExpandableDescription text={displayDesc} />
@@ -543,15 +558,46 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         )}
 
-        {/* Categories + Mechanics */}
+        {/* ── Categories + Mechanics with language toggle ───────────────────── */}
         {(categories.length > 0 || mechanics.length > 0) && (
-          <section className="flex flex-col gap-3">
-            {categories.length > 0 && (
-              <TagRow label="Kategorien" tags={categories} color="amber" hasCustom={!!customFields.categories} />
-            )}
-            {mechanics.length > 0 && (
-              <TagRow label="Mechanismen" tags={mechanics} color="slate" />
-            )}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-foreground">Kategorien & Mechanismen</h2>
+              {!customFields.categories && (rawCategories.length > 0 || rawMechanics.length > 0) && (
+                <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
+                  <button
+                    onClick={() => setTagLang("de")}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded-md transition-all",
+                      tagLang === "de"
+                        ? "bg-white shadow-sm text-amber-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    DE
+                  </button>
+                  <button
+                    onClick={() => setTagLang("en")}
+                    className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded-md transition-all",
+                      tagLang === "en"
+                        ? "bg-white shadow-sm text-amber-600"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    EN
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-3">
+              {categories.length > 0 && (
+                <TagRow label="Kategorien" tags={categories} color="amber" hasCustom={!!customFields.categories} />
+              )}
+              {mechanics.length > 0 && (
+                <TagRow label="Mechanismen" tags={mechanics} color="slate" />
+              )}
+            </div>
           </section>
         )}
 

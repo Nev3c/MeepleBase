@@ -10,11 +10,21 @@ export default async function ProfilePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [profileResult, libraryResult, playsResult] = await Promise.all([
+  const [profileResult, libraryResult, playsResult, tagsResult] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase.from("user_games").select("id, price_paid", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
     supabase.from("plays").select("game_id, game:games(name, thumbnail_url)").eq("user_id", user.id),
+    supabase.from("user_games").select("game:games(categories, mechanics)").eq("user_id", user.id),
   ]);
+
+  // Compute unique category/mechanic counts across the whole library
+  const uniqueCats = new Set<string>();
+  const uniqueMechs = new Set<string>();
+  for (const row of (tagsResult.data ?? [])) {
+    const g = row.game as { categories: string[] | null; mechanics: string[] | null } | null;
+    for (const c of g?.categories ?? []) uniqueCats.add(c);
+    for (const m of g?.mechanics ?? []) uniqueMechs.add(m);
+  }
 
   const libraryValue = (libraryResult.data ?? []).reduce((sum, ug) => {
     return sum + (typeof ug.price_paid === "number" ? ug.price_paid : 0);
@@ -38,6 +48,8 @@ export default async function ProfilePage() {
       playCount={playsResult.data?.length ?? 0}
       favoriteGame={favoriteGame ? { name: favoriteGame.name, count: favoriteGame.count, thumbnail: favoriteGame.thumbnail } : null}
       libraryValue={libraryValue > 0 ? libraryValue : null}
+      uniqueCategoryCount={uniqueCats.size}
+      uniqueMechanicCount={uniqueMechs.size}
     />
   );
 }
