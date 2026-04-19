@@ -502,7 +502,11 @@ function PlaySheet({
       const ensureRes = await fetch("/api/games/ensure", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bgg_id: globalSelected.bgg_id }),
+        body: JSON.stringify({
+          bgg_id: globalSelected.bgg_id,
+          name: globalSelected.name,
+          thumbnail_url: globalSelected.thumbnail_url,
+        }),
       });
       if (!ensureRes.ok) {
         setError("Spiel konnte nicht geladen werden. Bitte nochmal versuchen.");

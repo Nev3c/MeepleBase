@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-  const body = await req.json() as { bgg_id: number };
+  const body = await req.json() as { bgg_id: number; name?: string; thumbnail_url?: string | null };
   if (!body.bgg_id) return NextResponse.json({ error: "bgg_id erforderlich" }, { status: 400 });
 
   const admin = createClient(
@@ -62,17 +62,18 @@ export async function POST(req: NextRequest) {
     const item = data?.item as Record<string, unknown> | undefined;
     if (!item) return NextResponse.json({ error: "Spiel nicht gefunden" }, { status: 404 });
 
-    const name = String((item.primaryname as Record<string, unknown>)?.name ?? "Unbekannt");
+    // Prefer client-supplied name/thumbnail (already validated via bgg/lookup)
+    // Fall back to geekitems fields — use item.imageurl like bgg/lookup does
+    const name = body.name || String((item.primaryname as Record<string, unknown>)?.name ?? "Unbekannt");
     const year = Number((item as Record<string, unknown>).yearpublished ?? 0) || null;
     const minPlayers = Number((item as Record<string, unknown>).minplayers ?? 1) || null;
     const maxPlayers = Number((item as Record<string, unknown>).maxplayers ?? 1) || null;
     const minPlaytime = Number((item as Record<string, unknown>).minplaytime ?? 0) || null;
     const maxPlaytime = Number((item as Record<string, unknown>).maxplaytime ?? 0) || null;
 
-    interface ImageItem { url?: string }
-    const images = item.images as Record<string, unknown> | undefined;
-    const thumbnail_url = (images?.thumb as ImageItem)?.url ?? null;
-    const image_url = (images?.original as ImageItem)?.url ?? thumbnail_url;
+    // item.imageurl matches what bgg/lookup returns; images.thumb.url used wrong field before
+    const thumbnail_url = body.thumbnail_url ?? (item.imageurl as string | null) ?? null;
+    const image_url = (item.topimageurl as string | null) ?? thumbnail_url;
 
     const description = String((item as Record<string, unknown>).description ?? "").trim() || null;
 
