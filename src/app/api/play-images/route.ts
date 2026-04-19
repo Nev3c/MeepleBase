@@ -54,6 +54,19 @@ export async function POST(req: NextRequest) {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
   const fileName = `${user.id}/${Date.now()}.${ext}`;
 
+  // Ensure bucket exists (auto-create on first use)
+  const { data: buckets } = await storageClient.storage.listBuckets();
+  const bucketExists = (buckets ?? []).some((b) => b.name === "play-images");
+  if (!bucketExists) {
+    const { error: createErr } = await storageClient.storage.createBucket("play-images", {
+      public: true,
+      fileSizeLimit: 10 * 1024 * 1024,
+    });
+    if (createErr) {
+      return NextResponse.json({ error: `Bucket konnte nicht erstellt werden: ${createErr.message}` }, { status: 500 });
+    }
+  }
+
   const { error: uploadError } = await storageClient.storage
     .from("play-images")
     .upload(fileName, file, { contentType: file.type, upsert: false });
