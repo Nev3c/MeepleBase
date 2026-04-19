@@ -581,7 +581,6 @@ function PlaySheet({
                       onChange={(e) => setGameSearch(e.target.value)}
                       placeholder="Name, BGG-ID oder Link…"
                       className="w-full text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
-                      autoFocus
                     />
                   </div>
 

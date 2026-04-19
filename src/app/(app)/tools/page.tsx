@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, Minus, RotateCcw, Dices, ArrowRight,
-  X, Trophy, Undo2, Crown, Zap,
+  X, Trophy, Undo2, Crown, Hash,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -346,16 +346,22 @@ function CoinFlip() {
   const [result, setResult] = useState<"heads" | "tails" | null>(null);
   const [flipping, setFlipping] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  // Cumulative rotation so CSS transition always animates forward from current state
+  const [totalRotation, setTotalRotation] = useState(0);
 
   function flip() {
     if (flipping) return;
+    const outcome: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
     setFlipping(true);
     setShowResult(false);
+    // heads lands on 0° face, tails on 180° face
+    // Add 1080° (3 full spins) + 180° extra for tails
+    setTotalRotation((prev) => prev + 1080 + (outcome === "tails" ? 180 : 0));
     setTimeout(() => {
-      setResult(Math.random() < 0.5 ? "heads" : "tails");
+      setResult(outcome);
       setFlipping(false);
       setShowResult(true);
-    }, 650);
+    }, 700);
   }
 
   return (
@@ -375,24 +381,24 @@ function CoinFlip() {
             className="relative w-32 h-32"
             style={{
               transformStyle: "preserve-3d",
-              transition: flipping ? "transform 0.65s cubic-bezier(0.4,0,0.2,1)" : "transform 0.3s",
-              transform: flipping ? "rotateY(720deg)" : "rotateY(0deg)",
+              transition: "transform 0.7s cubic-bezier(0.4,0,0.2,1)",
+              transform: `rotateY(${totalRotation}deg)`,
             }}
           >
-            {/* Heads */}
+            {/* Front = Kopf (0°) */}
             <div
               className="absolute inset-0 rounded-full flex flex-col items-center justify-center shadow-lg border-4 border-amber-400 bg-amber-400"
-              style={{ backfaceVisibility: "hidden" }}
+              style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
             >
               <Crown size={40} className="text-white drop-shadow" strokeWidth={1.5} />
               <span className="text-white text-xs font-bold mt-1 tracking-widest uppercase">Kopf</span>
             </div>
-            {/* Tails */}
+            {/* Back = Zahl (180°) */}
             <div
               className="absolute inset-0 rounded-full flex flex-col items-center justify-center shadow-lg border-4 border-slate-500 bg-[#1E2A3A]"
-              style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+              style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
             >
-              <Zap size={40} className="text-amber-400 drop-shadow" strokeWidth={1.5} />
+              <Hash size={40} className="text-amber-400 drop-shadow" strokeWidth={1.5} />
               <span className="text-amber-400 text-xs font-bold mt-1 tracking-widest uppercase">Zahl</span>
             </div>
           </div>
@@ -405,7 +411,7 @@ function CoinFlip() {
               {result === "heads" ? "Kopf!" : "Zahl!"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {result === "heads" ? "Die Krone hat gewonnen" : "Das Blitz-Symbol hat gewonnen"}
+              {result === "heads" ? "Die Krone hat gewonnen" : "Die Zahl hat gewonnen"}
             </p>
           </div>
         )}

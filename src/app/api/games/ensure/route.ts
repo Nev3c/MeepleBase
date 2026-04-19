@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       .upsert({
         bgg_id: body.bgg_id,
         name,
-        year,
+        year_published: year,
         min_players: minPlayers,
         max_players: maxPlayers,
         min_playtime: minPlaytime,
