@@ -42,11 +42,18 @@ export async function POST(req: NextRequest) {
   // Check if game already exists
   const { data: existing } = await admin
     .from("games")
-    .select("id")
+    .select("id, thumbnail_url")
     .eq("bgg_id", body.bgg_id)
     .maybeSingle();
 
   if (existing?.id) {
+    // Patch thumbnail if we have one now but the stored record doesn't
+    if (!existing.thumbnail_url && body.thumbnail_url) {
+      await admin
+        .from("games")
+        .update({ thumbnail_url: body.thumbnail_url })
+        .eq("id", existing.id);
+    }
     return NextResponse.json({ game_id: existing.id });
   }
 
