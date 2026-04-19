@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Edit2, Users, Clock, MapPin, Handshake, FileText, Camera } from "lucide-react";
+import { ArrowLeft, Edit2, Users, Clock, MapPin, Handshake, FileText, Camera, ExternalLink, BookPlus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ImageLightbox } from "@/components/shared/image-lightbox";
 
@@ -21,7 +21,7 @@ interface GameInfo {
   name: string;
   thumbnail_url: string | null;
   image_url?: string | null;
-  bgg_id?: number;
+  bgg_id?: number | null;
 }
 
 interface Play {
@@ -37,10 +37,13 @@ interface Play {
   players?: PlayPlayer[];
 }
 
-export function PlayDetailClient({ play }: { play: Play; libraryGames?: unknown[] }) {
+export function PlayDetailClient({ play, libraryGames = [] }: { play: Play; libraryGames?: { id: string }[] }) {
   const router = useRouter();
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [addState, setAddState] = useState<"idle" | "adding" | "added" | "error">("idle");
   const { game, players = [] } = play;
+
+  const isInLibrary = libraryGames.some((g) => g.id === game?.id);
 
   const date = new Date(play.played_at);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -98,11 +101,17 @@ export function PlayDetailClient({ play }: { play: Play; libraryGames?: unknown[
         {/* Game name + date overlay */}
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-4">
           {game && (
-            <Link href={`/games/${game.id}`} className="block">
+            isInLibrary ? (
+              <Link href={`/games/${game.id}`} className="block">
+                <h1 className="font-display text-2xl font-semibold text-white leading-tight drop-shadow-sm line-clamp-2">
+                  {game.name}
+                </h1>
+              </Link>
+            ) : (
               <h1 className="font-display text-2xl font-semibold text-white leading-tight drop-shadow-sm line-clamp-2">
                 {game.name}
               </h1>
-            </Link>
+            )
           )}
           <p className="text-white/80 text-sm mt-0.5 capitalize">{dateStr}</p>
         </div>
@@ -226,8 +235,8 @@ export function PlayDetailClient({ play }: { play: Play; libraryGames?: unknown[
           </section>
         )}
 
-        {/* Link to game detail */}
-        {game && (
+        {/* Game actions */}
+        {game && isInLibrary && (
           <Link
             href={`/games/${game.id}`}
             className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors mt-1"
@@ -243,6 +252,88 @@ export function PlayDetailClient({ play }: { play: Play; libraryGames?: unknown[
             </div>
             <ArrowLeft size={14} className="text-amber-500 rotate-180 flex-shrink-0" />
           </Link>
+        )}
+
+        {game && !isInLibrary && (
+          <div className="flex flex-col gap-2 mt-1">
+            {/* Add to library */}
+            {addState === "added" ? (
+              <Link
+                href={`/games/${game.id}`}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <Check size={15} className="text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-green-700 font-medium">Zur Bibliothek hinzugefügt</p>
+                  <p className="text-sm font-semibold text-green-900 truncate">{game.name}</p>
+                </div>
+                <ArrowLeft size={14} className="text-green-500 rotate-180 flex-shrink-0" />
+              </Link>
+            ) : (
+              <button
+                onClick={async () => {
+                  if (!game.bgg_id || addState === "adding") return;
+                  setAddState("adding");
+                  try {
+                    const res = await fetch("/api/games/add", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ bgg_id: game.bgg_id }),
+                    });
+                    if (res.ok || res.status === 409) {
+                      setAddState("added");
+                    } else {
+                      setAddState("error");
+                    }
+                  } catch {
+                    setAddState("error");
+                  }
+                }}
+                disabled={addState === "adding"}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-60 w-full text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  {addState === "adding" ? (
+                    <svg className="animate-spin h-4 w-4 text-amber-600" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                  ) : (
+                    <BookPlus size={15} className="text-amber-600" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-amber-700 font-medium">Nicht in deiner Bibliothek</p>
+                  <p className="text-sm font-semibold text-amber-900">Zur Bibliothek hinzufügen</p>
+                </div>
+                <ArrowLeft size={14} className="text-amber-500 rotate-180 flex-shrink-0" />
+              </button>
+            )}
+            {addState === "error" && (
+              <p className="text-xs text-red-500 text-center">Fehler beim Hinzufügen. Bitte nochmal versuchen.</p>
+            )}
+
+            {/* BGG link */}
+            {game.bgg_id && (
+              <a
+                href={`https://boardgamegeek.com/boardgame/${game.bgg_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-muted/60 border border-border hover:bg-muted transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                  <ExternalLink size={14} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground font-medium">BoardGameGeek</p>
+                  <p className="text-sm font-semibold text-foreground truncate">{game.name} ansehen</p>
+                </div>
+                <ExternalLink size={13} className="text-muted-foreground flex-shrink-0" />
+              </a>
+            )}
+          </div>
         )}
       </div>
     </div>
