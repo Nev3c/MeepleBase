@@ -2,30 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Library, Dices, User, Wrench } from "lucide-react";
+import { Library, Dices, User, Wrench, Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  {
-    href: "/library",
-    label: "Bibliothek",
-    icon: Library,
-  },
-  {
-    href: "/plays",
-    label: "Partien",
-    icon: Dices,
-  },
-  {
-    href: "/tools",
-    label: "Tools",
-    icon: Wrench,
-  },
-  {
-    href: "/profile",
-    label: "Profil",
-    icon: User,
-  },
+  { href: "/library",  label: "Bibliothek", icon: Library  },
+  { href: "/plays",    label: "Partien",    icon: Dices    },
+  { href: "/tools",    label: "Tools",      icon: Wrench   },
+  { href: "/discover", label: "Entdecken",  icon: Compass  },
+  { href: "/profile",  label: "Profil",     icon: User     },
 ];
 
 export function BottomNav() {
@@ -44,7 +29,7 @@ export function BottomNav() {
               key={href}
               href={href}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 flex-1 py-3 px-2 min-h-[56px]",
+                "flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 px-1 min-h-[52px]",
                 "transition-all duration-200 ease-out relative",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 isActive
@@ -54,15 +39,15 @@ export function BottomNav() {
               aria-current={isActive ? "page" : undefined}
             >
               {isActive && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-amber-500 rounded-full" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-amber-500 rounded-full" />
               )}
               <Icon
-                size={22}
+                size={20}
                 strokeWidth={isActive ? 2.5 : 1.75}
                 className="transition-all duration-200"
               />
               <span className={cn(
-                "text-[10px] font-medium tracking-wide leading-none",
+                "text-[9px] font-medium tracking-wide leading-none",
                 isActive ? "font-semibold" : ""
               )}>
                 {label}

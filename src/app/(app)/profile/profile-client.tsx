@@ -6,7 +6,7 @@ import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
-import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus, Euro } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 interface ProfileClientProps {
@@ -15,9 +15,10 @@ interface ProfileClientProps {
   gameCount: number;
   playCount: number;
   favoriteGame: { name: string; count: number; thumbnail: string | null } | null;
+  libraryValue?: number | null;
 }
 
-export function ProfileClient({ user, profile, gameCount, playCount, favoriteGame }: ProfileClientProps) {
+export function ProfileClient({ user, profile, gameCount, playCount, favoriteGame, libraryValue }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -132,10 +133,17 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
 
       {/* Statistiken */}
       <div className="px-4 mb-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className={`grid gap-3 ${libraryValue != null ? "grid-cols-2" : "grid-cols-3"}`}>
           <StatCard icon={<Library size={18} className="text-amber-500" />} value={gameCount.toString()} label="Spiele" />
           <StatCard icon={<Dices size={18} className="text-amber-500" />} value={playCount.toString()} label="Partien" />
           <StatCard icon={<Star size={18} className="text-amber-500" />} value={favoriteLabel} label="Lieblingsspiel" sub={favoriteSub} />
+          {libraryValue != null && (
+            <StatCard
+              icon={<Euro size={18} className="text-amber-500" />}
+              value={libraryValue.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " €"}
+              label="Sammlungswert"
+            />
+          )}
         </div>
       </div>
 

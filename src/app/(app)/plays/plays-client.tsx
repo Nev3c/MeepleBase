@@ -360,7 +360,6 @@ function PlaySheet({
   const [gameSearch, setGameSearch] = useState("");
   const [gameDropdownOpen, setGameDropdownOpen] = useState(false);
   // Global search (games not in library)
-  const [globalMode, setGlobalMode] = useState(false);
   const [globalResults, setGlobalResults] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>([]);
   const [globalSearching, setGlobalSearching] = useState(false);
   const [globalSelected, setGlobalSelected] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null } | null>(null);
@@ -383,11 +382,19 @@ function PlaySheet({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(editPlay?.image_url ?? null);
 
+  // Detect BGG ID / URL pasted into search
+  function extractBggId(input: string): number | null {
+    const urlMatch = input.match(/boardgamegeek\.com\/boardgame\/(\d+)/i);
+    if (urlMatch) return Number(urlMatch[1]);
+    const numMatch = input.trim().match(/^\d{4,7}$/); // 4-7 digit numbers = BGG IDs
+    if (numMatch) return Number(numMatch[0]);
+    return null;
+  }
+
   const selectedGame = libraryGames.find((g) => g.id === gameId);
   const filteredGames = gameSearch
     ? libraryGames.filter((g) => g.name.toLowerCase().includes(gameSearch.toLowerCase()))
     : libraryGames;
-  const showGlobalHint = !globalMode && gameSearch.length >= 2 && filteredGames.length === 0;
 
   function addPlayer() {
     setPlayers((prev) => [...prev, { display_name: "", score: "", winner: false }]);
@@ -408,13 +415,35 @@ function PlaySheet({
     })));
   }
 
-  // Debounced global search
+  // Seamless global search: BGG ID detection + Wikidata fallback
   useEffect(() => {
-    if (!globalMode || gameSearch.length < 2) { setGlobalResults([]); return; }
+    const trimmed = gameSearch.trim();
+    if (trimmed.length < 2) { setGlobalResults([]); setGlobalSearching(false); return; }
+
+    // BGG ID or URL → immediate direct lookup, no debounce
+    const bggId = extractBggId(trimmed);
+    if (bggId) {
+      setGlobalSearching(true);
+      setGlobalResults([]);
+      fetch(`/api/bgg/lookup?id=${bggId}`)
+        .then((r) => r.json())
+        .then((data: { bgg_id?: number; name?: string; thumbnail_url?: string }) => {
+          if (data.bgg_id) {
+            setGlobalResults([{ bgg_id: data.bgg_id, name: data.name ?? "", thumbnail_url: data.thumbnail_url ?? null }]);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setGlobalSearching(false));
+      return;
+    }
+
+    // Text search → debounced Wikidata only when no library matches found
+    if (filteredGames.length > 0) { setGlobalResults([]); return; }
+
     setGlobalSearching(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/games/search?q=${encodeURIComponent(gameSearch)}`);
+        const res = await fetch(`/api/games/search?q=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
           const data = await res.json() as { results: { bgg_id: number; name: string; thumbnail_url: string | null }[] };
           setGlobalResults(data.results ?? []);
@@ -422,9 +451,10 @@ function PlaySheet({
       } finally {
         setGlobalSearching(false);
       }
-    }, 400);
+    }, 500);
     return () => clearTimeout(t);
-  }, [globalMode, gameSearch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameSearch]);
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -528,7 +558,7 @@ function PlaySheet({
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Spiel *</label>
             <div className="relative">
               <button
-                onClick={() => { setGameDropdownOpen((o) => !o); setGlobalMode(false); }}
+                onClick={() => setGameDropdownOpen((o) => !o)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors",
                   (gameId || globalSelected) ? "border-amber-400 bg-amber-50" : "border-border bg-background"
@@ -545,29 +575,19 @@ function PlaySheet({
 
               {gameDropdownOpen && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-64">
-                  <div className="p-2 border-b border-border flex gap-2">
+                  <div className="p-2 border-b border-border">
                     <input
                       value={gameSearch}
                       onChange={(e) => setGameSearch(e.target.value)}
-                      placeholder={globalMode ? "BGG durchsuchen…" : "Suchen…"}
-                      className="flex-1 text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
+                      placeholder="Name, BGG-ID oder Link…"
+                      className="w-full text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
                       autoFocus
                     />
-                    <button
-                      onClick={() => { setGlobalMode((m) => !m); setGameSearch(""); setGlobalResults([]); }}
-                      className={cn(
-                        "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex-shrink-0",
-                        globalMode ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground"
-                      )}
-                      title="Auch außerhalb der Bibliothek suchen"
-                    >
-                      🌐
-                    </button>
                   </div>
 
                   <div className="overflow-y-auto max-h-48">
                     {/* Library results */}
-                    {!globalMode && filteredGames.map((g) => (
+                    {filteredGames.map((g) => (
                       <button
                         key={g.id}
                         onClick={() => { setGameId(g.id); setGlobalSelected(null); setGameDropdownOpen(false); setGameSearch(""); }}
@@ -583,24 +603,22 @@ function PlaySheet({
                       </button>
                     ))}
 
-                    {/* Hint to switch to global search */}
-                    {showGlobalHint && (
-                      <button
-                        onClick={() => { setGlobalMode(true); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-muted transition-colors text-amber-600 font-medium"
-                      >
-                        <span className="text-base">🌐</span>
-                        <span>In allen Spielen suchen…</span>
-                      </button>
+                    {/* Separator when showing global results */}
+                    {filteredGames.length > 0 && globalResults.length > 0 && (
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/40 border-t border-border">
+                        Alle Spiele (BGG)
+                      </div>
                     )}
 
-                    {/* Global search results */}
-                    {globalMode && globalSearching && (
-                      <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+                    {/* Loading */}
+                    {globalSearching && (
+                      <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
                         Suche…
                       </div>
                     )}
-                    {globalMode && !globalSearching && gameSearch.length >= 2 && globalResults.map((g) => (
+
+                    {/* Global results */}
+                    {!globalSearching && globalResults.map((g) => (
                       <button
                         key={g.bgg_id}
                         onClick={() => { setGlobalSelected(g); setGameId(""); setGameDropdownOpen(false); setGameSearch(""); }}
@@ -613,17 +631,15 @@ function PlaySheet({
                           <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />
                         )}
                         <span className="truncate">{g.name}</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0">BGG</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0 bg-muted px-1.5 py-0.5 rounded">BGG</span>
                       </button>
                     ))}
-                    {globalMode && !globalSearching && gameSearch.length >= 2 && globalResults.length === 0 && (
-                      <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
-                        Nichts gefunden
-                      </div>
-                    )}
-                    {globalMode && gameSearch.length < 2 && (
-                      <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
-                        Mindestens 2 Zeichen eingeben
+
+                    {/* Empty state — only when explicitly searched */}
+                    {!globalSearching && gameSearch.length >= 2 && filteredGames.length === 0 && globalResults.length === 0 && (
+                      <div className="flex flex-col items-center py-4 text-xs text-muted-foreground gap-1">
+                        <span>Nichts gefunden</span>
+                        <span className="text-[10px] opacity-70">Tipp: BGG-ID oder Link einfügen</span>
                       </div>
                     )}
                   </div>

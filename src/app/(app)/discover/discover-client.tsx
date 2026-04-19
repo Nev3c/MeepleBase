@@ -258,19 +258,25 @@ function HeuteTab({
       <div className="bg-card border border-border rounded-2xl p-4 mb-4">
         <div className="flex flex-col gap-4">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium flex items-center gap-1.5">
-                <Users size={14} className="text-amber-500" /> Spieler
-              </label>
-              <span className="text-sm font-bold text-amber-600 w-8 text-center">{players}</span>
-            </div>
-            <input
-              type="range" min={1} max={8} value={players}
-              onChange={(e) => { setPlayers(Number(e.target.value)); setSuggestions(null); }}
-              className="w-full accent-amber-500"
-            />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-              <span>1</span><span>8</span>
+            <label className="text-sm font-medium flex items-center gap-1.5 mb-2">
+              <Users size={14} className="text-amber-500" /> Spieleranzahl
+            </label>
+            <div className="flex gap-1.5 flex-wrap">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setPlayers(n); setSuggestions(null); }}
+                  className={cn(
+                    "w-9 h-9 rounded-xl text-sm font-semibold transition-all",
+                    players === n
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : "bg-muted text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                  )}
+                  aria-pressed={players === n}
+                >
+                  {n === 8 ? "8+" : n}
+                </button>
+              ))}
             </div>
           </div>
 

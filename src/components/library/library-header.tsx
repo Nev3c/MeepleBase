@@ -171,35 +171,6 @@ export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) 
             />
           </div>
 
-          {/* Player count quick-filter chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
-            <span className="text-[11px] text-muted-foreground font-medium flex-shrink-0 pr-0.5">👥</span>
-            {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-              <button
-                key={n}
-                onClick={() => setFilter({ ...filter, playerCount: filter.playerCount === n ? undefined : n })}
-                className={cn(
-                  "flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
-                  filter.playerCount === n
-                    ? "bg-amber-500 text-white shadow-sm"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                )}
-                aria-pressed={filter.playerCount === n}
-                aria-label={`${n} Spieler`}
-              >
-                {n === 8 ? "8+" : n}
-              </button>
-            ))}
-            {filter.playerCount && (
-              <button
-                onClick={() => setFilter({ ...filter, playerCount: undefined })}
-                className="flex-shrink-0 ml-0.5 text-[11px] text-amber-600 font-medium hover:text-amber-700 transition-colors"
-              >
-                ✕ Filter
-              </button>
-            )}
-          </div>
-
           {sortKey !== "name_asc" && (
             <p className="text-[11px] text-amber-600 font-medium px-1">
               Sortiert nach: {currentSort?.label}

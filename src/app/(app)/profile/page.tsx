@@ -12,9 +12,13 @@ export default async function ProfilePage() {
 
   const [profileResult, libraryResult, playsResult] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
-    supabase.from("user_games").select("id", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
+    supabase.from("user_games").select("id, price_paid", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
     supabase.from("plays").select("game_id, game:games(name, thumbnail_url)").eq("user_id", user.id),
   ]);
+
+  const libraryValue = (libraryResult.data ?? []).reduce((sum, ug) => {
+    return sum + (typeof ug.price_paid === "number" ? ug.price_paid : 0);
+  }, 0);
 
   const playMap: Record<string, { count: number; name: string; thumbnail: string | null }> = {};
   for (const p of (playsResult.data ?? [])) {
@@ -33,6 +37,7 @@ export default async function ProfilePage() {
       gameCount={libraryResult.count ?? 0}
       playCount={playsResult.data?.length ?? 0}
       favoriteGame={favoriteGame ? { name: favoriteGame.name, count: favoriteGame.count, thumbnail: favoriteGame.thumbnail } : null}
+      libraryValue={libraryValue > 0 ? libraryValue : null}
     />
   );
 }

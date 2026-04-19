@@ -81,6 +81,9 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [draftMaxPlaytime, setDraftMaxPlaytime] = useState(customFields.max_playtime?.toString() ?? "");
   const [draftCategories, setDraftCategories] = useState(customFields.categories?.join(", ") ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
+  // Purchase price
+  const [pricePaid, setPricePaid] = useState<string>(userGame?.price_paid?.toString() ?? "");
+  const [savingPrice, setSavingPrice] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "ok" | "error">("idle");
   const [refreshLabel, setRefreshLabel] = useState("BGG aktualisieren");
@@ -447,6 +450,34 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 <span className="text-xs text-muted-foreground">BGG-Wertung: <span className="font-medium">{gameData.rating_avg.toFixed(1)}</span></span>
               </div>
             )}
+            {/* Purchase price */}
+            <div className="flex items-center gap-2 mt-1 pt-2 border-t border-border/50">
+              <span className="text-xs text-muted-foreground flex-1">Kaufpreis</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">€</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="–"
+                  value={pricePaid}
+                  onChange={(e) => setPricePaid(e.target.value)}
+                  onBlur={async () => {
+                    if (!userGame) return;
+                    setSavingPrice(true);
+                    const val = pricePaid !== "" ? parseFloat(pricePaid) : null;
+                    await fetch(`/api/user-games/${userGame.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ price_paid: val }),
+                    });
+                    setSavingPrice(false);
+                  }}
+                  className="w-20 text-sm text-right bg-transparent border-b border-border focus:border-amber-400 focus:outline-none transition-colors py-0.5 tabular-nums"
+                />
+                {savingPrice && <span className="text-[10px] text-amber-500">…</span>}
+              </div>
+            </div>
           </div>
         )}
 
@@ -473,9 +504,35 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
             )}
             {gameData.best_players != null && gameData.best_players.length > 0 && (
-              <Stat icon={<Users size={14} />} label={`Best: ${gameData.best_players.join(", ")}`} sublabel="Community" />
+              <div className="relative">
+                <Stat icon={<Users size={14} />} label={`Best: ${gameData.best_players.join(", ")}`} sublabel="Community" />
+              </div>
+            )}
+            {customFields.best_players_override && customFields.best_players_override.length > 0 && (
+              <div className="relative">
+                <Stat icon={<Users size={14} />} label={`Best: ${customFields.best_players_override.join(", ")}`} sublabel="Meine Wahl" />
+                <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+              </div>
             )}
           </div>
+        )}
+
+        {/* Manual best-players picker (always visible when in library) */}
+        {userGame && (
+          <BestPlayersOverride
+            value={customFields.best_players_override ?? []}
+            onChange={async (newVal) => {
+              const newCustom = { ...customFields };
+              if (newVal.length > 0) newCustom.best_players_override = newVal;
+              else delete newCustom.best_players_override;
+              await fetch(`/api/user-games/${userGame.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ custom_fields: Object.keys(newCustom).length > 0 ? newCustom : null }),
+              });
+              setCustomFields(newCustom);
+            }}
+          />
         )}
 
         {/* Description */}
@@ -987,6 +1044,60 @@ function Stat({ icon, label, sublabel }: { icon: React.ReactNode; label: string;
         <p className="text-sm font-semibold text-foreground leading-none">{label}</p>
         {sublabel && <p className="text-[10px] text-muted-foreground mt-0.5">{sublabel}</p>}
       </div>
+    </div>
+  );
+}
+
+// ── Best-Players Override (manual chip selector) ──────────────────────────────
+
+function BestPlayersOverride({
+  value,
+  onChange,
+}: {
+  value: number[];
+  onChange: (val: number[]) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function toggle(n: number) {
+    setSaving(true);
+    const next = value.includes(n) ? value.filter((x) => x !== n) : [...value, n].sort((a, b) => a - b);
+    await onChange(next);
+    setSaving(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 bg-muted/30 rounded-xl px-4 py-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Optimale Spielerzahl</span>
+        {value.length > 0 && (
+          <button
+            onClick={async () => { setSaving(true); await onChange([]); setSaving(false); }}
+            disabled={saving}
+            className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors"
+          >
+            Löschen
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+          <button
+            key={n}
+            onClick={() => toggle(n)}
+            disabled={saving}
+            className={cn(
+              "w-8 h-8 rounded-lg text-xs font-bold transition-all disabled:opacity-50",
+              value.includes(n)
+                ? "bg-amber-500 text-white shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+            )}
+          >
+            {n === 8 ? "8+" : n}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground">Deine persönliche Einschätzung (unabhängig von BGG)</p>
     </div>
   );
 }

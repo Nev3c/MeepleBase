@@ -63,6 +63,7 @@ export interface CustomFields {
   min_playtime?: number | null;
   max_playtime?: number | null;
   categories?: string[];
+  best_players_override?: number[]; // user's own optimal player count preference
 }
 
 export interface UserGame {
