@@ -20,8 +20,10 @@ export default async function ProfilePage() {
   // Compute unique category/mechanic counts across the whole library
   const uniqueCats = new Set<string>();
   const uniqueMechs = new Set<string>();
+  type GameTags = { categories: string[] | null; mechanics: string[] | null } | null;
   for (const row of (tagsResult.data ?? [])) {
-    const g = row.game as { categories: string[] | null; mechanics: string[] | null } | null;
+    const raw = row.game as unknown;
+    const g: GameTags = Array.isArray(raw) ? (raw[0] ?? null) : (raw as GameTags);
     for (const c of g?.categories ?? []) uniqueCats.add(c);
     for (const m of g?.mechanics ?? []) uniqueMechs.add(m);
   }
