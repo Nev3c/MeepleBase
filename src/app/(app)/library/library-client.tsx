@@ -43,10 +43,10 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       for (const m of ug.game?.mechanics ?? []) mechs.add(m);
     }
     return {
-      availableCategories: [...cats].sort((a, b) =>
+      availableCategories: Array.from(cats).sort((a, b) =>
         translateCategory(a).localeCompare(translateCategory(b), "de")
       ),
-      availableMechanics: [...mechs].sort((a, b) =>
+      availableMechanics: Array.from(mechs).sort((a, b) =>
         translateMechanic(a).localeCompare(translateMechanic(b), "de")
       ),
     };
