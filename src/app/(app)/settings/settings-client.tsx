@@ -185,6 +185,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     if (!refreshAbort.current) {
       setRefreshPhase("done");
       setRefreshPending(0);
+      router.refresh(); // invalidate Next.js router cache so library/detail show fresh data
     }
   }
 
