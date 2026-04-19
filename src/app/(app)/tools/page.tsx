@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Minus, RotateCcw, Dices, Coins, Users, ArrowRight, X, Trophy } from "lucide-react";
+import { Plus, Minus, RotateCcw, Dices, Coins, ArrowRight, X, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── Score Tracker ─────────────────────────────────────────────────────────────

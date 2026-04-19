@@ -88,7 +88,7 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
     });
 
     return games;
-  }, [initialGames, filter.status, deferredSearch, sortKey, playCounts]);
+  }, [initialGames, filter.status, filter.playerCount, deferredSearch, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
   const isFiltered = !!(filter.search || filter.status || filter.playerCount);
