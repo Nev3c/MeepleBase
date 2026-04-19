@@ -33,13 +33,6 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
         {/* Title row */}
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/icon-192.png" alt="" className="w-4 h-4 rounded-[5px]" aria-hidden="true" />
-              <span className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">
-                MeepleBase
-              </span>
-            </div>
             <h1 className="font-display text-2xl font-semibold text-foreground leading-tight">
               Bibliothek
             </h1>

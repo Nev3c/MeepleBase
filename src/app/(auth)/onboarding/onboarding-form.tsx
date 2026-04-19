@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import { Library, Dices, Compass, UserCircle, ChevronRight } from "lucide-react";
+import { Library, Dices, Compass, UserCircle, ChevronRight, Wrench } from "lucide-react";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
 
@@ -24,6 +24,11 @@ const GUIDE_STEPS = [
     description: "Halte jede Partie fest: Mitspieler, Punkte, Gewinner, Fotos und Spielzeit. Dein persönliches Spieltagebuch.",
   },
   {
+    icon: <Wrench size={48} className="text-amber-500" />,
+    title: "Tools",
+    description: "Punkte-Tracker für bis zu 8 Spieler, Würfelwurf (1–6 Würfel) und Münzwurf — dein digitaler Spielabend-Helfer. Punkte lassen sich direkt als Partie speichern.",
+  },
+  {
     icon: <Compass size={48} className="text-amber-500" />,
     title: "Entdecken",
     description: "Ungespielt: welche Spiele liegen noch unberührt? Was heute spielen? Passende Spiele nach Spieleranzahl & Zeit.",
@@ -31,7 +36,7 @@ const GUIDE_STEPS = [
   {
     icon: <UserCircle size={48} className="text-amber-500" />,
     title: "Profil",
-    description: "Deine Stats auf einen Blick. QR-Code zum Teilen der App — und in Phase 2 auch dein Spieler-Profil für Freunde.",
+    description: "Deine Stats auf einen Blick: Spiele, Partien, Kategorien, Mechanismen. QR-Code zum Teilen der App.",
   },
 ];
 
@@ -60,19 +65,30 @@ export function OnboardingForm() {
   return <ProfileStep step={step} total={TOTAL_STEPS} onBack={back} />;
 }
 
-// ── Dot indicator ───────────────────────────────────────────────────────────
+// ── Progress indicator ───────────────────────────────────────────────────────
 
 function Dots({ current, total }: { current: number; total: number }) {
+  const stepsLeft = total - current - 1;
   return (
-    <div className="flex gap-1.5 justify-center">
-      {Array.from({ length: total }).map((_, i) => (
+    <div className="flex flex-col gap-2">
+      {/* Progress bar */}
+      <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
         <div
-          key={i}
-          className={`rounded-full transition-all duration-300 ${
-            i === current ? "w-5 h-1.5 bg-amber-500" : "w-1.5 h-1.5 bg-muted-foreground/30"
-          }`}
+          className="h-full rounded-full bg-amber-500 transition-all duration-300"
+          style={{ width: `${((current + 1) / total) * 100}%` }}
         />
-      ))}
+      </div>
+      {/* Step counter */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-medium">
+          Schritt {current + 1} von {total}
+        </span>
+        {stepsLeft > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {stepsLeft} {stepsLeft === 1 ? "weiterer Schritt" : "weitere Schritte"}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
