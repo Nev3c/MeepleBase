@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Search, LayoutGrid, List, SlidersHorizontal, Plus, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Calendar, Star, Dices } from "lucide-react";
+import { Search, LayoutGrid, List, SlidersHorizontal, Plus, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Calendar, Star, Dices, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryStore } from "@/stores/library-store";
@@ -15,6 +15,8 @@ interface LibraryHeaderProps {
   user?: User | null;
   profile?: Profile | null;
   onAddGame?: () => void;
+  onFilter?: () => void;
+  activeFilterCount?: number;
 }
 
 const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: React.ReactNode }[] = [
@@ -30,7 +32,7 @@ const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: React.ReactNode 
   { key: "plays_asc",    label: "Wenigst gespielt",        icon: <Dices size={14} /> },
 ];
 
-export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) {
+export function LibraryHeader({ user, profile, onAddGame, onFilter, activeFilterCount = 0 }: LibraryHeaderProps) {
   const { view, setView, filter, setFilter, sortKey, setSortKey } = useLibraryStore();
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -139,6 +141,26 @@ export function LibraryHeader({ user, profile, onAddGame }: LibraryHeaderProps) 
                 </div>
               )}
             </div>
+
+            {/* Category / Mechanic filter button */}
+            {onFilter && (
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Kategorien & Mechanismen filtern"
+                  onClick={onFilter}
+                  className={cn(activeFilterCount > 0 && "text-amber-500")}
+                >
+                  <Tag size={16} strokeWidth={2} />
+                </Button>
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Avatar → Link zum Profil */}
             {user && (

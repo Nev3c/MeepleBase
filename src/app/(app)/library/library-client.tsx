@@ -5,8 +5,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { LibraryHeader } from "@/components/library/library-header";
 import { LibraryEmptyState } from "@/components/library/library-empty-state";
+import { LibraryFilterSheet } from "@/components/library/library-filter-sheet";
 import { GameCard } from "@/components/library/game-card";
 import { useLibraryStore } from "@/stores/library-store";
+import { translateCategory, translateMechanic } from "@/lib/bgg-translations";
 import type { UserGame, Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -27,9 +29,28 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   const { view, filter, sortKey } = useLibraryStore();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetInitialTab, setSheetInitialTab] = useState<"search" | "import">("search");
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   // Defer search input so typing stays instant while filter catches up
   const deferredSearch = useDeferredValue(filter.search);
+
+  // Collect all unique categories + mechanics across the library (sorted by translated name)
+  const { availableCategories, availableMechanics } = useMemo(() => {
+    const cats = new Set<string>();
+    const mechs = new Set<string>();
+    for (const ug of initialGames) {
+      for (const c of ug.game?.categories ?? []) cats.add(c);
+      for (const m of ug.game?.mechanics ?? []) mechs.add(m);
+    }
+    return {
+      availableCategories: [...cats].sort((a, b) =>
+        translateCategory(a).localeCompare(translateCategory(b), "de")
+      ),
+      availableMechanics: [...mechs].sort((a, b) =>
+        translateMechanic(a).localeCompare(translateMechanic(b), "de")
+      ),
+    };
+  }, [initialGames]);
 
   const filteredGames = useMemo(() => {
     let games = [...initialGames];
@@ -50,6 +71,18 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
         const max = g.game?.max_players ?? 99;
         return min <= n && n <= max;
       });
+    }
+
+    if (filter.categories?.length) {
+      games = games.filter((g) =>
+        filter.categories!.some((c) => g.game?.categories?.includes(c))
+      );
+    }
+
+    if (filter.mechanics?.length) {
+      games = games.filter((g) =>
+        filter.mechanics!.some((m) => g.game?.mechanics?.includes(m))
+      );
     }
 
     games.sort((a, b) => {
@@ -88,10 +121,11 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
     });
 
     return games;
-  }, [initialGames, filter.status, filter.playerCount, deferredSearch, sortKey, playCounts]);
+  }, [initialGames, filter.status, filter.playerCount, filter.categories, filter.mechanics, deferredSearch, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
-  const isFiltered = !!(filter.search || filter.status || filter.playerCount);
+  const isFiltered = !!(filter.search || filter.status || filter.playerCount || filter.categories?.length || filter.mechanics?.length);
+  const tagFilterCount = (filter.categories?.length ?? 0) + (filter.mechanics?.length ?? 0);
 
   function openAdd() { setSheetInitialTab("search"); setSheetOpen(true); }
 
@@ -102,6 +136,8 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           user={user}
           profile={profile}
           onAddGame={openAdd}
+          onFilter={() => setFilterSheetOpen(true)}
+          activeFilterCount={tagFilterCount}
         />
 
         {isEmpty ? (
@@ -141,6 +177,14 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
         bggUsername={profile?.bgg_username}
         initialTab={sheetInitialTab}
       />
+
+      {filterSheetOpen && (
+        <LibraryFilterSheet
+          availableCategories={availableCategories}
+          availableMechanics={availableMechanics}
+          onClose={() => setFilterSheetOpen(false)}
+        />
+      )}
     </>
   );
 }

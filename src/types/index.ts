@@ -171,6 +171,8 @@ export type LibraryFilter = {
   maxPlayers?: number;
   search?: string;
   playerCount?: number; // quick filter: show games playable with exactly N players
+  categories?: string[]; // English BGG strings matching games.categories
+  mechanics?: string[];  // English BGG strings matching games.mechanics
 };
 
 export type LibrarySortKey =
