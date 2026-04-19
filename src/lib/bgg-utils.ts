@@ -22,6 +22,20 @@ const XML_HEADERS = {
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
 
+function parseXmlAlternateNames(xml: string): string[] {
+  const names: string[] = [];
+  // Match all <name .../> tags (self-closing)
+  const tagRe = /<name\s([^>]*?)\/>/g;
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(xml)) !== null) {
+    const attrs = m[1];
+    if (!/type="alternate"/.test(attrs)) continue;
+    const valM = attrs.match(/value="([^"]+)"/);
+    if (valM?.[1]) names.push(valM[1]);
+  }
+  return names;
+}
+
 function parseXmlWeight(xml: string): number | null {
   // <averageweight value="2.0560" />  or  <averageweight value="2.056"/>
   const m = xml.match(/averageweight\s+value="([0-9.]+)"/);
@@ -120,6 +134,7 @@ export interface GeekItemData {
   complexity: number | null;
   publishers: string[];
   best_players: number[] | null;
+  alternate_names: string[];
   source: string; // which API provided weight/best_players
 }
 
@@ -140,13 +155,23 @@ export async function fetchGeekItem(bggId: number): Promise<GeekItemData | null>
   const best_players = xml?.best_players ?? geek?.best_players ?? null;
   const publishers   = geek?.publishers  ?? [];
 
+  // Merge alternate names from both sources, deduplicate
+  const xmlNames  = xml?.alternate_names  ?? [];
+  const geekNames = geek?.alternate_names ?? [];
+  const seen = new Set<string>();
+  const alternate_names: string[] = [];
+  for (const n of [...xmlNames, ...geekNames]) {
+    const key = n.toLowerCase().trim();
+    if (key && !seen.has(key)) { seen.add(key); alternate_names.push(n); }
+  }
+
   const source = [
     xml?.complexity   != null ? "xml-weight"      : null,
     xml?.best_players != null ? "xml-best_players": null,
     geek              != null ? "geekitems"        : null,
   ].filter(Boolean).join("+") || "none";
 
-  return { complexity, publishers, best_players, source };
+  return { complexity, publishers, best_players, alternate_names, source };
 }
 
 // ── geekitems call ────────────────────────────────────────────────────────────
@@ -174,7 +199,20 @@ async function fetchGeekItems(bggId: number) {
 
     const best_players = parseBestPlayers(item.polls);
 
-    return { publishers, complexity, best_players };
+    // Parse alternate names: item.alternatenames.alternatename can be array or single object
+    const altNamesRaw = (item.alternatenames as Record<string, unknown> | undefined)?.alternatename;
+    const alternate_names: string[] = [];
+    if (Array.isArray(altNamesRaw)) {
+      for (const entry of altNamesRaw as Record<string, unknown>[]) {
+        const n = String(entry.name ?? "").trim();
+        if (n) alternate_names.push(n);
+      }
+    } else if (altNamesRaw && typeof altNamesRaw === "object") {
+      const n = String((altNamesRaw as Record<string, unknown>).name ?? "").trim();
+      if (n) alternate_names.push(n);
+    }
+
+    return { publishers, complexity, best_players, alternate_names };
   } catch {
     return null;
   }
@@ -195,10 +233,11 @@ async function fetchXmlApi(bggId: number) {
     const xml = await res.text();
     if (!xml.includes("<items")) return null; // sanity check
 
-    const complexity   = parseXmlWeight(xml);
-    const best_players = parseXmlBestPlayers(xml);
+    const complexity      = parseXmlWeight(xml);
+    const best_players    = parseXmlBestPlayers(xml);
+    const alternate_names = parseXmlAlternateNames(xml);
 
-    return { complexity, best_players };
+    return { complexity, best_players, alternate_names };
   } catch {
     return null;
   }

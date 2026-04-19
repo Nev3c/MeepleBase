@@ -84,6 +84,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [savingInfo, setSavingInfo] = useState(false);
   // Purchase price
   const [pricePaid, setPricePaid] = useState<string>(userGame?.price_paid?.toString() ?? "");
+  const [savedPrice, setSavedPrice] = useState<string>(userGame?.price_paid?.toString() ?? "");
   const [savingPrice, setSavingPrice] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "ok" | "error">("idle");
@@ -102,6 +103,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         complexity?: number | null;
         publishers?: string[];
         best_players?: number[] | null;
+        alternate_names?: string[];
       };
       if (res.ok && data.success) {
         setGameData((prev) => ({
@@ -109,8 +111,9 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           ...(data.complexity != null ? { complexity: data.complexity } : {}),
           ...(data.publishers != null && data.publishers.length > 0 ? { publishers: data.publishers } : {}),
           ...(data.best_players != null ? { best_players: data.best_players } : {}),
+          ...(data.alternate_names != null && data.alternate_names.length > 0 ? { alternate_names: data.alternate_names } : {}),
         }));
-        const LABELS: Record<string, string> = { complexity: "Komplexität", publishers: "Verlag", best_players: "Best" };
+        const LABELS: Record<string, string> = { complexity: "Komplexität", publishers: "Verlag", best_players: "Best", alternate_names: "Alternativnamen" };
         const updated = (data.updated ?? []) as string[];
         const msg = updated.length > 0
           ? updated.map((k) => LABELS[k] ?? k).join(", ") + " ✓"
@@ -318,6 +321,47 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 onChange={(e) => setDraftName(e.target.value)}
                 className="w-full text-base font-semibold bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
+              {/* Alternate name picker */}
+              <div className="mt-2">
+                <p className="text-[11px] text-muted-foreground mb-1.5">Schnellauswahl:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {/* Original BGG name always shown first */}
+                  <button
+                    type="button"
+                    onClick={() => setDraftName(game.name)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border transition-colors font-medium",
+                      draftName === game.name
+                        ? "bg-amber-500 text-white border-amber-500"
+                        : "bg-background text-foreground border-border hover:border-amber-400 hover:bg-amber-50"
+                    )}
+                  >
+                    {game.name}
+                  </button>
+                  {/* Alternate names from BGG */}
+                  {(gameData.alternate_names ?? []).map((altName) => (
+                    <button
+                      key={altName}
+                      type="button"
+                      onClick={() => setDraftName(altName)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs rounded-full border transition-colors font-medium",
+                        draftName === altName
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-background text-foreground border-border hover:border-amber-400 hover:bg-amber-50"
+                      )}
+                    >
+                      {altName}
+                    </button>
+                  ))}
+                  {/* Hint when no alternate names loaded yet */}
+                  {!gameData.alternate_names?.length && (
+                    <span className="text-[11px] text-muted-foreground/70 self-center">
+                      Keine Alternativnamen — klicke auf &ldquo;BGG aktualisieren&rdquo;
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Beschreibung</label>
@@ -524,7 +568,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             {/* Purchase price */}
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm text-muted-foreground">Kaufpreis</span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">€</span>
                 <input
                   type="number"
@@ -533,20 +577,45 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                   placeholder="–"
                   value={pricePaid}
                   onChange={(e) => setPricePaid(e.target.value)}
-                  onBlur={async () => {
-                    if (!userGame) return;
-                    setSavingPrice(true);
-                    const val = pricePaid !== "" ? parseFloat(pricePaid) : null;
-                    await fetch(`/api/user-games/${userGame.id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ price_paid: val }),
-                    });
-                    setSavingPrice(false);
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                      if (!userGame || pricePaid === savedPrice) return;
+                      setSavingPrice(true);
+                      const val = pricePaid !== "" ? parseFloat(pricePaid) : null;
+                      await fetch(`/api/user-games/${userGame.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ price_paid: val }),
+                      });
+                      setSavedPrice(pricePaid);
+                      setSavingPrice(false);
+                    }
                   }}
                   className="w-20 text-sm text-right bg-transparent border-b border-border focus:border-amber-400 focus:outline-none transition-colors py-0.5 tabular-nums"
                 />
-                {savingPrice && <span className="text-[10px] text-amber-500">…</span>}
+                {savingPrice ? (
+                  <span className="text-[10px] text-amber-500 w-6 text-center">…</span>
+                ) : pricePaid !== savedPrice ? (
+                  <button
+                    onClick={async () => {
+                      if (!userGame) return;
+                      setSavingPrice(true);
+                      const val = pricePaid !== "" ? parseFloat(pricePaid) : null;
+                      await fetch(`/api/user-games/${userGame.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ price_paid: val }),
+                      });
+                      setSavedPrice(pricePaid);
+                      setSavingPrice(false);
+                    }}
+                    className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center flex-shrink-0 transition-all"
+                    aria-label="Preis speichern"
+                  >
+                    <Check size={12} strokeWidth={2.5} />
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

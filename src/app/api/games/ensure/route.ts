@@ -89,6 +89,19 @@ export async function POST(req: NextRequest) {
     const categories = ((links?.boardgamecategory as LinkItem[] | undefined) ?? []).map((l) => l.name);
     const mechanics = ((links?.boardgamemechanic as LinkItem[] | undefined) ?? []).map((l) => l.name);
 
+    // Parse alternate names from geekitems
+    const altNamesRaw = (item.alternatenames as Record<string, unknown> | undefined)?.alternatename;
+    const alternate_names: string[] = [];
+    if (Array.isArray(altNamesRaw)) {
+      for (const entry of altNamesRaw as Record<string, unknown>[]) {
+        const n = String(entry.name ?? "").trim();
+        if (n) alternate_names.push(n);
+      }
+    } else if (altNamesRaw && typeof altNamesRaw === "object") {
+      const n = String((altNamesRaw as Record<string, unknown>).name ?? "").trim();
+      if (n) alternate_names.push(n);
+    }
+
     const { data: inserted, error: insertErr } = await admin
       .from("games")
       .upsert({
@@ -104,6 +117,7 @@ export async function POST(req: NextRequest) {
         description,
         categories,
         mechanics,
+        ...(alternate_names.length > 0 ? { alternate_names } : {}),
       }, { onConflict: "bgg_id" })
       .select("id")
       .single();

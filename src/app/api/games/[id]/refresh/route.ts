@@ -53,12 +53,13 @@ export async function POST(
     return NextResponse.json({ error: "BGG nicht erreichbar oder keine Daten" }, { status: 502 });
   }
 
-  const { complexity, publishers, best_players } = bggData;
+  const { complexity, publishers, best_players, alternate_names } = bggData;
 
   const updates: Record<string, unknown> = {};
   if (complexity !== null) updates.complexity = complexity;
   if (publishers.length > 0) updates.publishers = publishers;
   if (best_players !== null) updates.best_players = best_players;
+  if (alternate_names.length > 0) updates.alternate_names = alternate_names;
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({
@@ -68,6 +69,7 @@ export async function POST(
       complexity: null,
       publishers: [],
       best_players: null,
+      alternate_names: [],
     });
   }
 
@@ -87,5 +89,6 @@ export async function POST(
     complexity: complexity ?? null,
     publishers,
     best_players: best_players ?? null,
+    alternate_names,
   });
 }

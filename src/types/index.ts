@@ -51,6 +51,7 @@ export interface Game {
   designers: string[] | null;
   publishers: string[] | null;
   best_players: number[] | null;
+  alternate_names: string[] | null;
   last_synced_at: string | null;
   created_at: string;
 }
