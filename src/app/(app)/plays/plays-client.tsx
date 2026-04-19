@@ -456,11 +456,40 @@ function PlaySheet({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameSearch]);
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Compress image to max 1200px / JPEG 82% before upload (~200-600 KB result)
+  function compressImage(file: File): Promise<File> {
+    const MAX_DIM = 1200;
+    const QUALITY = 0.82;
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = document.createElement("img");
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const { naturalWidth: w, naturalHeight: h } = img;
+        const scale = Math.min(1, MAX_DIM / Math.max(w, h));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(file); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => resolve(blob ? new File([blob], "photo.jpg", { type: "image/jpeg" }) : file),
+          "image/jpeg",
+          QUALITY
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    const compressed = await compressImage(file);
+    setImageFile(compressed);
+    setImagePreview(URL.createObjectURL(compressed));
   }
 
   async function handleSave() {
@@ -513,7 +542,12 @@ function PlaySheet({
         image_url = uploadData.url;
       } else {
         const errData = await uploadRes.json().catch(() => ({})) as { error?: string };
-        setError(`Foto-Upload fehlgeschlagen: ${errData.error ?? "Supabase-Bucket 'play-images' fehlt – bitte in Supabase Dashboard anlegen"}`);
+        const msg = errData.error ?? "";
+        const isSize = /payload|size|too large|limit|groß/i.test(msg);
+        setError(isSize
+          ? "Foto zu groß (max. 5 MB). Wähle ein kleineres Bild."
+          : `Foto-Upload fehlgeschlagen: ${msg || "Unbekannter Fehler"}`
+        );
         setSaving(false);
         return;
       }

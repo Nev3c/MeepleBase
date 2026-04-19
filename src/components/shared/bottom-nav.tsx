@@ -18,7 +18,8 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-border pb-safe"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-border pb-safe"
+      style={{ transform: "translateZ(0)", willChange: "transform" }}
       aria-label="Hauptnavigation"
     >
       <div className="flex items-stretch max-w-lg mx-auto">

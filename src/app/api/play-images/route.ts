@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "file ist erforderlich" }, { status: 400 });
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "Datei zu groß (max. 10 MB)" }, { status: 400 });
+  if (file.size > 5 * 1024 * 1024) {
+    return NextResponse.json({ error: "Foto zu groß (max. 5 MB). Bitte ein kleineres Bild wählen." }, { status: 400 });
   }
 
   // Use direct supabase-js admin client for storage — avoids SSR cookie issues with service_role
