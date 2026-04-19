@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 const GEEKITEMS_HEADERS = {
@@ -30,6 +31,12 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
   }
+
+  // Admin client for games table (protected by RLS — needs service_role)
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   const body = await request.json();
   const bggId = Number(body.bgg_id);
@@ -91,8 +98,8 @@ export async function POST(request: NextRequest) {
     console.error("[games/add] BGG fetch failed, continuing with minimal data:", e);
   }
 
-  // ── 2. Spiel in games-Tabelle upserten ────────────────────────────────────
-  const { data: game, error: gameError } = await supabase
+  // ── 2. Spiel in games-Tabelle upserten (admin — RLS bypassed) ────────────
+  const { data: game, error: gameError } = await admin
     .from("games")
     .upsert(upsertData, { onConflict: "bgg_id" })
     .select()
