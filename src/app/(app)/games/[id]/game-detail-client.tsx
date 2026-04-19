@@ -420,14 +420,25 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             {/* Meta chips */}
             {hasMeta && (
               <div className="flex flex-wrap gap-2 px-4 py-3">
-                {(effMinPlayers || effMaxPlayers) && (
-                  <div className="relative">
-                    <Stat icon={<Users size={14} />} label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)} />
-                    {(customFields.min_players != null || customFields.max_players != null) && (
-                      <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
-                    )}
-                  </div>
-                )}
+                {(effMinPlayers || effMaxPlayers) && (() => {
+                  // Best-players: prefer user's own override, fall back to BGG community
+                  const bestArr = customFields.best_players_override?.length
+                    ? customFields.best_players_override
+                    : (gameData.best_players?.length ? gameData.best_players : null);
+                  const bestLabel = bestArr ? `Best: ${bestArr.join(", ")}` : undefined;
+                  return (
+                    <div className="relative">
+                      <Stat
+                        icon={<Users size={14} />}
+                        label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)}
+                        sublabel={bestLabel}
+                      />
+                      {(customFields.min_players != null || customFields.max_players != null) && (
+                        <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 {(effMinPlaytime || effMaxPlaytime) && (
                   <div className="relative">
                     <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />
@@ -438,15 +449,6 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 )}
                 {gameData.complexity != null && (
                   <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
-                )}
-                {gameData.best_players != null && gameData.best_players.length > 0 && (
-                  <Stat icon={<Users size={14} />} label={`Best: ${gameData.best_players.join(", ")}`} sublabel="Community" />
-                )}
-                {customFields.best_players_override && customFields.best_players_override.length > 0 && (
-                  <div className="relative">
-                    <Stat icon={<Users size={14} />} label={`Best: ${customFields.best_players_override.join(", ")}`} sublabel="Meine Wahl" />
-                    <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
-                  </div>
                 )}
               </div>
             )}
@@ -1138,7 +1140,7 @@ function BestPlayersOverride({
   }
 
   return (
-    <div className="flex flex-col gap-2 bg-muted/30 rounded-xl px-4 py-3">
+    <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Optimale Spielerzahl</span>
         {value.length > 0 && (

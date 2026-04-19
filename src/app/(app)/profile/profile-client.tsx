@@ -28,10 +28,16 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [qrModal, setQrModal] = useState<"app" | "friend" | null>(null);
   const [appUrl, setAppUrl] = useState("https://meeplebase.app");
+  // Tour badge: show for new accounts (< 30 days) that haven't completed the tour
+  const [tourDone, setTourDone] = useState(true); // default true → no flash on hydration
 
   useEffect(() => {
     setAppUrl(window.location.origin);
-  }, []);
+    const done = localStorage.getItem("meeplebase_onboarding_done") === "1";
+    const accountAgeMs = Date.now() - new Date(user.created_at).getTime();
+    const isNewAccount = accountAgeMs < 30 * 24 * 60 * 60 * 1000; // 30 days
+    setTourDone(done || !isNewAccount);
+  }, [user.created_at]);
 
   const displayName = profile?.display_name ?? profile?.username ?? user.email?.split("@")[0] ?? "Spieler";
   const username = profile?.username ?? "–";
@@ -213,7 +219,28 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Einstellungen</SectionHeader>
           <MenuRow label="Einstellungen & BGG-Sync" href="/settings" showChevron />
-          <MenuRow label="App Tour" href="/onboarding" showChevron />
+          {/* App Tour — highlighted if not yet completed */}
+          {tourDone ? (
+            <MenuRow label="App Tour" href="/onboarding" showChevron />
+          ) : (
+            <a
+              href="/onboarding"
+              className="block hover:bg-amber-50 active:bg-amber-100 transition-colors"
+            >
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-sm font-semibold text-amber-700">App Tour</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full animate-pulse">
+                    Neu
+                  </span>
+                </div>
+                <ChevronRight size={16} className="text-amber-500" />
+              </div>
+              <p className="px-4 pb-3 text-xs text-amber-600/80 -mt-1">
+                Lerne alle Funktionen in 2 Minuten kennen →
+              </p>
+            </a>
+          )}
         </div>
 
         {/* Abmelden */}

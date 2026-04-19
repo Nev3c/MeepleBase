@@ -210,6 +210,8 @@ function ProfileStep({ step, total, onBack }: { step: number; total: number; onB
         await supabase.from("profiles").update(updates).eq("id", user.id);
       }
     }
+    // Mark tour as completed so the profile badge disappears
+    try { localStorage.setItem("meeplebase_onboarding_done", "1"); } catch { /* ignore */ }
     router.push("/library");
   }
 
