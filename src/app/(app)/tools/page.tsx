@@ -142,7 +142,7 @@ function ScoreTracker() {
             <input
               value={active.name}
               onChange={(e) => updateName(active.id, e.target.value)}
-              className="flex-1 text-sm font-semibold bg-transparent focus:outline-none text-foreground border-b border-transparent focus:border-amber-400 transition-colors pb-0.5"
+              className="flex-1 min-w-0 text-sm font-semibold bg-transparent focus:outline-none text-foreground border-b border-transparent focus:border-amber-400 transition-colors pb-0.5"
               placeholder="Name…"
             />
             <div className="flex items-center gap-2">
@@ -448,7 +448,7 @@ export default function ToolsPage() {
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
       {/* Header */}
-      <div className="bg-background border-b border-border px-4 pt-5 pb-0">
+      <div className="sticky top-0 z-30 bg-background border-b border-border px-4 pt-5 pb-0">
         <h1 className="font-display text-2xl font-semibold text-[#1E2A3A] mb-3">Tools</h1>
 
         {/* Tab bar */}
