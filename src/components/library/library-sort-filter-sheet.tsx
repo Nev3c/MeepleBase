@@ -3,7 +3,7 @@
 import {
   X,
   ArrowUpAZ, ArrowDownAZ,
-  Clock, Star, Dices, Users,
+  Clock, Star, Users,
   TrendingUp, TrendingDown,
 } from "lucide-react";
 import { useLibraryStore } from "@/stores/library-store";
