@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Check, X, RefreshCw, Shield } from "lucide-react";
+import { Check, X, RefreshCw, Shield, Trash2 } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -17,6 +17,7 @@ export function AdminClient() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
   const [requireApproval, setRequireApproval] = useState<boolean | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null); // userId pending delete
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -43,6 +44,18 @@ export function AdminClient() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, approved }),
+    });
+    await fetchUsers();
+    setActing(null);
+  }
+
+  async function deleteUser(userId: string) {
+    setActing(userId);
+    setDeleteConfirm(null);
+    await fetch("/api/admin/users", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
     });
     await fetchUsers();
     setActing(null);
@@ -96,6 +109,7 @@ export function AdminClient() {
               acting={acting === u.id}
               onApprove={() => setApproved(u.id, true)}
               onReject={() => setApproved(u.id, false)}
+              onDelete={() => setDeleteConfirm(u.id)}
               isPending
             />
           ))}
@@ -120,21 +134,57 @@ export function AdminClient() {
             acting={acting === u.id}
             onApprove={() => setApproved(u.id, true)}
             onReject={() => setApproved(u.id, false)}
+            onDelete={() => setDeleteConfirm(u.id)}
             isPending={false}
           />
         ))}
       </section>
+
+      {/* Delete confirm modal */}
+      {deleteConfirm && (() => {
+        const u = users.find((x) => x.id === deleteConfirm);
+        const name = u?.display_name ?? u?.username ?? u?.email.split("@")[0] ?? "?";
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-xl flex flex-col gap-4">
+              <div>
+                <p className="font-display text-lg font-semibold text-foreground">User löschen?</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <span className="font-medium text-foreground">{name}</span> wird dauerhaft gelöscht.
+                  Bibliothek, Partien und alle Daten werden entfernt. Das kann nicht rückgängig gemacht werden.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 h-10 rounded-xl border border-border bg-muted text-sm font-medium text-foreground hover:bg-muted/80 transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => deleteUser(deleteConfirm)}
+                  disabled={acting === deleteConfirm}
+                  className="flex-1 h-10 rounded-xl bg-destructive text-white text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-50"
+                >
+                  {acting === deleteConfirm ? "Löschen…" : "Ja, löschen"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
 function UserCard({
-  user, acting, onApprove, onReject, isPending,
+  user, acting, onApprove, onReject, onDelete, isPending,
 }: {
   user: UserRow;
   acting: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onDelete: () => void;
   isPending: boolean;
 }) {
   const name = user.display_name ?? user.username ?? user.email.split("@")[0];
@@ -175,16 +225,34 @@ function UserCard({
           >
             <X size={16} />
           </button>
+          <button
+            onClick={onDelete}
+            disabled={acting}
+            className="w-9 h-9 rounded-xl bg-red-500 text-white flex items-center justify-center hover:bg-red-600 disabled:opacity-50 transition-colors"
+            title="User löschen"
+          >
+            <Trash2 size={15} />
+          </button>
         </div>
       ) : (
-        <button
-          onClick={onReject}
-          disabled={acting}
-          className="text-xs text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50 flex-shrink-0"
-          title="Zugang entziehen"
-        >
-          Sperren
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={onReject}
+            disabled={acting}
+            className="text-xs text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
+            title="Zugang entziehen"
+          >
+            Sperren
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={acting}
+            className="w-8 h-8 rounded-lg bg-red-50 text-red-400 flex items-center justify-center hover:bg-red-100 hover:text-red-600 disabled:opacity-50 transition-colors"
+            title="User löschen"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       )}
     </div>
   );

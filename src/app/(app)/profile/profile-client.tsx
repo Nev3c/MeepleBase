@@ -246,10 +246,17 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
           </div>
         )}
 
-        {/* Version */}
-        <p className="text-center text-xs text-muted-foreground pb-4 pt-1">
-          MeepleBase · Phase 1 MVP
-        </p>
+        {/* Legal links + Version */}
+        <div className="flex flex-col items-center gap-1 pb-4 pt-1">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <a href="/impressum" className="hover:text-foreground transition-colors underline underline-offset-2">Impressum</a>
+            <span aria-hidden="true">·</span>
+            <a href="/privacy" className="hover:text-foreground transition-colors underline underline-offset-2">Datenschutz</a>
+            <span aria-hidden="true">·</span>
+            <a href="/terms" className="hover:text-foreground transition-colors underline underline-offset-2">AGB</a>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">MeepleBase · Phase 1 MVP</p>
+        </div>
       </div>
 
       {/* QR Modal */}

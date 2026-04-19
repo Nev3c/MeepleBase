@@ -66,6 +66,49 @@ export async function GET() {
   return NextResponse.json({ users });
 }
 
+export async function DELETE(request: NextRequest) {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(c) { c.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !isAdmin(user.email)) {
+    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 403 });
+  }
+
+  const body = await request.json() as { userId: string };
+  if (!body.userId) {
+    return NextResponse.json({ error: "userId erforderlich" }, { status: 400 });
+  }
+
+  // Prevent self-deletion
+  if (body.userId === user.id) {
+    return NextResponse.json({ error: "Du kannst dich nicht selbst löschen." }, { status: 400 });
+  }
+
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Delete from auth (cascades to profiles via FK if set, otherwise profile stays — clean up manually)
+  const { error } = await admin.auth.admin.deleteUser(body.userId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Also delete profile row (in case ON DELETE CASCADE is not set)
+  await admin.from("profiles").delete().eq("id", body.userId);
+
+  return NextResponse.json({ success: true });
+}
+
 export async function PATCH(request: NextRequest) {
   const cookieStore = cookies();
   const supabase = createServerClient(

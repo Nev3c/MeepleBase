@@ -32,21 +32,35 @@ async function getAuthUser() {
   return supabase.auth.getUser();
 }
 
+/** Get all game IDs from a user's library */
+async function getUserGameIds(admin: ReturnType<typeof serviceClient>, userId: string) {
+  const { data } = await admin
+    .from("user_games")
+    .select("game_id")
+    .eq("user_id", userId);
+  return (data ?? []).map((r: { game_id: string }) => r.game_id);
+}
+
+/** Count games with best_players = NULL (not yet fetched from BGG) */
+async function countPending(admin: ReturnType<typeof serviceClient>, gameIds: string[]) {
+  if (gameIds.length === 0) return 0;
+  const { count } = await admin
+    .from("games")
+    .select("id", { count: "exact", head: true })
+    .in("id", gameIds)
+    .is("best_players", null);
+  return count ?? 0;
+}
+
 export async function GET() {
   const { data: { user } } = await getAuthUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
   const admin = serviceClient();
+  const gameIds = await getUserGameIds(admin, user.id);
+  const pending = await countPending(admin, gameIds);
 
-  // Count games in user's library where best_players IS NULL
-  const { count, error } = await admin
-    .from("user_games")
-    .select("games!inner(id, best_players)", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .is("games.best_players", null);
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ pending: count ?? 0 });
+  return NextResponse.json({ pending });
 }
 
 export async function POST() {
@@ -54,19 +68,24 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
   const admin = serviceClient();
+  const gameIds = await getUserGameIds(admin, user.id);
 
-  // Fetch next 5 games in user's library that still need best_players
-  const { data: userGames, error } = await admin
-    .from("user_games")
-    .select("games!inner(id, bgg_id, name, best_players)")
-    .eq("user_id", user.id)
-    .is("games.best_players", null)
-    .order("games(name)")
+  if (gameIds.length === 0) {
+    return NextResponse.json({ refreshed: 0, errors: 0, names: [], remaining: 0, done: true });
+  }
+
+  // Fetch next 5 games that still need best_players (NULL = not yet processed)
+  const { data: games, error } = await admin
+    .from("games")
+    .select("id, bgg_id, name, best_players")
+    .in("id", gameIds)
+    .is("best_players", null)
+    .order("name")
     .limit(5);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (!userGames || userGames.length === 0) {
+  if (!games || games.length === 0) {
     return NextResponse.json({ refreshed: 0, errors: 0, names: [], remaining: 0, done: true });
   }
 
@@ -74,8 +93,7 @@ export async function POST() {
   let errors = 0;
   const names: string[] = [];
 
-  for (const ug of userGames) {
-    const g = ug.games as unknown as { id: string; bgg_id: number; name: string; best_players: number[] | null } | null;
+  for (const g of games as { id: string; bgg_id: number; name: string; best_players: number[] | null }[]) {
     if (!g?.bgg_id) { errors++; continue; }
 
     const bggData = await fetchGeekItem(Number(g.bgg_id));
@@ -86,8 +104,9 @@ export async function POST() {
       const updates: Record<string, unknown> = {};
       if (bggData.complexity !== null) updates.complexity = bggData.complexity;
       if (bggData.publishers.length > 0) updates.publishers = bggData.publishers;
-      // Always set best_players (even empty array → use sentinel [0] to mark "processed")
-      // Use null→[] empty array if BGG had no data, so we don't re-process it every time
+      // Store whatever we got — null means "no poll data on BGG", [] is an empty array sentinel
+      // We store the actual array (or empty []) to mark it as "processed"
+      // Games with null will be re-tried on next bulk refresh
       updates.best_players = bggData.best_players ?? [];
 
       const { error: upErr } = await admin
@@ -106,18 +125,14 @@ export async function POST() {
     await new Promise((r) => setTimeout(r, 500));
   }
 
-  // Count remaining
-  const { count: remaining } = await admin
-    .from("user_games")
-    .select("games!inner(id, best_players)", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .is("games.best_players", null);
+  // Count remaining (NULL only — [] means processed/no data)
+  const remaining = await countPending(admin, gameIds);
 
   return NextResponse.json({
     refreshed,
     errors,
     names,
-    remaining: remaining ?? 0,
-    done: (remaining ?? 0) === 0,
+    remaining,
+    done: remaining === 0,
   });
 }
