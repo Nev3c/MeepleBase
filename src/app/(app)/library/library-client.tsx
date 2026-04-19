@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { LibraryHeader } from "@/components/library/library-header";
 import { LibraryEmptyState } from "@/components/library/library-empty-state";
-import { LibraryFilterSheet } from "@/components/library/library-filter-sheet";
+import { LibrarySortFilterSheet } from "@/components/library/library-sort-filter-sheet";
 import { GameCard } from "@/components/library/game-card";
 import { useLibraryStore } from "@/stores/library-store";
 import { translateCategory, translateMechanic } from "@/lib/bgg-translations";
@@ -126,6 +126,7 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   const isEmpty = filteredGames.length === 0;
   const isFiltered = !!(filter.search || filter.status || filter.playerCount || filter.categories?.length || filter.mechanics?.length);
   const tagFilterCount = (filter.categories?.length ?? 0) + (filter.mechanics?.length ?? 0);
+  const sortFilterActive = sortKey !== "name_asc" || tagFilterCount > 0;
 
   function openAdd() { setSheetInitialTab("search"); setSheetOpen(true); }
 
@@ -136,8 +137,9 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           user={user}
           profile={profile}
           onAddGame={openAdd}
-          onFilter={() => setFilterSheetOpen(true)}
-          activeFilterCount={tagFilterCount}
+          onSortFilter={() => setFilterSheetOpen(true)}
+          sortFilterActive={sortFilterActive}
+          sortFilterCount={tagFilterCount}
         />
 
         {isEmpty ? (
@@ -179,9 +181,10 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       />
 
       {filterSheetOpen && (
-        <LibraryFilterSheet
+        <LibrarySortFilterSheet
           availableCategories={availableCategories}
           availableMechanics={availableMechanics}
+          filteredCount={filteredGames.length}
           onClose={() => setFilterSheetOpen(false)}
         />
       )}

@@ -2,57 +2,30 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Search, LayoutGrid, List, SlidersHorizontal, Plus, ArrowUpAZ, ArrowDownAZ, ArrowUp01, ArrowDown01, Calendar, Star, Dices, Tag } from "lucide-react";
+import { Search, LayoutGrid, List, SlidersHorizontal, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryStore } from "@/stores/library-store";
 import { cn } from "@/lib/utils";
-import type { Profile, LibrarySortKey } from "@/types";
+import type { Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
-import { useState, useRef, useEffect } from "react";
 
 interface LibraryHeaderProps {
   user?: User | null;
   profile?: Profile | null;
   onAddGame?: () => void;
-  onFilter?: () => void;
-  activeFilterCount?: number;
+  onSortFilter?: () => void;
+  sortFilterActive?: boolean;
+  sortFilterCount?: number;
 }
 
-const SORT_OPTIONS: { key: LibrarySortKey; label: string; icon: React.ReactNode }[] = [
-  { key: "name_asc",     label: "Name A → Z",        icon: <ArrowUpAZ size={14} /> },
-  { key: "name_desc",    label: "Name Z → A",        icon: <ArrowDownAZ size={14} /> },
-  { key: "added_desc",   label: "Neueste zuerst",     icon: <Calendar size={14} /> },
-  { key: "added_asc",    label: "Älteste zuerst",     icon: <Calendar size={14} /> },
-  { key: "players_asc",  label: "Spieler ↑ (wenige)",  icon: <ArrowUp01 size={14} /> },
-  { key: "players_desc", label: "Spieler ↓ (viele)",   icon: <ArrowDown01 size={14} /> },
-  { key: "rating",       label: "Bewertung ↓ (beste)",   icon: <Star size={14} /> },
-  { key: "rating_asc",   label: "Bewertung ↑ (schlechte)", icon: <Star size={14} /> },
-  { key: "plays_desc",   label: "Meist gespielt",          icon: <Dices size={14} /> },
-  { key: "plays_asc",    label: "Wenigst gespielt",        icon: <Dices size={14} /> },
-];
 
-export function LibraryHeader({ user, profile, onAddGame, onFilter, activeFilterCount = 0 }: LibraryHeaderProps) {
-  const { view, setView, filter, setFilter, sortKey, setSortKey } = useLibraryStore();
-  const [sortOpen, setSortOpen] = useState(false);
-  const sortRef = useRef<HTMLDivElement>(null);
+export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilterActive, sortFilterCount = 0 }: LibraryHeaderProps) {
+  const { view, setView, filter, setFilter } = useLibraryStore();
 
   const displayName = profile?.display_name ?? profile?.username ?? user?.email?.split("@")[0] ?? "";
   const avatarUrl = profile?.avatar_url ?? user?.user_metadata?.avatar_url;
   const initial = displayName[0]?.toUpperCase() ?? "?";
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
-        setSortOpen(false);
-      }
-    }
-    if (sortOpen) document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [sortOpen]);
-
-  const currentSort = SORT_OPTIONS.find((o) => o.key === sortKey);
 
   return (
     <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border">
@@ -106,57 +79,21 @@ export function LibraryHeader({ user, profile, onAddGame, onFilter, activeFilter
               </button>
             </div>
 
-            {/* Sort dropdown */}
-            <div className="relative" ref={sortRef}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Sortierung"
-                onClick={() => setSortOpen((o) => !o)}
-                className={cn(sortKey !== "name_asc" && "text-amber-500")}
-              >
-                <SlidersHorizontal size={16} strokeWidth={2} />
-              </Button>
-
-              {sortOpen && (
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl overflow-hidden z-50">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-3 pt-3 pb-1.5">
-                    Sortierung
-                  </p>
-                  {SORT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.key}
-                      onClick={() => { setSortKey(opt.key); setSortOpen(false); }}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors",
-                        sortKey === opt.key
-                          ? "bg-amber-50 text-amber-700 font-medium"
-                          : "hover:bg-muted text-foreground"
-                      )}
-                    >
-                      <span className="text-muted-foreground">{opt.icon}</span>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Category / Mechanic filter button */}
-            {onFilter && (
+            {/* Combined sort + filter button */}
+            {onSortFilter && (
               <div className="relative">
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="Kategorien & Mechanismen filtern"
-                  onClick={onFilter}
-                  className={cn(activeFilterCount > 0 && "text-amber-500")}
+                  aria-label="Sortierung & Filter"
+                  onClick={onSortFilter}
+                  className={cn(sortFilterActive && "text-amber-500")}
                 >
-                  <Tag size={16} strokeWidth={2} />
+                  <SlidersHorizontal size={16} strokeWidth={2} />
                 </Button>
-                {activeFilterCount > 0 && (
+                {sortFilterCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
-                    {activeFilterCount}
+                    {sortFilterCount}
                   </span>
                 )}
               </div>
@@ -193,11 +130,6 @@ export function LibraryHeader({ user, profile, onAddGame, onFilter, activeFilter
             />
           </div>
 
-          {sortKey !== "name_asc" && (
-            <p className="text-[11px] text-amber-600 font-medium px-1">
-              Sortiert nach: {currentSort?.label}
-            </p>
-          )}
         </div>
       </div>
     </header>

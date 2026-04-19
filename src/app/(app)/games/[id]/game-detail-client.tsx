@@ -550,7 +550,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               <TagRow label="Kategorien" tags={categories} color="amber" hasCustom={!!customFields.categories} />
             )}
             {mechanics.length > 0 && (
-              <TagRow label="Mechanismen" tags={mechanics.slice(0, 10)} color="slate" />
+              <TagRow label="Mechanismen" tags={mechanics} color="slate" />
             )}
           </section>
         )}
@@ -991,7 +991,11 @@ function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }
   );
 }
 
-function TagRow({ label, tags, color, hasCustom }: { label: string; tags: string[]; color: "amber" | "slate"; hasCustom?: boolean }) {
+function TagRow({ label, tags, color, hasCustom, cap = 8 }: { label: string; tags: string[]; color: "amber" | "slate"; hasCustom?: boolean; cap?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? tags : tags.slice(0, cap);
+  const hidden = tags.length - cap;
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
@@ -999,17 +1003,38 @@ function TagRow({ label, tags, color, hasCustom }: { label: string; tags: string
         {hasCustom && <span className="text-[10px] text-amber-600 font-medium">(eigene Angabe)</span>}
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {tags.map((t) => (
+        {visible.map((t) => (
           <span
             key={t}
             className={cn(
               "px-2.5 py-1 text-xs rounded-full font-medium",
-              color === "amber" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"
+              color === "amber" ? "bg-amber-50 text-amber-800 border border-amber-100" : "bg-slate-100 text-slate-700 border border-slate-200"
             )}
           >
             {t}
           </span>
         ))}
+        {!expanded && hidden > 0 && (
+          <button
+            onClick={() => setExpanded(true)}
+            className={cn(
+              "px-2.5 py-1 text-xs rounded-full font-medium border transition-colors",
+              color === "amber"
+                ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"
+                : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+            )}
+          >
+            +{hidden} weitere
+          </button>
+        )}
+        {expanded && hidden > 0 && (
+          <button
+            onClick={() => setExpanded(false)}
+            className="px-2.5 py-1 text-xs rounded-full font-medium border border-border text-muted-foreground hover:bg-muted transition-colors"
+          >
+            Weniger
+          </button>
+        )}
       </div>
     </div>
   );
