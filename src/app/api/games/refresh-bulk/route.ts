@@ -41,14 +41,14 @@ async function getUserGameIds(admin: ReturnType<typeof serviceClient>, userId: s
   return (data ?? []).map((r: { game_id: string }) => r.game_id);
 }
 
-/** Count games with best_players = NULL (not yet fetched from BGG) */
+/** Count games with alternate_names = NULL (not yet refreshed with current code) */
 async function countPending(admin: ReturnType<typeof serviceClient>, gameIds: string[]) {
   if (gameIds.length === 0) return 0;
   const { count } = await admin
     .from("games")
     .select("id", { count: "exact", head: true })
     .in("id", gameIds)
-    .is("best_players", null);
+    .is("alternate_names", null);
   return count ?? 0;
 }
 
@@ -74,12 +74,12 @@ export async function POST() {
     return NextResponse.json({ refreshed: 0, errors: 0, names: [], remaining: 0, done: true });
   }
 
-  // Fetch next 5 games that still need best_players (NULL = not yet processed)
+  // Fetch next 5 games where alternate_names IS NULL (= not yet processed with current code)
   const { data: games, error } = await admin
     .from("games")
-    .select("id, bgg_id, name, best_players")
+    .select("id, bgg_id, name")
     .in("id", gameIds)
-    .is("best_players", null)
+    .is("alternate_names", null)
     .order("name")
     .limit(5);
 
@@ -93,7 +93,7 @@ export async function POST() {
   let errors = 0;
   const names: string[] = [];
 
-  for (const g of games as { id: string; bgg_id: number; name: string; best_players: number[] | null }[]) {
+  for (const g of games as { id: string; bgg_id: number; name: string }[]) {
     if (!g?.bgg_id) { errors++; continue; }
 
     const bggData = await fetchGeekItem(Number(g.bgg_id));
@@ -104,10 +104,15 @@ export async function POST() {
       const updates: Record<string, unknown> = {};
       if (bggData.complexity !== null) updates.complexity = bggData.complexity;
       if (bggData.publishers.length > 0) updates.publishers = bggData.publishers;
-      // Store whatever we got — null means "no poll data on BGG", [] is an empty array sentinel
-      // We store the actual array (or empty []) to mark it as "processed"
-      // Games with null will be re-tried on next bulk refresh
+      // best_players: store [] as sentinel for "processed but no data"
       updates.best_players = bggData.best_players ?? [];
+      // alternate_names: always set ([] = processed, no names found) — marks game as done
+      updates.alternate_names = bggData.alternate_names;
+      // images: always update to official cover art (removes stored community/personal photos)
+      if (bggData.thumbnail_url) {
+        updates.thumbnail_url = bggData.thumbnail_url;
+        updates.image_url = bggData.thumbnail_url;
+      }
 
       const { error: upErr } = await admin
         .from("games")

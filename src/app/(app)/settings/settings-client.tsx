@@ -488,7 +488,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
             <div>
               <p className="text-sm font-medium text-foreground mb-0.5">BGG-Daten aktualisieren</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Holt Komplexität, Verlag und Community-Spielerempfehlung (Best: X) für alle Spiele deiner Bibliothek von BGG.
+                Holt Komplexität, Verlag, Community-Spielerempfehlung, Alternativnamen und Titelbilder (offizielles Cover) für alle Spiele deiner Bibliothek von BGG.
               </p>
             </div>
 
@@ -503,7 +503,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    <span className="font-semibold text-foreground">{refreshPending}</span> Spiele ohne Community-Daten
+                    <span className="font-semibold text-foreground">{refreshPending}</span> Spiele noch nicht vollständig aktualisiert
                   </p>
                 )}
                 <button
