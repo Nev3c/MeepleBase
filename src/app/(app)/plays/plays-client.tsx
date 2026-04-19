@@ -800,7 +800,7 @@ function PlaySheet({
         <div className="px-4 py-4 border-t border-border flex-shrink-0">
           <button
             onClick={handleSave}
-            disabled={saving || !gameId}
+            disabled={saving || (!gameId && !globalSelected)}
             className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
           >
             {saving ? (

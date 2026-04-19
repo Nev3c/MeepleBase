@@ -43,13 +43,10 @@ export function BottomNav() {
               )}
               <Icon
                 size={20}
-                strokeWidth={isActive ? 2.5 : 1.75}
-                className="transition-all duration-200"
+                strokeWidth={2}
+                className="transition-colors duration-200"
               />
-              <span className={cn(
-                "text-[9px] font-medium tracking-wide leading-none",
-                isActive ? "font-semibold" : ""
-              )}>
+              <span className="text-[9px] font-semibold tracking-wide leading-none">
                 {label}
               </span>
             </Link>

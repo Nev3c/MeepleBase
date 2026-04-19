@@ -346,17 +346,27 @@ function CoinFlip() {
   const [result, setResult] = useState<"heads" | "tails" | null>(null);
   const [flipping, setFlipping] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  // Cumulative rotation so CSS transition always animates forward from current state
   const [totalRotation, setTotalRotation] = useState(0);
+  // Ref tracks the true accumulated rotation so successive flips always
+  // compute the correct delta (avoids stale-closure issues with state)
+  const rotationRef = useRef(0);
 
   function flip() {
     if (flipping) return;
     const outcome: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
+
+    // 0° mod 360 = Kopf face, 180° mod 360 = Zahl face
+    const targetMod = outcome === "heads" ? 0 : 180;
+    const currentMod = rotationRef.current % 360;
+    // Forward degrees to reach the target face; minimum 360 if already aligned
+    const forward = ((targetMod - currentMod) + 360) % 360 || 360;
+    const newRotation = rotationRef.current + forward + 720; // + 2 full extra spins
+
+    rotationRef.current = newRotation;
     setFlipping(true);
     setShowResult(false);
-    // heads lands on 0° face, tails on 180° face
-    // Add 1080° (3 full spins) + 180° extra for tails
-    setTotalRotation((prev) => prev + 1080 + (outcome === "tails" ? 180 : 0));
+    setTotalRotation(newRotation);
+
     setTimeout(() => {
       setResult(outcome);
       setFlipping(false);
@@ -404,16 +414,11 @@ function CoinFlip() {
           </div>
         </div>
 
-        {/* Result */}
+        {/* Result — only large label, no sub-text to avoid confusion */}
         {showResult && result && !flipping && (
-          <div className="text-center">
-            <p className="font-display text-2xl font-bold text-foreground">
-              {result === "heads" ? "Kopf!" : "Zahl!"}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {result === "heads" ? "Die Krone hat gewonnen" : "Die Zahl hat gewonnen"}
-            </p>
-          </div>
+          <p className="font-display text-2xl font-bold text-foreground text-center">
+            {result === "heads" ? "Kopf!" : "Zahl!"}
+          </p>
         )}
 
         <button
