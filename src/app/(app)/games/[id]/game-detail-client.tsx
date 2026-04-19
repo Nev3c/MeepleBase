@@ -104,6 +104,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         publishers?: string[];
         best_players?: number[] | null;
         alternate_names?: string[];
+        thumbnail_url?: string | null;
       };
       if (res.ok && data.success) {
         setGameData((prev) => ({
@@ -112,8 +113,9 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           ...(data.publishers != null && data.publishers.length > 0 ? { publishers: data.publishers } : {}),
           ...(data.best_players != null ? { best_players: data.best_players } : {}),
           ...(data.alternate_names != null && data.alternate_names.length > 0 ? { alternate_names: data.alternate_names } : {}),
+          ...(data.thumbnail_url ? { thumbnail_url: data.thumbnail_url, image_url: data.thumbnail_url } : {}),
         }));
-        const LABELS: Record<string, string> = { complexity: "Komplexität", publishers: "Verlag", best_players: "Best", alternate_names: "Alternativnamen" };
+        const LABELS: Record<string, string> = { complexity: "Komplexität", publishers: "Verlag", best_players: "Best", alternate_names: "Alternativnamen", thumbnail_url: "Bild" };
         const updated = (data.updated ?? []) as string[];
         const msg = updated.length > 0
           ? updated.map((k) => LABELS[k] ?? k).join(", ") + " ✓"

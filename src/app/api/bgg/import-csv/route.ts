@@ -71,7 +71,7 @@ async function enrichGame(bggId: number): Promise<Record<string, unknown> | null
       max_playtime: item.maxplaytime ? Number(item.maxplaytime) : null,
       complexity: complexity && !isNaN(complexity) ? complexity : null,
       thumbnail_url: item.imageurl ?? null,
-      image_url: item.topimageurl ?? null,
+      image_url: item.imageurl ?? null,
       description: item.short_description ?? null,
       categories: names(links.boardgamecategory).length ? names(links.boardgamecategory) : null,
       mechanics: names(links.boardgamemechanic).length ? names(links.boardgamemechanic) : null,

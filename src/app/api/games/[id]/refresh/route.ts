@@ -53,13 +53,15 @@ export async function POST(
     return NextResponse.json({ error: "BGG nicht erreichbar oder keine Daten" }, { status: 502 });
   }
 
-  const { complexity, publishers, best_players, alternate_names } = bggData;
+  const { complexity, publishers, best_players, alternate_names, thumbnail_url } = bggData;
 
   const updates: Record<string, unknown> = {};
   if (complexity !== null) updates.complexity = complexity;
   if (publishers.length > 0) updates.publishers = publishers;
   if (best_players !== null) updates.best_players = best_players;
   if (alternate_names.length > 0) updates.alternate_names = alternate_names;
+  // Always update images to official cover art (removes any stored community/personal photos)
+  if (thumbnail_url) { updates.thumbnail_url = thumbnail_url; updates.image_url = thumbnail_url; }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({
@@ -90,5 +92,6 @@ export async function POST(
     publishers,
     best_players: best_players ?? null,
     alternate_names,
+    thumbnail_url: thumbnail_url ?? null,
   });
 }

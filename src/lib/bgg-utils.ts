@@ -162,6 +162,7 @@ export interface GeekItemData {
   publishers: string[];
   best_players: number[] | null;
   alternate_names: string[];
+  thumbnail_url: string | null; // official cover art only (item.imageurl)
   source: string; // which API provided weight/best_players
 }
 
@@ -180,9 +181,10 @@ export async function fetchGeekItem(bggId: number): Promise<GeekItemData | null>
   if (!geek && !xml) return null;
 
   // Prefer XML for weight + best_players (more complete data)
-  const complexity   = xml?.complexity   ?? geek?.complexity   ?? null;
-  const best_players = xml?.best_players ?? geek?.best_players ?? null;
-  const publishers   = geek?.publishers  ?? [];
+  const complexity    = xml?.complexity   ?? geek?.complexity   ?? null;
+  const best_players  = xml?.best_players ?? geek?.best_players ?? null;
+  const publishers    = geek?.publishers  ?? [];
+  const thumbnail_url = geek?.thumbnail_url ?? null; // official cover art, never topimageurl
 
   // Merge alternate names from all sources, deduplicate (XML first = highest quality)
   const xmlNames      = xml?.alternate_names  ?? [];
@@ -200,7 +202,7 @@ export async function fetchGeekItem(bggId: number): Promise<GeekItemData | null>
     geek              != null ? "geekitems"        : null,
   ].filter(Boolean).join("+") || "none";
 
-  return { complexity, publishers, best_players, alternate_names, source };
+  return { complexity, publishers, best_players, alternate_names, thumbnail_url, source };
 }
 
 // ── geekitems call ────────────────────────────────────────────────────────────
@@ -241,7 +243,9 @@ async function fetchGeekItems(bggId: number) {
       if (n) alternate_names.push(n);
     }
 
-    return { publishers, complexity, best_players, alternate_names };
+    const thumbnail_url = (item.imageurl as string | null) ?? null;
+
+    return { publishers, complexity, best_players, alternate_names, thumbnail_url };
   } catch {
     return null;
   }

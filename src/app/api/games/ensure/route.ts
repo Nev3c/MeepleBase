@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     // item.imageurl matches what bgg/lookup returns; images.thumb.url used wrong field before
     const thumbnail_url = body.thumbnail_url ?? (item.imageurl as string | null) ?? null;
-    const image_url = (item.topimageurl as string | null) ?? thumbnail_url;
+    const image_url = thumbnail_url; // always use cover art, never community topimageurl
 
     const description = String((item as Record<string, unknown>).description ?? "").trim() || null;
 
