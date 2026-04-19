@@ -42,6 +42,10 @@ export default async function ProfilePage() {
   }
   const favoriteGame = Object.values(playMap).sort((a, b) => b.count - a.count)[0] ?? null;
 
+  const isAdmin =
+    !!process.env.ADMIN_EMAIL &&
+    user.email?.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase();
+
   return (
     <ProfileClient
       user={user}
@@ -52,6 +56,7 @@ export default async function ProfilePage() {
       libraryValue={libraryValue > 0 ? libraryValue : null}
       uniqueCategoryCount={uniqueCats.size}
       uniqueMechanicCount={uniqueMechs.size}
+      isAdmin={isAdmin}
     />
   );
 }

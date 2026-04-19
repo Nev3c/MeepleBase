@@ -6,7 +6,7 @@ import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
-import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus, Euro, Tag, Cog } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus, Euro, Tag, Cog, ShieldCheck } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 interface ProfileClientProps {
@@ -18,9 +18,10 @@ interface ProfileClientProps {
   libraryValue?: number | null;
   uniqueCategoryCount?: number;
   uniqueMechanicCount?: number;
+  isAdmin?: boolean;
 }
 
-export function ProfileClient({ user, profile, gameCount, playCount, favoriteGame, libraryValue, uniqueCategoryCount, uniqueMechanicCount }: ProfileClientProps) {
+export function ProfileClient({ user, profile, gameCount, playCount, favoriteGame, libraryValue, uniqueCategoryCount, uniqueMechanicCount, isAdmin }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -219,6 +220,9 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Einstellungen</SectionHeader>
           <MenuRow label="Einstellungen & BGG-Sync" href="/settings" showChevron />
+          {isAdmin && (
+            <MenuRow label="Admin" href="/admin" showChevron icon={<ShieldCheck size={14} className="text-muted-foreground" />} />
+          )}
           {/* App Tour — highlighted if not yet completed */}
           {tourDone ? (
             <MenuRow label="App Tour" href="/onboarding" showChevron />
@@ -392,16 +396,21 @@ function MenuRow({
   href,
   showChevron,
   muted,
+  icon,
 }: {
   label: string;
   value?: string;
   href?: string;
   showChevron?: boolean;
   muted?: boolean;
+  icon?: React.ReactNode;
 }) {
   const content = (
     <div className="flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        {icon}
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </div>
       <div className="flex items-center gap-1.5">
         {value && (
           <span className={`text-sm ${muted ? "text-muted-foreground" : "text-muted-foreground"} max-w-[160px] truncate text-right`}>
