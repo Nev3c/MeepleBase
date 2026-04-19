@@ -30,7 +30,7 @@ export function BottomNav() {
               href={href}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 px-1 min-h-[52px]",
-                "transition-all duration-200 ease-out relative",
+                "transition-colors duration-200 ease-out relative",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 isActive
                   ? "text-amber-500"
@@ -38,9 +38,11 @@ export function BottomNav() {
               )}
               aria-current={isActive ? "page" : undefined}
             >
-              {isActive && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-amber-500 rounded-full" />
-              )}
+              {/* Always in DOM — only colour changes, no layout-shifting insertion */}
+              <span className={cn(
+                "absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full transition-colors duration-200",
+                isActive ? "bg-amber-500" : "bg-transparent"
+              )} />
               <Icon
                 size={20}
                 strokeWidth={2}
