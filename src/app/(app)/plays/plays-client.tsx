@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown, Edit2, SlidersHorizontal, Camera } from "lucide-react";
@@ -51,9 +51,37 @@ export function PlaysClient({
   libraryGames: LibraryGame[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [plays, setPlays] = useState<Play[]>(initialPlays);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editPlay, setEditPlay] = useState<Play | null>(null);
+  const [prefillPlayers, setPrefillPlayers] = useState<DraftPlayer[] | undefined>(undefined);
+
+  // Auto-open sheet with pre-filled players when navigating from score tracker
+  useEffect(() => {
+    const prefill = searchParams.get("prefill");
+    if (!prefill) return;
+    try {
+      const params = new URLSearchParams(decodeURIComponent(prefill));
+      const players: DraftPlayer[] = [];
+      let i = 0;
+      while (params.has(`player_${i}_name`)) {
+        players.push({
+          display_name: params.get(`player_${i}_name`) ?? "",
+          score: params.get(`player_${i}_score`) ?? "",
+          winner: false,
+        });
+        i++;
+      }
+      if (players.length > 0) {
+        setPrefillPlayers(players);
+        setSheetOpen(true);
+        // Clean URL
+        router.replace("/plays", { scroll: false });
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<PlaySortKey>("date_desc");
   const [sortOpen, setSortOpen] = useState(false);
@@ -179,7 +207,8 @@ export function PlaysClient({
       {sheetOpen && (
         <PlaySheet
           libraryGames={libraryGames}
-          onClose={() => setSheetOpen(false)}
+          prefillPlayers={prefillPlayers}
+          onClose={() => { setSheetOpen(false); setPrefillPlayers(undefined); }}
           onSaved={handleCreated}
         />
       )}
@@ -316,10 +345,11 @@ function PlayCard({
 }
 
 function PlaySheet({
-  libraryGames, editPlay, onClose, onSaved,
+  libraryGames, editPlay, prefillPlayers, onClose, onSaved,
 }: {
   libraryGames: LibraryGame[];
   editPlay?: Play | null;
+  prefillPlayers?: DraftPlayer[];
   onClose: () => void;
   onSaved: (play: Play) => void;
 }) {
@@ -329,6 +359,11 @@ function PlaySheet({
   const [gameId, setGameId] = useState<string>(editPlay?.game_id ?? "");
   const [gameSearch, setGameSearch] = useState("");
   const [gameDropdownOpen, setGameDropdownOpen] = useState(false);
+  // Global search (games not in library)
+  const [globalMode, setGlobalMode] = useState(false);
+  const [globalResults, setGlobalResults] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>([]);
+  const [globalSearching, setGlobalSearching] = useState(false);
+  const [globalSelected, setGlobalSelected] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null } | null>(null);
   const [playedAt, setPlayedAt] = useState(editPlay?.played_at?.slice(0, 10) ?? today);
   const [duration, setDuration] = useState(editPlay?.duration_minutes?.toString() ?? "");
   const [location, setLocation] = useState(editPlay?.location ?? "");
@@ -337,6 +372,8 @@ function PlaySheet({
   const [players, setPlayers] = useState<DraftPlayer[]>(
     editPlay?.players && editPlay.players.length > 0
       ? editPlay.players.map((p) => ({ display_name: p.display_name, score: p.score?.toString() ?? "", winner: p.winner }))
+      : prefillPlayers && prefillPlayers.length > 0
+      ? prefillPlayers
       : [{ display_name: "", score: "", winner: false }]
   );
   const [saving, setSaving] = useState(false);
@@ -350,6 +387,7 @@ function PlaySheet({
   const filteredGames = gameSearch
     ? libraryGames.filter((g) => g.name.toLowerCase().includes(gameSearch.toLowerCase()))
     : libraryGames;
+  const showGlobalHint = !globalMode && gameSearch.length >= 2 && filteredGames.length === 0;
 
   function addPlayer() {
     setPlayers((prev) => [...prev, { display_name: "", score: "", winner: false }]);
@@ -370,6 +408,24 @@ function PlaySheet({
     })));
   }
 
+  // Debounced global search
+  useEffect(() => {
+    if (!globalMode || gameSearch.length < 2) { setGlobalResults([]); return; }
+    setGlobalSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/games/search?q=${encodeURIComponent(gameSearch)}`);
+        if (res.ok) {
+          const data = await res.json() as { results: { bgg_id: number; name: string; thumbnail_url: string | null }[] };
+          setGlobalResults(data.results ?? []);
+        }
+      } finally {
+        setGlobalSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [globalMode, gameSearch]);
+
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -378,9 +434,26 @@ function PlaySheet({
   }
 
   async function handleSave() {
-    if (!gameId) { setError("Bitte ein Spiel auswählen"); return; }
     setSaving(true);
     setError(null);
+
+    // If a global (non-library) game is selected, ensure it exists in the DB first
+    let resolvedGameId = gameId;
+    if (!resolvedGameId && globalSelected) {
+      const ensureRes = await fetch("/api/games/ensure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bgg_id: globalSelected.bgg_id }),
+      });
+      if (!ensureRes.ok) {
+        setError("Spiel konnte nicht geladen werden. Bitte nochmal versuchen.");
+        setSaving(false);
+        return;
+      }
+      const ensureData = await ensureRes.json() as { game_id: string };
+      resolvedGameId = ensureData.game_id;
+    }
+    if (!resolvedGameId) { setError("Bitte ein Spiel auswählen"); setSaving(false); return; }
 
     const validPlayers = players
       .filter((p) => p.display_name.trim())
@@ -391,7 +464,7 @@ function PlaySheet({
       }));
 
     const payload = {
-      game_id: gameId,
+      game_id: resolvedGameId,
       played_at: playedAt,
       duration_minutes: duration ? Number(duration) : null,
       location: location.trim() || null,
@@ -455,37 +528,49 @@ function PlaySheet({
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Spiel *</label>
             <div className="relative">
               <button
-                onClick={() => setGameDropdownOpen((o) => !o)}
+                onClick={() => { setGameDropdownOpen((o) => !o); setGlobalMode(false); }}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors",
-                  gameId ? "border-amber-400 bg-amber-50" : "border-border bg-background"
+                  (gameId || globalSelected) ? "border-amber-400 bg-amber-50" : "border-border bg-background"
                 )}
               >
-                {selectedGame?.thumbnail_url && (
-                  <Image src={selectedGame.thumbnail_url} alt="" width={32} height={32} className="rounded-md object-cover flex-shrink-0" />
+                {(selectedGame?.thumbnail_url ?? globalSelected?.thumbnail_url) && (
+                  <Image src={(selectedGame?.thumbnail_url ?? globalSelected?.thumbnail_url)!} alt="" width={32} height={32} className="rounded-md object-cover flex-shrink-0" />
                 )}
-                <span className={cn("flex-1 text-sm truncate", !gameId && "text-muted-foreground")}>
-                  {selectedGame?.name ?? "Spiel auswählen…"}
+                <span className={cn("flex-1 text-sm truncate", !(gameId || globalSelected) && "text-muted-foreground")}>
+                  {selectedGame?.name ?? globalSelected?.name ?? "Spiel auswählen…"}
                 </span>
                 <ChevronDown size={16} className={cn("text-muted-foreground transition-transform", gameDropdownOpen && "rotate-180")} />
               </button>
 
               {gameDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-60">
-                  <div className="p-2 border-b border-border">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-64">
+                  <div className="p-2 border-b border-border flex gap-2">
                     <input
                       value={gameSearch}
                       onChange={(e) => setGameSearch(e.target.value)}
-                      placeholder="Suchen…"
-                      className="w-full text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
+                      placeholder={globalMode ? "BGG durchsuchen…" : "Suchen…"}
+                      className="flex-1 text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
                       autoFocus
                     />
+                    <button
+                      onClick={() => { setGlobalMode((m) => !m); setGameSearch(""); setGlobalResults([]); }}
+                      className={cn(
+                        "text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex-shrink-0",
+                        globalMode ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:text-foreground"
+                      )}
+                      title="Auch außerhalb der Bibliothek suchen"
+                    >
+                      🌐
+                    </button>
                   </div>
-                  <div className="overflow-y-auto max-h-44">
-                    {filteredGames.map((g) => (
+
+                  <div className="overflow-y-auto max-h-48">
+                    {/* Library results */}
+                    {!globalMode && filteredGames.map((g) => (
                       <button
                         key={g.id}
-                        onClick={() => { setGameId(g.id); setGameDropdownOpen(false); setGameSearch(""); }}
+                        onClick={() => { setGameId(g.id); setGlobalSelected(null); setGameDropdownOpen(false); setGameSearch(""); }}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
                           gameId === g.id && "bg-amber-50 text-amber-700 font-medium"
@@ -497,6 +582,50 @@ function PlaySheet({
                         <span className="truncate">{g.name}</span>
                       </button>
                     ))}
+
+                    {/* Hint to switch to global search */}
+                    {showGlobalHint && (
+                      <button
+                        onClick={() => { setGlobalMode(true); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left hover:bg-muted transition-colors text-amber-600 font-medium"
+                      >
+                        <span className="text-base">🌐</span>
+                        <span>In allen Spielen suchen…</span>
+                      </button>
+                    )}
+
+                    {/* Global search results */}
+                    {globalMode && globalSearching && (
+                      <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+                        Suche…
+                      </div>
+                    )}
+                    {globalMode && !globalSearching && gameSearch.length >= 2 && globalResults.map((g) => (
+                      <button
+                        key={g.bgg_id}
+                        onClick={() => { setGlobalSelected(g); setGameId(""); setGameDropdownOpen(false); setGameSearch(""); }}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
+                          globalSelected?.bgg_id === g.bgg_id && "bg-amber-50 text-amber-700 font-medium"
+                        )}
+                      >
+                        {g.thumbnail_url && (
+                          <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />
+                        )}
+                        <span className="truncate">{g.name}</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0">BGG</span>
+                      </button>
+                    ))}
+                    {globalMode && !globalSearching && gameSearch.length >= 2 && globalResults.length === 0 && (
+                      <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+                        Nichts gefunden
+                      </div>
+                    )}
+                    {globalMode && gameSearch.length < 2 && (
+                      <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+                        Mindestens 2 Zeichen eingeben
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

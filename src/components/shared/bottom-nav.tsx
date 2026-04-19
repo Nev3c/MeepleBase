@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Library, Dices, User, Compass } from "lucide-react";
+import { Library, Dices, User, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -17,9 +17,9 @@ const NAV_ITEMS = [
     icon: Dices,
   },
   {
-    href: "/discover",
-    label: "Entdecken",
-    icon: Compass,
+    href: "/tools",
+    label: "Tools",
+    icon: Wrench,
   },
   {
     href: "/profile",

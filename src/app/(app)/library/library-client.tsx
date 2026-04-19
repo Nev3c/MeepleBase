@@ -43,6 +43,15 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       games = games.filter((g) => g.game?.name.toLowerCase().includes(q));
     }
 
+    if (filter.playerCount) {
+      const n = filter.playerCount;
+      games = games.filter((g) => {
+        const min = g.game?.min_players ?? 1;
+        const max = g.game?.max_players ?? 99;
+        return min <= n && n <= max;
+      });
+    }
+
     games.sort((a, b) => {
       switch (sortKey) {
         case "name_asc":
@@ -82,7 +91,7 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   }, [initialGames, filter.status, deferredSearch, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
-  const isFiltered = !!(filter.search || filter.status);
+  const isFiltered = !!(filter.search || filter.status || filter.playerCount);
 
   function openAdd() { setSheetInitialTab("search"); setSheetOpen(true); }
 

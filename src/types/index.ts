@@ -169,6 +169,7 @@ export type LibraryFilter = {
   minPlayers?: number;
   maxPlayers?: number;
   search?: string;
+  playerCount?: number; // quick filter: show games playable with exactly N players
 };
 
 export type LibrarySortKey =

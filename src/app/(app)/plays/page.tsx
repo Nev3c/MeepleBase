@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { PlaysClient } from "./plays-client";
 
@@ -32,5 +33,9 @@ export default async function PlaysPage() {
     return Array.isArray(g) ? g : [g];
   });
 
-  return <PlaysClient initialPlays={plays} libraryGames={libraryGames} />;
+  return (
+    <Suspense>
+      <PlaysClient initialPlays={plays} libraryGames={libraryGames} />
+    </Suspense>
+  );
 }
