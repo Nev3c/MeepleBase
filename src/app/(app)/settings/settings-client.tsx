@@ -141,9 +141,6 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
 
-  // Invalidate Next.js router cache on mount so library/detail always show fresh data
-  useEffect(() => { router.refresh(); }, [router]);
-
   // ── BGG Bulk Refresh functions ─────────────────────────────────────────────
   const fetchRefreshPending = useCallback(async () => {
     try {
@@ -188,7 +185,6 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     if (!refreshAbort.current) {
       setRefreshPhase("done");
       setRefreshPending(0);
-      router.refresh(); // invalidate Next.js router cache so library/detail show fresh data
     }
   }
 

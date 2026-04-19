@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { fetchGeekItem } from "@/lib/bgg-utils";
 
 // GET  /api/games/refresh-bulk  → { pending: number }
@@ -132,6 +133,10 @@ export async function POST() {
 
   // Count remaining (NULL only — [] means processed/no data)
   const remaining = await countPending(admin, gameIds);
+
+  // Invalidate Next.js page cache so library + game detail pages show fresh images/data
+  revalidatePath("/library", "page");
+  revalidatePath("/games/[id]", "page");
 
   return NextResponse.json({
     refreshed,
