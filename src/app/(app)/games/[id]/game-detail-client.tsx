@@ -517,34 +517,72 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         )}
 
-        {/* ── Overview card: status + meta ─────────────────────────────────── */}
+        {/* ── Description + links directly under hero ──────────────────────── */}
+        {displayDesc && (
+          <div>
+            <ExpandableDescription text={displayDesc} />
+            {customFields.description && <p className="text-[11px] text-amber-600 mt-1">Eigene Beschreibung</p>}
+          </div>
+        )}
+        {(customFields.youtube_url || customFields.spotify_url) && (
+          <div className="flex flex-col gap-2">
+            {customFields.youtube_url && (
+              <a href={customFields.youtube_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-sm active:bg-red-50/50 transition-all">
+                <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <PlayCircle size={18} className="text-red-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Tutorial ansehen</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{customFields.youtube_url}</p>
+                </div>
+                <ExternalLink size={14} className="text-muted-foreground flex-shrink-0" />
+              </a>
+            )}
+            {customFields.spotify_url && (
+              <a href={customFields.spotify_url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-sm active:bg-green-50/50 transition-all">
+                <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <Music2 size={18} className="text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Playlist öffnen</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{customFields.spotify_url}</p>
+                </div>
+                <ExternalLink size={14} className="text-muted-foreground flex-shrink-0" />
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* ── Overview card: status + inline meta ──────────────────────────── */}
         {userGame && (
           <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-            {/* Status row */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-              {editingStatus ? (
-                <div className="flex flex-col gap-2 w-full">
-                  <div className="flex flex-wrap gap-2">
-                    {STATUS_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleStatusSave(opt.value)}
-                        disabled={saving}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
-                          status === opt.value ? "bg-amber-500 text-white" : "bg-muted text-foreground hover:bg-muted/80"
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  <button onClick={() => setEditingStatus(false)} className="self-start text-xs text-muted-foreground flex items-center gap-1">
-                    <X size={12} /> Abbrechen
-                  </button>
+            {editingStatus ? (
+              <div className="px-4 py-3 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleStatusSave(opt.value)}
+                      disabled={saving}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                        status === opt.value ? "bg-amber-500 text-white" : "bg-muted text-foreground hover:bg-muted/80"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <>
+                <button onClick={() => setEditingStatus(false)} className="self-start text-xs text-muted-foreground flex items-center gap-1">
+                  <X size={12} /> Abbrechen
+                </button>
+              </div>
+            ) : (
+              <div className="px-4 py-3 flex flex-col gap-2">
+                {/* Status badge + edit button */}
+                <div className="flex items-center">
                   <span className={cn("px-3 py-1 rounded-full text-sm font-medium", STATUS_COLORS[status])}>
                     {STATUS_OPTIONS.find((o) => o.value === status)?.label}
                   </span>
@@ -555,54 +593,68 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                   >
                     <Edit2 size={13} />
                   </button>
-                </>
-              )}
-            </div>
-
-            {/* Meta chips */}
-            {hasMeta && (
-              <div className="flex flex-wrap gap-2 px-4 py-3">
-                {(effMinPlayers || effMaxPlayers) && (() => {
-                  // Best-players: prefer user's own override, fall back to BGG community
-                  const bestArr = customFields.best_players_override?.length
-                    ? customFields.best_players_override
-                    : (gameData.best_players?.length ? gameData.best_players : null);
-                  const bestLabel = bestArr ? `Best: ${bestArr.join(", ")}` : undefined;
-                  return (
-                    <div className="relative">
-                      <Stat
-                        icon={<Users size={14} />}
-                        label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)}
-                        sublabel={bestLabel}
-                      />
-                      {(customFields.min_players != null || customFields.max_players != null) && (
-                        <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
-                      )}
-                    </div>
-                  );
-                })()}
-                {(effMinPlaytime || effMaxPlaytime) && (
-                  <div className="relative">
-                    <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />
-                    {(customFields.min_playtime != null || customFields.max_playtime != null) && (
-                      <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                </div>
+                {/* Inline meta stats — no chip boxes, just icon + text */}
+                {hasMeta && (
+                  <div className="flex items-center gap-x-4 gap-y-1 flex-wrap">
+                    {(effMinPlayers || effMaxPlayers) && (() => {
+                      const bestArr = customFields.best_players_override?.length
+                        ? customFields.best_players_override
+                        : (gameData.best_players?.length ? gameData.best_players : null);
+                      return (
+                        <div className="flex items-center gap-1.5 text-sm text-foreground">
+                          <Users size={13} className="text-muted-foreground flex-shrink-0" />
+                          <span>{formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)}</span>
+                          {bestArr && <span className="text-xs text-muted-foreground">· Best {bestArr.join(", ")}</span>}
+                          {(customFields.min_players != null || customFields.max_players != null) && (
+                            <span className="text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {(effMinPlaytime || effMaxPlaytime) && (
+                      <div className="flex items-center gap-1.5 text-sm text-foreground">
+                        <Clock size={13} className="text-muted-foreground flex-shrink-0" />
+                        <span>{formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)}</span>
+                        {(customFields.min_playtime != null || customFields.max_playtime != null) && (
+                          <span className="text-[8px] bg-amber-400 text-white rounded-full px-1 font-bold leading-4">!</span>
+                        )}
+                      </div>
+                    )}
+                    {gameData.complexity != null && (
+                      <div className="flex items-center gap-1.5 text-sm text-foreground">
+                        <Star size={13} className="text-muted-foreground flex-shrink-0" />
+                        <span>{gameData.complexity.toFixed(1)}<span className="text-xs text-muted-foreground"> / 5</span></span>
+                      </div>
                     )}
                   </div>
-                )}
-                {gameData.complexity != null && (
-                  <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />
                 )}
               </div>
             )}
           </div>
         )}
 
-        {/* Meta chips for non-library games */}
+        {/* Meta for non-library games */}
         {!userGame && hasMeta && (
-          <div className="flex flex-wrap gap-2">
-            {(effMinPlayers || effMaxPlayers) && <Stat icon={<Users size={14} />} label={formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)} />}
-            {(effMinPlaytime || effMaxPlaytime) && <Stat icon={<Clock size={14} />} label={formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)} />}
-            {gameData.complexity != null && <Stat icon={<Star size={14} />} label={`${gameData.complexity.toFixed(1)} / 5`} sublabel="Komplexität" />}
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap px-1">
+            {(effMinPlayers || effMaxPlayers) && (
+              <div className="flex items-center gap-1.5 text-sm text-foreground">
+                <Users size={13} className="text-muted-foreground" />
+                {formatPlayers(effMinPlayers ?? null, effMaxPlayers ?? null)}
+              </div>
+            )}
+            {(effMinPlaytime || effMaxPlaytime) && (
+              <div className="flex items-center gap-1.5 text-sm text-foreground">
+                <Clock size={13} className="text-muted-foreground" />
+                {formatTime(effMinPlaytime ?? null, effMaxPlaytime ?? null)}
+              </div>
+            )}
+            {gameData.complexity != null && (
+              <div className="flex items-center gap-1.5 text-sm text-foreground">
+                <Star size={13} className="text-muted-foreground" />
+                {gameData.complexity.toFixed(1)}<span className="text-xs text-muted-foreground"> / 5</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -742,54 +794,6 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 ) : null}
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ── Description ──────────────────────────────────────────────────── */}
-        {displayDesc && (
-          <div className="relative">
-            <ExpandableDescription text={displayDesc} />
-            {customFields.description && <p className="text-[11px] text-amber-600 mt-1">Eigene Beschreibung</p>}
-          </div>
-        )}
-
-        {/* ── YouTube + Spotify links ───────────────────────────────────────── */}
-        {(customFields.youtube_url || customFields.spotify_url) && (
-          <div className="flex flex-col gap-2">
-            {customFields.youtube_url && (
-              <a
-                href={customFields.youtube_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-sm hover:border-red-200 hover:bg-red-50/50 transition-all group"
-              >
-                <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 transition-colors">
-                  <PlayCircle size={18} className="text-red-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Tutorial ansehen</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{customFields.youtube_url}</p>
-                </div>
-                <ExternalLink size={14} className="text-muted-foreground flex-shrink-0" />
-              </a>
-            )}
-            {customFields.spotify_url && (
-              <a
-                href={customFields.spotify_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-sm hover:border-green-200 hover:bg-green-50/50 transition-all group"
-              >
-                <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0 group-hover:bg-green-200 transition-colors">
-                  <Music2 size={18} className="text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Playlist öffnen</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{customFields.spotify_url}</p>
-                </div>
-                <ExternalLink size={14} className="text-muted-foreground flex-shrink-0" />
-              </a>
-            )}
           </div>
         )}
 
