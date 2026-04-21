@@ -492,6 +492,25 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 Abbrechen
               </button>
             </div>
+            {/* Hero image info — shown inside edit form */}
+            {customFields.hero_image_url && (
+              <div className="flex items-center gap-3 p-3 bg-violet-50 border border-violet-200 rounded-xl">
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                  <Image src={customFields.hero_image_url} alt="Aktuelles Titelbild" fill className="object-cover" sizes="48px" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-violet-800">Eigenes Titelbild aktiv</p>
+                  <p className="text-[11px] text-violet-600">Das Bild oben kommt aus deinen eigenen Fotos.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSetHeroImage(null)}
+                  className="text-xs text-violet-600 font-medium px-2.5 py-1.5 rounded-lg hover:bg-violet-100 transition-colors flex-shrink-0"
+                >
+                  Zurücksetzen
+                </button>
+              </div>
+            )}
             {(customFields.name || customFields.description) && (
               <p className="text-[11px] text-amber-600">Eigene Angaben aktiv — BGG-Daten werden beim Import nicht überschrieben.</p>
             )}
@@ -1051,47 +1070,50 @@ function OwnImagesSection({
       <SectionHeader icon={<Camera size={15} />} title="Eigene Bilder" />
       <div className="mt-2 flex flex-col gap-2">
         {images.length > 0 && (
-          <div className="grid grid-cols-3 gap-2">
-            {images.map((img, i) => {
-              const isHero = img.url === heroImageUrl;
-              return (
-                <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden bg-muted group">
-                  <button
-                    className="absolute inset-0 z-10"
-                    onClick={() => setLightboxIndex(i)}
-                    aria-label={`Bild ${i + 1} vergrößern`}
-                  />
-                  <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
-                  {/* Hero badge */}
-                  {isHero && (
-                    <div className="absolute top-1.5 left-1.5 z-20 bg-violet-500/90 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5 pointer-events-none">
-                      <Crown size={9} /> Titelbild
-                    </div>
-                  )}
-                  {/* Set as hero button */}
-                  {onHeroChange && (
+          <>
+            {onHeroChange && (
+              <p className="text-[11px] text-muted-foreground">
+                Krone antippen um ein Bild als Titelbild oben zu setzen.
+              </p>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              {images.map((img, i) => {
+                const isHero = img.url === heroImageUrl;
+                return (
+                  <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden bg-muted">
+                    {/* Tap to open lightbox — entire tile minus the crown button */}
                     <button
-                      className={cn(
-                        "absolute bottom-0 left-0 right-0 z-20 py-1 text-[10px] font-semibold transition-all duration-150",
-                        isHero
-                          ? "bg-violet-500/80 text-white"
-                          : "bg-black/55 text-white/90 opacity-0 group-hover:opacity-100 active:opacity-100"
-                      )}
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setSettingHero(true);
-                        await onHeroChange(isHero ? null : img.url);
-                        setSettingHero(false);
-                      }}
-                      disabled={settingHero}
-                    >
-                      {isHero ? "↺ Zurücksetzen" : "Als Titelbild"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                      className="absolute inset-0 z-10"
+                      onClick={() => setLightboxIndex(i)}
+                      aria-label={`Bild ${i + 1} vergrößern`}
+                    />
+                    <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
+                    {/* Crown button — always visible, top-right */}
+                    {onHeroChange && (
+                      <button
+                        className={cn(
+                          "absolute top-1.5 right-1.5 z-20 w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-colors disabled:opacity-50",
+                          isHero
+                            ? "bg-violet-500 text-white"
+                            : "bg-black/40 text-white/70"
+                        )}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setSettingHero(true);
+                          await onHeroChange(isHero ? null : img.url);
+                          setSettingHero(false);
+                        }}
+                        disabled={settingHero}
+                        aria-label={isHero ? "Titelbild zurücksetzen" : "Als Titelbild setzen"}
+                      >
+                        <Crown size={13} fill={isHero ? "currentColor" : "none"} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
         {lightboxIndex !== null && (
           <ImageLightbox
