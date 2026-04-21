@@ -4,7 +4,7 @@ import {
   X,
   ArrowUpAZ, ArrowDownAZ,
   Clock, Star, Users,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, Paintbrush,
 } from "lucide-react";
 import { useLibraryStore } from "@/stores/library-store";
 import { translateCategory, translateMechanic } from "@/lib/bgg-translations";
@@ -48,7 +48,11 @@ export function LibrarySortFilterSheet({
   const selectedMechanics = filter.mechanics ?? [];
 
   const tagFilterCount = selectedCategories.length + selectedMechanics.length;
-  const isModified = sortKey !== "name_asc" || tagFilterCount > 0;
+  const isModified = sortKey !== "name_asc" || tagFilterCount > 0 || !!filter.customized;
+
+  function toggleCustomized() {
+    setFilter({ ...filter, customized: filter.customized ? undefined : true });
+  }
 
   function toggleCategory(cat: string) {
     const next = selectedCategories.includes(cat)
@@ -66,7 +70,7 @@ export function LibrarySortFilterSheet({
 
   function resetAll() {
     setSortKey("name_asc");
-    setFilter({ ...filter, categories: undefined, mechanics: undefined });
+    setFilter({ ...filter, categories: undefined, mechanics: undefined, customized: undefined });
   }
 
   const hasTagSections = availableCategories.length > 0 || availableMechanics.length > 0;
@@ -129,6 +133,26 @@ export function LibrarySortFilterSheet({
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* Individualisiert filter */}
+          <section>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">
+              Sonstiges
+            </h3>
+            <button
+              onClick={toggleCustomized}
+              className={cn(
+                "flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-left transition-colors border",
+                filter.customized
+                  ? "bg-violet-500 text-white border-violet-500 font-semibold"
+                  : "bg-muted/60 text-foreground border-transparent hover:bg-muted"
+              )}
+            >
+              <Paintbrush size={14} className="flex-shrink-0" />
+              <span>Nur individualisierte Spiele</span>
+              {filter.customized && <span className="ml-auto text-[10px] bg-white/25 rounded-full px-1.5 py-0.5 font-bold">aktiv</span>}
+            </button>
           </section>
 
           {/* Language toggle — only when tags are available */}

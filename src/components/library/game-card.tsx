@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Users, Clock, Star } from "lucide-react";
+import { Users, Clock, Star, Paintbrush } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatPlaytime, formatPlayerCount } from "@/lib/utils";
 import type { UserGame, GameStatus } from "@/types";
@@ -100,6 +100,9 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
           {playCount > 0 && (
             <span className="text-[10px] text-muted-foreground font-medium">{playCount}×</span>
           )}
+          {userGame.custom_fields?.customized && (
+            <Paintbrush size={11} className="text-violet-400" aria-label="Individualisiert" />
+          )}
         </div>
       </Link>
     );
@@ -132,6 +135,15 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
             <Badge variant={userGame.status as keyof typeof STATUS_LABELS} className="text-[10px] px-2 py-0.5 shadow-sm">
               {STATUS_LABELS[userGame.status]}
             </Badge>
+          </div>
+        )}
+
+        {/* Customized badge */}
+        {userGame.custom_fields?.customized && (
+          <div className="absolute bottom-2 left-2">
+            <div className="flex items-center gap-0.5 bg-violet-500/85 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-md">
+              <Paintbrush size={9} />
+            </div>
           </div>
         )}
 

@@ -85,6 +85,10 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       );
     }
 
+    if (filter.customized) {
+      games = games.filter((g) => g.custom_fields?.customized === true);
+    }
+
     games.sort((a, b) => {
       switch (sortKey) {
         case "name_asc":
@@ -121,12 +125,12 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
     });
 
     return games;
-  }, [initialGames, filter.status, filter.playerCount, filter.categories, filter.mechanics, deferredSearch, sortKey, playCounts]);
+  }, [initialGames, filter.status, filter.playerCount, filter.categories, filter.mechanics, filter.customized, deferredSearch, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
-  const isFiltered = !!(filter.search || filter.status || filter.playerCount || filter.categories?.length || filter.mechanics?.length);
+  const isFiltered = !!(filter.search || filter.status || filter.playerCount || filter.categories?.length || filter.mechanics?.length || filter.customized);
   const tagFilterCount = (filter.categories?.length ?? 0) + (filter.mechanics?.length ?? 0);
-  const sortFilterActive = sortKey !== "name_asc" || tagFilterCount > 0;
+  const sortFilterActive = sortKey !== "name_asc" || tagFilterCount > 0 || !!filter.customized;
 
   function openAdd() { setSheetInitialTab("search"); setSheetOpen(true); }
 

@@ -65,6 +65,10 @@ export interface CustomFields {
   max_playtime?: number | null;
   categories?: string[];
   best_players_override?: number[]; // user's own optimal player count preference
+  hero_image_url?: string;          // custom hero image (from own uploads)
+  customized?: boolean;             // painted minis / upgraded components
+  youtube_url?: string;             // tutorial video link
+  spotify_url?: string;             // background playlist link
 }
 
 export interface UserGame {
@@ -174,6 +178,7 @@ export type LibraryFilter = {
   playerCount?: number; // quick filter: show games playable with exactly N players
   categories?: string[]; // English BGG strings matching games.categories
   mechanics?: string[];  // English BGG strings matching games.mechanics
+  customized?: boolean;  // only show individualized (painted/upgraded) games
 };
 
 export type LibrarySortKey =

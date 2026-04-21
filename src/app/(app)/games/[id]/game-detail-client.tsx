@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Users, Clock, Star, ExternalLink, Trash2,
   Edit2, Check, X, Plus, Camera, FileText, BookOpen,
-  ChevronDown, ChevronUp, RefreshCw,
+  ChevronDown, ChevronUp, RefreshCw, Paintbrush, PlayCircle, Music2, Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { translateCategories, translateMechanics } from "@/lib/bgg-translations";
@@ -81,6 +81,8 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [draftMinPlaytime, setDraftMinPlaytime] = useState(customFields.min_playtime?.toString() ?? "");
   const [draftMaxPlaytime, setDraftMaxPlaytime] = useState(customFields.max_playtime?.toString() ?? "");
   const [draftCategories, setDraftCategories] = useState(customFields.categories?.join(", ") ?? "");
+  const [draftYoutubeUrl, setDraftYoutubeUrl] = useState(customFields.youtube_url ?? "");
+  const [draftSpotifyUrl, setDraftSpotifyUrl] = useState(customFields.spotify_url ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
   // Purchase price
   const [pricePaid, setPricePaid] = useState<string>(userGame?.price_paid?.toString() ?? "");
@@ -137,6 +139,33 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     }
   }
 
+  async function handleToggleCustomized() {
+    if (!userGame) return;
+    const newVal = !customFields.customized;
+    const newCustom = { ...customFields };
+    if (newVal) newCustom.customized = true;
+    else delete newCustom.customized;
+    setCustomFields(newCustom);
+    await fetch(`/api/user-games/${userGame.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_fields: Object.keys(newCustom).length > 0 ? newCustom : null }),
+    });
+  }
+
+  async function handleSetHeroImage(url: string | null) {
+    if (!userGame) return;
+    const newCustom = { ...customFields };
+    if (url) newCustom.hero_image_url = url;
+    else delete newCustom.hero_image_url;
+    setCustomFields(newCustom);
+    await fetch(`/api/user-games/${userGame.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_fields: Object.keys(newCustom).length > 0 ? newCustom : null }),
+    });
+  }
+
   const displayName = customFields.name ?? gameData.name;
   const displayDesc = customFields.description ?? gameData.description_de ?? gameData.description;
 
@@ -181,6 +210,20 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     // Categories
     const cats = draftCategories.split(",").map((s) => s.trim()).filter(Boolean);
     if (cats.length > 0) newCustom.categories = cats; else delete newCustom.categories;
+
+    // YouTube URL
+    if (draftYoutubeUrl.trim()) {
+      newCustom.youtube_url = draftYoutubeUrl.trim();
+    } else {
+      delete newCustom.youtube_url;
+    }
+
+    // Spotify URL
+    if (draftSpotifyUrl.trim()) {
+      newCustom.spotify_url = draftSpotifyUrl.trim();
+    } else {
+      delete newCustom.spotify_url;
+    }
 
     await fetch(`/api/user-games/${userGame.id}`, {
       method: "PATCH",
@@ -257,18 +300,21 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
     <div className="flex flex-col min-h-dvh bg-background">
       {/* ── Hero with title overlay ─────────────────────────────────────────── */}
       <div className="relative w-full bg-muted overflow-hidden" style={{ aspectRatio: "4/3", maxHeight: "60vw" }}>
-        {gameData.image_url || gameData.thumbnail_url ? (
-          <Image
-            src={(gameData.image_url ?? gameData.thumbnail_url)!}
-            alt={gameData.name}
-            fill
-            className="object-cover"
-            sizes="100vw"
-            priority
-          />
-        ) : (
-          <PlaceholderHero name={game.name} />
-        )}
+        {(() => {
+          const heroSrc = customFields.hero_image_url ?? gameData.image_url ?? gameData.thumbnail_url;
+          return heroSrc ? (
+            <Image
+              src={heroSrc}
+              alt={gameData.name}
+              fill
+              className="object-cover"
+              sizes="100vw"
+              priority
+            />
+          ) : (
+            <PlaceholderHero name={game.name} />
+          );
+        })()}
         {/* Gradient scrim — bottom 60% */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
 
@@ -304,6 +350,11 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               )}
               {customFields.name && (
                 <span className="text-amber-300 text-xs font-medium">Eigener Name</span>
+              )}
+              {customFields.hero_image_url && (
+                <span className="flex items-center gap-1 text-violet-300 text-xs font-medium">
+                  <Crown size={11} /> Eigenes Titelbild
+                </span>
               )}
             </div>
           </div>
@@ -398,6 +449,30 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">Kategorien (kommagetrennt)</label>
               <input value={draftCategories} onChange={(e) => setDraftCategories(e.target.value)} placeholder="z.B. Strategie, Familienspiel" className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block flex items-center gap-1.5">
+                <PlayCircle size={12} className="text-red-500" /> YouTube Tutorial
+              </label>
+              <input
+                type="url"
+                value={draftYoutubeUrl}
+                onChange={(e) => setDraftYoutubeUrl(e.target.value)}
+                placeholder="https://youtube.com/watch?v=…"
+                className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block flex items-center gap-1.5">
+                <Music2 size={12} className="text-green-500" /> Spotify Playlist
+              </label>
+              <input
+                type="url"
+                value={draftSpotifyUrl}
+                onChange={(e) => setDraftSpotifyUrl(e.target.value)}
+                placeholder="https://open.spotify.com/playlist/…"
+                className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
             <div className="flex gap-2">
               <button onClick={handleSaveInfo} disabled={savingInfo} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold disabled:opacity-50">
                 <Check size={13} /> Speichern
@@ -411,6 +486,8 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 setDraftMinPlaytime(customFields.min_playtime?.toString() ?? "");
                 setDraftMaxPlaytime(customFields.max_playtime?.toString() ?? "");
                 setDraftCategories(customFields.categories?.join(", ") ?? "");
+                setDraftYoutubeUrl(customFields.youtube_url ?? "");
+                setDraftSpotifyUrl(customFields.spotify_url ?? "");
               }} className="px-3 py-2 rounded-xl bg-muted text-sm font-medium">
                 Abbrechen
               </button>
@@ -567,6 +644,32 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
               />
             </div>
 
+            {/* Customized toggle */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Paintbrush size={15} className={customFields.customized ? "text-violet-500" : "text-muted-foreground"} />
+                <div>
+                  <p className="text-sm text-foreground">Individualisiert</p>
+                  <p className="text-[11px] text-muted-foreground">Bemalt, Upgrades, custom Komponenten</p>
+                </div>
+              </div>
+              <button
+                onClick={handleToggleCustomized}
+                className={cn(
+                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0",
+                  customFields.customized ? "bg-violet-500" : "bg-muted"
+                )}
+                aria-label="Individualisiert umschalten"
+              >
+                <span
+                  className={cn(
+                    "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform",
+                    customFields.customized ? "translate-x-5" : "translate-x-0.5"
+                  )}
+                />
+              </button>
+            </div>
+
             {/* Purchase price */}
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm text-muted-foreground">Kaufpreis</span>
@@ -631,6 +734,46 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         )}
 
+        {/* ── YouTube + Spotify links ───────────────────────────────────────── */}
+        {(customFields.youtube_url || customFields.spotify_url) && (
+          <div className="flex flex-col gap-2">
+            {customFields.youtube_url && (
+              <a
+                href={customFields.youtube_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-sm hover:border-red-200 hover:bg-red-50/50 transition-all group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0 group-hover:bg-red-200 transition-colors">
+                  <PlayCircle size={18} className="text-red-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Tutorial ansehen</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{customFields.youtube_url}</p>
+                </div>
+                <ExternalLink size={14} className="text-muted-foreground flex-shrink-0" />
+              </a>
+            )}
+            {customFields.spotify_url && (
+              <a
+                href={customFields.spotify_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl shadow-sm hover:border-green-200 hover:bg-green-50/50 transition-all group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0 group-hover:bg-green-200 transition-colors">
+                  <Music2 size={18} className="text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Playlist öffnen</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{customFields.spotify_url}</p>
+                </div>
+                <ExternalLink size={14} className="text-muted-foreground flex-shrink-0" />
+              </a>
+            )}
+          </div>
+        )}
+
         {/* ── Categories + Mechanics with language toggle ───────────────────── */}
         {(categories.length > 0 || mechanics.length > 0) && (
           <section>
@@ -691,7 +834,13 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
         )}
 
         {/* ── Eigene Bilder ─────────────────────────────────────────────────── */}
-        <OwnImagesSection gameId={game.id} images={images} setImages={setImages} />
+        <OwnImagesSection
+          gameId={game.id}
+          images={images}
+          setImages={setImages}
+          heroImageUrl={customFields.hero_image_url}
+          onHeroChange={userGame ? handleSetHeroImage : undefined}
+        />
 
         {/* ── Hausregeln ────────────────────────────────────────────────────── */}
         <NoteSection
@@ -831,15 +980,18 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
 // ── Own Images Section ────────────────────────────────────────────────────────
 
 function OwnImagesSection({
-  gameId, images, setImages,
+  gameId, images, setImages, heroImageUrl, onHeroChange,
 }: {
   gameId: string;
   images: UserGameImage[];
   setImages: React.Dispatch<React.SetStateAction<UserGameImage[]>>;
+  heroImageUrl?: string;
+  onHeroChange?: (url: string | null) => Promise<void>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settingHero, setSettingHero] = useState(false);
 
   async function compressImage(file: File): Promise<Blob> {
     return new Promise((resolve) => {
@@ -900,16 +1052,45 @@ function OwnImagesSection({
       <div className="mt-2 flex flex-col gap-2">
         {images.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
-            {images.map((img, i) => (
-              <button
-                key={img.id}
-                className="relative aspect-square rounded-xl overflow-hidden bg-muted"
-                onClick={() => setLightboxIndex(i)}
-                aria-label={`Bild ${i + 1} vergrößern`}
-              >
-                <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
-              </button>
-            ))}
+            {images.map((img, i) => {
+              const isHero = img.url === heroImageUrl;
+              return (
+                <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden bg-muted group">
+                  <button
+                    className="absolute inset-0 z-10"
+                    onClick={() => setLightboxIndex(i)}
+                    aria-label={`Bild ${i + 1} vergrößern`}
+                  />
+                  <Image src={img.url} alt={img.label ?? "Spielbild"} fill className="object-cover" sizes="33vw" />
+                  {/* Hero badge */}
+                  {isHero && (
+                    <div className="absolute top-1.5 left-1.5 z-20 bg-violet-500/90 backdrop-blur-sm text-white px-1.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5 pointer-events-none">
+                      <Crown size={9} /> Titelbild
+                    </div>
+                  )}
+                  {/* Set as hero button */}
+                  {onHeroChange && (
+                    <button
+                      className={cn(
+                        "absolute bottom-0 left-0 right-0 z-20 py-1 text-[10px] font-semibold transition-all duration-150",
+                        isHero
+                          ? "bg-violet-500/80 text-white"
+                          : "bg-black/55 text-white/90 opacity-0 group-hover:opacity-100 active:opacity-100"
+                      )}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setSettingHero(true);
+                        await onHeroChange(isHero ? null : img.url);
+                        setSettingHero(false);
+                      }}
+                      disabled={settingHero}
+                    >
+                      {isHero ? "↺ Zurücksetzen" : "Als Titelbild"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         {lightboxIndex !== null && (
