@@ -619,13 +619,13 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                   <button
                     key={n}
                     onClick={() => handleRatingClick(n)}
                     className={cn(
-                      "w-8 h-8 rounded-lg text-xs font-bold transition-all",
+                      "w-7 h-7 rounded-lg text-xs font-bold transition-all flex-shrink-0",
                       personalRating === n
                         ? "bg-amber-500 text-white shadow-sm"
                         : personalRating && n <= personalRating
@@ -666,11 +666,11 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             {/* Customized toggle */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div className="flex items-center gap-2">
-                <Paintbrush size={15} className={customFields.customized ? "text-violet-500" : "text-muted-foreground"} />
-                <div>
-                  <p className="text-sm text-foreground">Individualisiert</p>
-                  <p className="text-[11px] text-muted-foreground">Bemalt, Upgrades, custom Komponenten</p>
-                </div>
+                <Paintbrush size={14} className={customFields.customized ? "text-violet-500" : "text-muted-foreground"} />
+                <span className="text-sm text-foreground">Individualisiert</span>
+                {customFields.customized && (
+                  <span className="text-[10px] text-violet-500 font-medium bg-violet-50 px-1.5 py-0.5 rounded-full">aktiv</span>
+                )}
               </div>
               <button
                 onClick={handleToggleCustomized}
@@ -1138,7 +1138,7 @@ function OwnImagesSection({
           )}
           {uploading ? "Wird hochgeladen…" : "Bild hinzufügen"}
         </button>
-        <p className="text-[11px] text-muted-foreground/70">Bilder werden vor dem Upload auf max. 1200 px komprimiert (JPEG 85%).</p>
+        <p className="text-[10px] text-muted-foreground/50">max. 1200 px · JPEG 85 %</p>
       </div>
     </section>
   );
@@ -1244,11 +1244,7 @@ function NoteSection({
             />
           )
         ))}
-        {notes.length === 0 && !adding && (
-          <p className="text-sm text-muted-foreground bg-muted/30 rounded-xl px-4 py-3">
-            Noch keine {title}. Tippe auf &quot;Hinzufügen&quot;.
-          </p>
-        )}
+        {/* Empty state omitted intentionally — the "+ Hinzufügen" button is sufficient */}
       </div>
     </section>
   );
@@ -1288,13 +1284,13 @@ function NoteEditor({ value, onChange, placeholder, onSave, onCancel, saving }: 
 
 function NoteCard({ note, onEdit, onDelete }: { note: GameNote; onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="bg-muted/30 rounded-xl px-4 py-3 group">
+    <div className="bg-muted/30 rounded-xl px-4 py-3">
       <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note.content}</p>
-      <div className="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+      <div className="flex items-center gap-3 mt-2">
+        <button onClick={onEdit} className="text-xs text-muted-foreground/60 active:text-foreground flex items-center gap-1">
           <Edit2 size={11} /> Bearbeiten
         </button>
-        <button onClick={onDelete} className="text-xs text-muted-foreground hover:text-red-500 flex items-center gap-1">
+        <button onClick={onDelete} className="text-xs text-muted-foreground/60 active:text-red-500 flex items-center gap-1">
           <Trash2 size={11} /> Löschen
         </button>
       </div>
