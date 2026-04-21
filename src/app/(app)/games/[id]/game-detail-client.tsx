@@ -1372,18 +1372,6 @@ function ExpandableDescription({ text }: { text: string }) {
   );
 }
 
-function Stat({ icon, label, sublabel }: { icon: React.ReactNode; label: string; sublabel?: string }) {
-  return (
-    <div className="flex items-center gap-1.5 px-3 py-2 bg-muted rounded-xl">
-      <span className="text-muted-foreground">{icon}</span>
-      <div>
-        <p className="text-sm font-semibold text-foreground leading-none">{label}</p>
-        {sublabel && <p className="text-[10px] text-muted-foreground mt-0.5">{sublabel}</p>}
-      </div>
-    </div>
-  );
-}
-
 // ── Best-Players Override (manual chip selector) ──────────────────────────────
 
 function BestPlayersOverride({
