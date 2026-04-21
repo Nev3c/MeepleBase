@@ -793,105 +793,94 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
           </div>
         )}
 
-        {/* ── Categories + Mechanics with language toggle ───────────────────── */}
-        {(categories.length > 0 || mechanics.length > 0) && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-foreground">Kategorien & Mechanismen</h2>
-              {!customFields.categories && (rawCategories.length > 0 || rawMechanics.length > 0) && (
-                <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
-                  <button
-                    onClick={() => setTagLang("de")}
-                    className={cn(
-                      "text-xs font-semibold px-2.5 py-1 rounded-md transition-all",
-                      tagLang === "de"
-                        ? "bg-white shadow-sm text-amber-600"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    DE
-                  </button>
-                  <button
-                    onClick={() => setTagLang("en")}
-                    className={cn(
-                      "text-xs font-semibold px-2.5 py-1 rounded-md transition-all",
-                      tagLang === "en"
-                        ? "bg-white shadow-sm text-amber-600"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    EN
-                  </button>
+        {/* ── Spielinfos: Categories + Designer + Publisher ─────────────────── */}
+        {(categories.length > 0 || mechanics.length > 0 || (gameData.designers?.length ?? 0) > 0 || (gameData.publishers?.length ?? 0) > 0) && (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {/* Categories + Mechanics */}
+            {(categories.length > 0 || mechanics.length > 0) && (
+              <div className={cn("px-4 py-4", (gameData.designers?.length || gameData.publishers?.length) && "border-b border-border")}>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-foreground">Kategorien & Mechanismen</h2>
+                  {!customFields.categories && (rawCategories.length > 0 || rawMechanics.length > 0) && (
+                    <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
+                      <button
+                        onClick={() => setTagLang("de")}
+                        className={cn("text-xs font-semibold px-2.5 py-1 rounded-md transition-all", tagLang === "de" ? "bg-white shadow-sm text-amber-600" : "text-muted-foreground")}
+                      >DE</button>
+                      <button
+                        onClick={() => setTagLang("en")}
+                        className={cn("text-xs font-semibold px-2.5 py-1 rounded-md transition-all", tagLang === "en" ? "bg-white shadow-sm text-amber-600" : "text-muted-foreground")}
+                      >EN</button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="flex flex-col gap-3">
-              {categories.length > 0 && (
-                <TagRow label="Kategorien" tags={categories} color="amber" hasCustom={!!customFields.categories} />
-              )}
-              {mechanics.length > 0 && (
-                <TagRow label="Mechanismen" tags={mechanics} color="slate" />
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Designers */}
-        {gameData.designers && gameData.designers.length > 0 && (
-          <section>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Designer</p>
-            <p className="text-sm text-foreground">{gameData.designers.join(", ")}</p>
-          </section>
-        )}
-
-        {/* Publishers */}
-        {gameData.publishers && gameData.publishers.length > 0 && (
-          <section>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Verlag</p>
-            <p className="text-sm text-foreground">{gameData.publishers.slice(0, 3).join(", ")}</p>
-          </section>
+                <div className="flex flex-col gap-3">
+                  {categories.length > 0 && <TagRow label="Kategorien" tags={categories} color="amber" hasCustom={!!customFields.categories} />}
+                  {mechanics.length > 0 && <TagRow label="Mechanismen" tags={mechanics} color="slate" />}
+                </div>
+              </div>
+            )}
+            {/* Designer row */}
+            {gameData.designers && gameData.designers.length > 0 && (
+              <div className={cn("flex items-start gap-3 px-4 py-3", gameData.publishers?.length && "border-b border-border")}>
+                <span className="text-xs text-muted-foreground w-14 pt-0.5 flex-shrink-0">Design</span>
+                <span className="text-sm text-foreground leading-snug">{gameData.designers.join(", ")}</span>
+              </div>
+            )}
+            {/* Publisher row */}
+            {gameData.publishers && gameData.publishers.length > 0 && (
+              <div className="flex items-start gap-3 px-4 py-3">
+                <span className="text-xs text-muted-foreground w-14 pt-0.5 flex-shrink-0">Verlag</span>
+                <span className="text-sm text-foreground leading-snug">{gameData.publishers.slice(0, 3).join(", ")}</span>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── Eigene Bilder ─────────────────────────────────────────────────── */}
-        <OwnImagesSection
-          gameId={game.id}
-          images={images}
-          setImages={setImages}
-          heroImageUrl={customFields.hero_image_url}
-          onHeroChange={userGame ? handleSetHeroImage : undefined}
-        />
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm px-4 py-4">
+          <OwnImagesSection
+            gameId={game.id}
+            images={images}
+            setImages={setImages}
+            heroImageUrl={customFields.hero_image_url}
+            onHeroChange={userGame ? handleSetHeroImage : undefined}
+          />
+        </div>
 
-        {/* ── Hausregeln ────────────────────────────────────────────────────── */}
-        <NoteSection
-          gameId={game.id}
-          noteType="house_rules"
-          title="Hausregeln"
-          icon={<BookOpen size={15} />}
-          placeholder="Eigene Regeländerungen, Varianten oder Hausregeln notieren…"
-          notes={notes.filter((n) => n.note_type === "house_rules")}
-          setNotes={setNotes}
-        />
-
-        {/* ── Notizen ───────────────────────────────────────────────────────── */}
-        <NoteSection
-          gameId={game.id}
-          noteType="general"
-          title="Notizen"
-          icon={<FileText size={15} />}
-          placeholder="Strategie-Hinweise, Links, Erinnerungen…"
-          notes={notes.filter((n) => n.note_type === "general")}
-          setNotes={setNotes}
-        />
+        {/* ── Hausregeln + Notizen (one card, two sections) ─────────────────── */}
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="px-4 py-4 border-b border-border">
+            <NoteSection
+              gameId={game.id}
+              noteType="house_rules"
+              title="Hausregeln"
+              icon={<BookOpen size={15} />}
+              placeholder="Eigene Regeländerungen, Varianten oder Hausregeln notieren…"
+              notes={notes.filter((n) => n.note_type === "house_rules")}
+              setNotes={setNotes}
+            />
+          </div>
+          <div className="px-4 py-4">
+            <NoteSection
+              gameId={game.id}
+              noteType="general"
+              title="Notizen"
+              icon={<FileText size={15} />}
+              placeholder="Strategie-Hinweise, Links, Erinnerungen…"
+              notes={notes.filter((n) => n.note_type === "general")}
+              setNotes={setNotes}
+            />
+          </div>
+        </div>
 
         {/* ── Mit wem gespielt ──────────────────────────────────────────────── */}
-        <section>
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm px-4 py-4">
           <SectionHeader icon={<Users size={15} />} title="Mit wem gespielt" />
-          <div className="mt-2">
+          <div className="mt-3">
             {playCount === 0 ? (
-              <div className="bg-muted/40 rounded-xl px-4 py-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Wird automatisch aus deinen erfassten Partien befüllt.
-                </p>
+              <div className="text-center py-2">
+                <p className="text-sm text-muted-foreground">Wird aus erfassten Partien befüllt.</p>
                 <Link href="/plays" className="text-xs text-amber-600 font-medium mt-1 inline-block">
                   Partie erfassen →
                 </Link>
@@ -899,7 +888,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             ) : (
               <div className="flex flex-col gap-2">
                 <p className="text-sm text-foreground font-medium">
-                  {playCount} {playCount === 1 ? "Partie" : "Partien"} gespielt
+                  {playCount} {playCount === 1 ? "Partie" : "Partien"}
                   {allPlayerNames.length > 0 && (
                     <span className="text-muted-foreground font-normal"> · {allPlayerNames.join(", ")}</span>
                   )}
@@ -909,8 +898,8 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                     const dateStr = new Date(play.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
                     const playerNames = play.players?.map((p) => p.display_name).join(", ");
                     return (
-                      <div key={play.id} className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 py-2">
-                        <span className="text-xs text-muted-foreground">{dateStr}</span>
+                      <div key={play.id} className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-2">
+                        <span className="text-xs text-muted-foreground flex-shrink-0">{dateStr}</span>
                         {playerNames && (
                           <span className="text-xs text-foreground truncate flex-1">{playerNames}</span>
                         )}
@@ -922,15 +911,15 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                   })}
                 </div>
                 <Link href="/plays" className="text-xs text-amber-600 font-medium mt-1 inline-block">
-                  Alle Partien ansehen →
+                  Alle Partien →
                 </Link>
               </div>
             )}
           </div>
-        </section>
+        </div>
 
-        {/* BGG Link + Refresh */}
-        <div className="flex items-center justify-between">
+        {/* ── BGG Link + Refresh ────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-1">
           <a
             href={`https://boardgamegeek.com/boardgame/${gameData.bgg_id}`}
             target="_blank"
@@ -938,7 +927,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
             className="flex items-center gap-2 text-sm text-amber-600 font-medium"
           >
             <ExternalLink size={14} />
-            Auf BoardGameGeek ansehen
+            BoardGameGeek
           </a>
           {gameData.bgg_id && (
             <button
@@ -948,7 +937,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 "flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50",
                 refreshStatus === "ok"    ? "text-emerald-600" :
                 refreshStatus === "error" ? "text-red-500" :
-                "text-muted-foreground hover:text-foreground"
+                "text-muted-foreground"
               )}
               title="BGG-Daten aktualisieren"
             >
