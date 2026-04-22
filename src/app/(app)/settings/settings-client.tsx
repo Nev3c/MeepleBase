@@ -409,8 +409,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
               )}
               {location && locationLat === null && locationStatus !== "detecting" && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  Nur als Text gespeichert — kein GPS-Matching für „In meiner Nähe".
-                  <button type="button" onClick={detectLocation} className="underline text-amber-600 ml-0.5">Erkennen</button>
+                  Nur als Text — ohne GPS kein Nähe-Matching.
+                  <button type="button" onClick={detectLocation} className="underline text-amber-600 ml-0.5">Jetzt erkennen</button>
                 </p>
               )}
             </div>

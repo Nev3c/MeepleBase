@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const players = withDistance.map(({ location_lat, location_lng, ...p }) => ({
+  const players = withDistance.map(({ location_lat: _lat, location_lng: _lng, ...p }) => ({
     ...p,
     friendship: friendshipMap.get(p.id) ?? null,
   }));
