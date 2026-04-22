@@ -48,7 +48,6 @@ const VISIBILITY_LABELS: Record<LibraryVisibility, { label: string; icon: React.
 };
 
 export function PlayerProfileClient({
-  currentUserId,
   targetProfile,
   friendData,
   library,

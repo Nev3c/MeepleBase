@@ -71,9 +71,9 @@ export default async function PlayersPage() {
   const unreadCount = (messages ?? []).length;
 
   // Build friend profiles
-  let friends: FriendProfile[] = [];
-  let pendingReceived: FriendProfile[] = [];
-  let pendingSent: FriendProfile[] = [];
+  const friends: FriendProfile[] = [];
+  const pendingReceived: FriendProfile[] = [];
+  const pendingSent: FriendProfile[] = [];
 
   if (friendships?.length) {
     const otherIds = Array.from(new Set(friendships.map((f) =>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -55,7 +55,6 @@ interface Props {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function PlayersClient({
-  currentUserId,
   friends: initialFriends,
   pendingReceived: initialPendingReceived,
   pendingSent: initialPendingSent,

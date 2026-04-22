@@ -9,7 +9,7 @@ interface Props {
   params: { userId: string };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   return { title: "Spieler-Profil" };
 }
 
@@ -80,7 +80,7 @@ export default async function PlayerProfilePage({ params }: Props) {
 
   // Fetch library if visible
   let library: FriendGame[] = [];
-  let playCountMap: Record<string, number> = {};
+  const playCountMap: Record<string, number> = {};
 
   if (canSeeLibrary) {
     const [{ data: games }, { data: plays }] = await Promise.all([
