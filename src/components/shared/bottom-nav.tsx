@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Library, Dices, User, Wrench, Compass } from "lucide-react";
+import { Library, Dices, User, Wrench, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/library",  label: "Bibliothek", icon: Library  },
-  { href: "/plays",    label: "Partien",    icon: Dices    },
-  { href: "/tools",    label: "Tools",      icon: Wrench   },
-  { href: "/discover", label: "Entdecken",  icon: Compass  },
-  { href: "/profile",  label: "Profil",     icon: User     },
+  { href: "/library", label: "Bibliothek", icon: Library },
+  { href: "/plays",   label: "Partien",    icon: Dices   },
+  { href: "/tools",   label: "Tools",      icon: Wrench  },
+  { href: "/players", label: "Spieler",    icon: Users   },
+  { href: "/profile", label: "Profil",     icon: User    },
 ];
 
 export function BottomNav() {

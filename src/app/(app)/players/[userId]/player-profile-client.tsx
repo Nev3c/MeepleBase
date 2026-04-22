@@ -1,0 +1,316 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  ArrowLeft, MessageSquare, UserPlus, UserCheck, UserX, Clock,
+  BookOpen, Lock, Globe, Users, Eye,
+} from "lucide-react";
+import { PlayerAvatar } from "../players-client";
+import { cn } from "@/lib/utils";
+import type { FriendProfile, LibraryVisibility } from "@/types";
+
+interface FriendGame {
+  id: string;
+  game_id: string;
+  status: string;
+  game: {
+    id: string;
+    name: string;
+    thumbnail_url: string | null;
+  } | null;
+}
+
+interface Props {
+  currentUserId: string;
+  targetProfile: {
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    bio: string | null;
+    location: string | null;
+    library_visibility: LibraryVisibility;
+  };
+  friendData: FriendProfile | null;
+  library: FriendGame[];
+  playCountMap: Record<string, number>;
+  canSeeLibrary: boolean;
+  unreadFromUser: number;
+}
+
+const VISIBILITY_LABELS: Record<LibraryVisibility, { label: string; icon: React.ReactNode }> = {
+  public: { label: "Öffentlich", icon: <Globe size={11} /> },
+  friends: { label: "Nur Freunde", icon: <Users size={11} /> },
+  private: { label: "Privat", icon: <Lock size={11} /> },
+};
+
+export function PlayerProfileClient({
+  currentUserId,
+  targetProfile,
+  friendData,
+  library,
+  playCountMap,
+  canSeeLibrary,
+  unreadFromUser,
+}: Props) {
+  const router = useRouter();
+  const [localFriendData, setLocalFriendData] = useState(friendData);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fp = localFriendData;
+  const p = targetProfile;
+  const isFriend = fp?.friendship_status === "accepted";
+  const isPendingSent = fp?.friendship_status === "pending" && fp.is_requester;
+  const isPendingReceived = fp?.friendship_status === "pending" && !fp.is_requester;
+
+  async function sendRequest() {
+    setActionLoading(true);
+    const res = await fetch("/api/friendships", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addressee_id: p.id }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { id: string };
+      setLocalFriendData({
+        friendship_id: data.id,
+        friendship_status: "pending",
+        is_requester: true,
+        profile: { id: p.id, username: p.username, display_name: p.display_name, avatar_url: p.avatar_url, location: p.location, library_visibility: p.library_visibility },
+      });
+    }
+    setActionLoading(false);
+  }
+
+  async function respondToRequest(action: "accept" | "decline") {
+    if (!fp) return;
+    setActionLoading(true);
+    const res = await fetch(`/api/friendships/${fp.friendship_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    if (res.ok) {
+      if (action === "accept") {
+        setLocalFriendData({ ...fp, friendship_status: "accepted" });
+        router.refresh(); // Reload to get library
+      } else {
+        setLocalFriendData(null);
+      }
+    }
+    setActionLoading(false);
+  }
+
+  async function cancelOrRemove() {
+    if (!fp) return;
+    setActionLoading(true);
+    const res = await fetch(`/api/friendships/${fp.friendship_id}`, { method: "DELETE" });
+    if (res.ok) {
+      setLocalFriendData(null);
+      if (isFriend) router.refresh();
+    }
+    setActionLoading(false);
+  }
+
+  return (
+    <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-12 pb-3 flex items-center gap-3">
+        <button onClick={() => router.back()} className="p-2 -ml-2 rounded-xl hover:bg-muted transition-colors">
+          <ArrowLeft size={20} />
+        </button>
+        <span className="font-display text-lg font-semibold flex-1 min-w-0 truncate">
+          {p.display_name ?? p.username}
+        </span>
+        {unreadFromUser > 0 && (
+          <Link
+            href={`/players/messages/${p.id}`}
+            className="relative p-2 rounded-xl hover:bg-muted transition-colors"
+          >
+            <MessageSquare size={20} className="text-amber-500" />
+            <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              {unreadFromUser}
+            </span>
+          </Link>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-5 px-4 py-5 max-w-2xl mx-auto w-full">
+
+        {/* Profile Header Card */}
+        <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 shadow-card">
+          <PlayerAvatar
+            name={p.display_name ?? p.username}
+            avatarUrl={p.avatar_url}
+            size="lg"
+          />
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display text-xl font-semibold text-foreground leading-tight">
+              {p.display_name ?? p.username}
+            </h1>
+            <p className="text-sm text-muted-foreground">@{p.username}</p>
+            {p.location && (
+              <p className="text-xs text-muted-foreground mt-1">{p.location}</p>
+            )}
+            {p.bio && (
+              <p className="text-sm text-foreground/80 mt-2 leading-relaxed">{p.bio}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Actions Card */}
+        <div className="flex gap-2">
+          {/* Message button */}
+          <Link
+            href={`/players/messages/${p.id}`}
+            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-muted text-foreground text-sm font-medium border border-border hover:bg-muted/70 transition-colors active:scale-[0.98]"
+          >
+            <MessageSquare size={15} />
+            Nachricht
+          </Link>
+
+          {/* Friendship action */}
+          {!fp && (
+            <button
+              onClick={sendRequest}
+              disabled={actionLoading}
+              className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors active:scale-[0.98] disabled:opacity-50"
+            >
+              <UserPlus size={15} />
+              {actionLoading ? "…" : "Hinzufügen"}
+            </button>
+          )}
+
+          {isPendingSent && (
+            <button
+              onClick={cancelOrRemove}
+              disabled={actionLoading}
+              className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-muted text-muted-foreground text-sm font-medium border border-border disabled:opacity-50"
+            >
+              <Clock size={15} />
+              {actionLoading ? "…" : "Anfrage gesendet"}
+            </button>
+          )}
+
+          {isPendingReceived && (
+            <div className="flex-1 flex gap-2">
+              <button
+                onClick={() => respondToRequest("decline")}
+                disabled={actionLoading}
+                className="flex-1 flex items-center justify-center h-11 rounded-xl bg-muted text-muted-foreground text-sm font-medium border border-border disabled:opacity-50"
+              >
+                <UserX size={15} />
+              </button>
+              <button
+                onClick={() => respondToRequest("accept")}
+                disabled={actionLoading}
+                className="flex-1 flex items-center justify-center gap-1.5 h-11 rounded-xl bg-amber-500 text-white text-sm font-semibold disabled:opacity-50"
+              >
+                <UserCheck size={15} />
+                {actionLoading ? "…" : "Annehmen"}
+              </button>
+            </div>
+          )}
+
+          {isFriend && (
+            <button
+              onClick={cancelOrRemove}
+              disabled={actionLoading}
+              className="flex items-center justify-center gap-2 px-4 h-11 rounded-xl bg-muted text-foreground text-sm font-medium border border-border hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
+              aria-label="Freundschaft beenden"
+            >
+              <UserCheck size={15} className="text-green-600" />
+              Befreundet
+            </button>
+          )}
+        </div>
+
+        {/* Library */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Bibliothek</h2>
+            {/* Visibility info — only shown to the viewer, not the owner */}
+            <span className={cn(
+              "ml-auto flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full",
+              p.library_visibility === "public"
+                ? "bg-green-50 text-green-700"
+                : p.library_visibility === "friends"
+                ? "bg-blue-50 text-blue-700"
+                : "bg-muted text-muted-foreground"
+            )}>
+              {VISIBILITY_LABELS[p.library_visibility].icon}
+              {VISIBILITY_LABELS[p.library_visibility].label}
+            </span>
+          </div>
+
+          {!canSeeLibrary ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+              <Lock size={24} className="text-muted-foreground mb-2" />
+              <p className="text-sm font-medium text-foreground">Bibliothek nicht sichtbar</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {p.library_visibility === "private"
+                  ? "Diese Bibliothek ist privat."
+                  : "Werde Freund, um die Bibliothek zu sehen."}
+              </p>
+            </div>
+          ) : library.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">Noch keine Spiele in der Bibliothek.</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground mb-3 font-medium">
+                {library.length} {library.length === 1 ? "Spiel" : "Spiele"} im Besitz
+              </p>
+              {/* Library transparency note */}
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5 mb-3">
+                <Eye size={10} className="flex-shrink-0" />
+                <span>Du siehst: Cover, Spielname und Anzahl Partien</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                {library.map((ug) => {
+                  if (!ug.game) return null;
+                  const g = ug.game;
+                  const plays = playCountMap[ug.game_id] ?? 0;
+                  return (
+                    <div
+                      key={ug.id}
+                      className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card"
+                    >
+                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                        {g.thumbnail_url ? (
+                          <Image
+                            src={g.thumbnail_url}
+                            alt={g.name}
+                            fill
+                            className="object-cover"
+                            sizes="48px"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-amber-100">
+                            <span className="text-amber-600 font-bold text-base">{g.name[0]}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
+                        {plays > 0 && (
+                          <p className="text-xs text-amber-600 font-medium">{plays}× gespielt</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}

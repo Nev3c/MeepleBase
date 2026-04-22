@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import type { Profile } from "@/types";
+import type { Profile, LibraryVisibility } from "@/types";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
@@ -23,6 +24,9 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [bggUsername, setBggUsername] = useState(profile?.bgg_username ?? "");
+  const [libraryVisibility, setLibraryVisibility] = useState<LibraryVisibility>(
+    (profile?.library_visibility as LibraryVisibility) ?? "friends"
+  );
   const [bggStatus, setBggStatus] = useState<BggStatus>("idle");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -105,6 +109,11 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
       }
       // "found", "error" (unreachable) oder "" → speichern erlaubt
       updates.bgg_username = trimmedBgg || null;
+    }
+
+    const originalVisibility = (profile?.library_visibility as LibraryVisibility) ?? "friends";
+    if (libraryVisibility !== originalVisibility) {
+      updates.library_visibility = libraryVisibility;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -239,9 +248,11 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     fetchPending();
   }
 
+  const originalVisibility = (profile?.library_visibility as LibraryVisibility) ?? "friends";
   const hasChanges =
     displayName.trim() !== (profile?.display_name ?? "") ||
-    bggUsername.trim() !== originalBgg;
+    bggUsername.trim() !== originalBgg ||
+    libraryVisibility !== originalVisibility;
 
   const canSave =
     hasChanges &&
@@ -573,6 +584,57 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                 </button>
               </div>
             )}
+          </div>
+        </section>
+
+        {/* ── Privatsphäre ──────────────────────────────────── */}
+        <section>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Privatsphäre</p>
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-0.5">Bibliothek-Sichtbarkeit</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Lege fest, wer deine Spielebibliothek sehen kann. Andere sehen nur: Cover, Spielname und Anzahl Partien — keine persönlichen Notizen oder Preise.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {([
+                { value: "public" as LibraryVisibility, icon: <Globe size={15} />, label: "Öffentlich", desc: "Alle registrierten Spieler können deine Bibliothek sehen" },
+                { value: "friends" as LibraryVisibility, icon: <Users size={15} />, label: "Nur Freunde", desc: "Nur bestätigte Freunde sehen deine Bibliothek" },
+                { value: "private" as LibraryVisibility, icon: <Lock size={15} />, label: "Privat", desc: "Niemand kann deine Bibliothek sehen" },
+              ] as const).map(({ value, icon, label, desc }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLibraryVisibility(value)}
+                  className={cn(
+                    "flex items-start gap-3 w-full px-3.5 py-3 rounded-xl border text-left transition-all",
+                    libraryVisibility === value
+                      ? "bg-amber-50 border-amber-400"
+                      : "bg-background border-border hover:border-muted-foreground/30"
+                  )}
+                >
+                  <span className={cn("mt-0.5 flex-shrink-0", libraryVisibility === value ? "text-amber-600" : "text-muted-foreground")}>
+                    {icon}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-sm font-medium", libraryVisibility === value ? "text-amber-800" : "text-foreground")}>
+                      {label}
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-snug mt-0.5">{desc}</p>
+                  </div>
+                  <span className={cn(
+                    "mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all",
+                    libraryVisibility === value ? "border-amber-500 bg-amber-500" : "border-border"
+                  )}>
+                    {libraryVisibility === value && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 

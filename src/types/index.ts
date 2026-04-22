@@ -25,6 +25,7 @@ export interface Profile {
   location_lat: number | null;
   location_lng: number | null;
   is_public: boolean;
+  library_visibility: LibraryVisibility;
   created_at: string;
   updated_at: string;
 }
@@ -187,3 +188,54 @@ export type LibrarySortKey =
   | "players_asc" | "players_desc"
   | "rating" | "rating_asc"
   | "plays_desc" | "plays_asc";
+
+// ============================================================
+// Social types
+// ============================================================
+
+export type FriendshipStatus = "pending" | "accepted" | "declined";
+
+export type LibraryVisibility = "private" | "friends" | "public";
+
+export interface Friendship {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  status: FriendshipStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FriendProfile {
+  friendship_id: string;
+  friendship_status: FriendshipStatus;
+  is_requester: boolean;
+  profile: {
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    location: string | null;
+    library_visibility: LibraryVisibility;
+  };
+}
+
+export interface Message {
+  id: string;
+  from_id: string;
+  to_id: string;
+  content: string;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface ConversationSummary {
+  other_user_id: string;
+  other_username: string;
+  other_display_name: string | null;
+  other_avatar_url: string | null;
+  last_message: string;
+  last_message_at: string;
+  unread_count: number;
+  is_last_from_me: boolean;
+}
