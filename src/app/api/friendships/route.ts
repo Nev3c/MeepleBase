@@ -33,9 +33,9 @@ export async function GET() {
   if (!friendships?.length) return NextResponse.json({ friends: [], pending_received: [], pending_sent: [] });
 
   // Get profiles for all other parties
-  const otherIds = [...new Set(friendships.map((f) =>
+  const otherIds = Array.from(new Set(friendships.map((f) =>
     f.requester_id === user.id ? f.addressee_id : f.requester_id
-  ))];
+  )));
 
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

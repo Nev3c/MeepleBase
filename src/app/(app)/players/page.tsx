@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PlayersClient } from "./players-client";
-import type { FriendProfile, ConversationSummary } from "@/types";
+import type { FriendProfile, GameStatus } from "@/types";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export const metadata: Metadata = { title: "Spieler" };
 
 interface LibraryGame {
   game_id: string;
-  status: string;
+  status: GameStatus;
   personal_rating: number | null;
   game: {
     id: string;
@@ -76,9 +76,9 @@ export default async function PlayersPage() {
   let pendingSent: FriendProfile[] = [];
 
   if (friendships?.length) {
-    const otherIds = [...new Set(friendships.map((f) =>
+    const otherIds = Array.from(new Set(friendships.map((f) =>
       f.requester_id === user.id ? f.addressee_id : f.requester_id
-    ))];
+    )));
 
     const { data: profiles } = await admin
       .from("profiles")
