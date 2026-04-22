@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
-  Users, MessageSquare, Mail, ChevronRight, MoreHorizontal,
-  MapPin, Navigation,
+  Users, MessageSquare, Mail, MoreHorizontal,
+  MapPin, LocateFixed,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FriendProfile } from "@/types";
@@ -190,12 +190,12 @@ export function PlayersClient({
           </div>
           <Link
             href="/players/messages"
-            className="relative p-2 rounded-xl hover:bg-muted transition-colors"
+            className="relative p-2.5 rounded-xl hover:bg-muted transition-colors"
             aria-label="Nachrichten"
           >
             <Mail size={20} className="text-muted-foreground" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -274,11 +274,11 @@ function SpielerTab({
   const showNearby = nearbyStatus !== "idle";
 
   return (
-    <div className="flex flex-col gap-0 px-4 pb-8">
-      {/* Search */}
+    <div className="flex flex-col px-4 pb-8">
+      {/* Search input */}
       <div className="pt-4 pb-2">
         <div className="relative">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <input
             type="text"
             value={searchQuery}
@@ -287,24 +287,24 @@ function SpielerTab({
               if (showNearby) onClearNearby();
             }}
             placeholder="Spieler suchen…"
-            className="w-full h-11 pl-9 pr-4 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all min-w-0"
+            className="w-full h-11 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all min-w-0"
           />
           {searchQuery.length > 0 && (
             <button
               onClick={() => onSearchInput("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground p-0.5"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
               aria-label="Suche löschen"
             >
-              <X size={14} />
+              <X size={12} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Nearby search button row */}
+      {/* Nearby search controls */}
       {!showSearch && (
-        <div className="flex items-center gap-2 pb-3">
-          <div className="flex gap-1">
+        <div className="flex items-center gap-2 pb-4">
+          <div className="flex gap-1.5">
             {[25, 50, 100].map((r) => (
               <button
                 key={r}
@@ -314,10 +314,10 @@ function SpielerTab({
                   onNearbySearch(r);
                 }}
                 className={cn(
-                  "px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors border",
+                  "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
                   nearbyStatus !== "idle" && nearbyRadius === r
-                    ? "bg-amber-500 text-white border-amber-500"
-                    : "bg-muted text-muted-foreground border-transparent hover:border-border"
+                    ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                    : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-foreground"
                 )}
               >
                 {r} km
@@ -329,14 +329,15 @@ function SpielerTab({
               onClick={onClearNearby}
               className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              <X size={12} /> Schließen
+              <X size={11} />
+              Schließen
             </button>
           ) : (
             <button
               onClick={() => onNearbySearch()}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted border border-border text-xs font-medium text-foreground hover:border-amber-400 transition-colors"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs font-medium text-foreground hover:border-amber-400 hover:text-amber-600 transition-colors"
             >
-              <Navigation size={12} />
+              <LocateFixed size={12} />
               In meiner Nähe
             </button>
           )}
@@ -345,34 +346,39 @@ function SpielerTab({
 
       {/* Nearby results */}
       {showNearby && !showSearch && (
-        <div className="flex flex-col gap-2 mb-4">
+        <div className="flex flex-col gap-2 mb-5">
           {(nearbyStatus === "locating" || nearbyStatus === "loading") && (
-            <p className="text-xs text-muted-foreground px-1 animate-pulse">
-              {nearbyStatus === "locating" ? "Standort wird ermittelt…" : "Spieler werden gesucht…"}
-            </p>
+            <div className="flex items-center gap-2 py-2 px-1">
+              <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                {nearbyStatus === "locating" ? "Standort wird ermittelt…" : "Spieler werden gesucht…"}
+              </p>
+            </div>
           )}
           {nearbyStatus === "denied" && (
-            <div className="py-4 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+            <div className="py-6 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
               <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground">Standortzugriff verweigert</p>
               <p className="text-xs text-muted-foreground mt-1">Bitte in den Browser-Einstellungen erlauben.</p>
             </div>
           )}
           {nearbyStatus === "error" && (
-            <p className="text-sm text-red-600 px-1">Fehler beim Abrufen der Spieler. Bitte erneut versuchen.</p>
+            <div className="py-4 px-1">
+              <p className="text-sm text-red-600">Fehler beim Abrufen des Standorts. Bitte erneut versuchen.</p>
+            </div>
           )}
           {nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length === 0 && (
             <div className="py-8 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
-              <MapPin size={24} className="text-muted-foreground mx-auto mb-2" />
+              <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground">Keine Spieler in der Nähe</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Im Umkreis von {nearbyRadius} km gibt es noch keine Spieler. Versuche einen größeren Radius.
+              <p className="text-xs text-muted-foreground mt-1 px-4">
+                Im Umkreis von {nearbyRadius} km noch niemand gefunden. Versuch einen größeren Radius.
               </p>
             </div>
           )}
           {nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length > 0 && (
             <>
-              <p className="text-xs text-muted-foreground font-medium px-0.5">
+              <p className="text-xs text-muted-foreground font-medium px-0.5 mb-1">
                 {nearbyResults.length} {nearbyResults.length === 1 ? "Spieler" : "Spieler"} im Umkreis von {nearbyRadius} km
               </p>
               {nearbyResults.map((player) => (
@@ -389,16 +395,19 @@ function SpielerTab({
         </div>
       )}
 
-      {/* Text Search Results */}
+      {/* Text search results */}
       {showSearch ? (
         <div className="flex flex-col gap-2">
           {searching && (
-            <p className="text-xs text-muted-foreground px-1 animate-pulse">Suche…</p>
+            <div className="flex items-center gap-2 py-2 px-1">
+              <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
+              <p className="text-xs text-muted-foreground">Suche…</p>
+            </div>
           )}
           {!searching && searchResults !== null && searchResults.length === 0 && (
-            <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">Kein Spieler gefunden.</p>
-              <p className="text-xs text-muted-foreground mt-1">Versuche einen anderen Nutzernamen.</p>
+            <div className="py-10 text-center">
+              <p className="text-sm font-medium text-foreground mb-1">Kein Spieler gefunden</p>
+              <p className="text-xs text-muted-foreground">Versuche einen anderen Nutzernamen.</p>
             </div>
           )}
           {(searchResults ?? []).map((player) => (
@@ -412,12 +421,10 @@ function SpielerTab({
         </div>
       ) : (
         <>
-          {/* Pending Requests */}
+          {/* Pending incoming requests */}
           {pendingReceived.length > 0 && (
             <section className="mb-5">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Anfragen ({pendingReceived.length})
-              </h3>
+              <SectionLabel>Anfragen ({pendingReceived.length})</SectionLabel>
               <div className="flex flex-col gap-2">
                 {pendingReceived.map((fp) => (
                   <PendingRequestCard
@@ -430,12 +437,10 @@ function SpielerTab({
             </section>
           )}
 
-          {/* Friends List */}
+          {/* Friends list */}
           <section>
             {friends.length > 0 && (
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Freunde ({friends.length})
-              </h3>
+              <SectionLabel>Freunde ({friends.length})</SectionLabel>
             )}
 
             {friends.length === 0 && pendingReceived.length === 0 ? (
@@ -461,7 +466,9 @@ function SpielerTab({
                 ))}
                 {pendingSent.length > 0 && (
                   <>
-                    <p className="text-xs text-muted-foreground mt-3 mb-1 font-medium">Gesendete Anfragen</p>
+                    <div className="mt-3 mb-1">
+                      <SectionLabel>Gesendete Anfragen</SectionLabel>
+                    </div>
                     {pendingSent.map((fp) => (
                       <PendingSentCard
                         key={fp.friendship_id}
@@ -477,6 +484,16 @@ function SpielerTab({
         </>
       )}
     </div>
+  );
+}
+
+// ── Section Label ──────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold text-muted-foreground mb-2 px-0.5">
+      {children}
+    </p>
   );
 }
 
@@ -518,9 +535,7 @@ function SearchResultCard({
           {showDistance && player.distance_km !== undefined && (
             <span className="flex-shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
               <MapPin size={9} />
-              {player.distance_km < 1
-                ? `< 1 km`
-                : `${Math.round(player.distance_km)} km`}
+              {player.distance_km < 1 ? `< 1 km` : `${Math.round(player.distance_km)} km`}
             </span>
           )}
         </div>
@@ -544,7 +559,7 @@ function SearchResultCard({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50"
         >
           <Clock size={13} />
-          Gesendet
+          {loading ? "…" : "Gesendet"}
         </button>
       ) : f?.status === "pending" && !f.is_requester ? (
         <span className="text-xs text-amber-600 font-medium px-2">Anfrage erhalten</span>
@@ -593,18 +608,18 @@ function PendingRequestCard({
         <button
           onClick={() => handle("decline")}
           disabled={!!loading}
-          className="w-8 h-8 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground active:bg-muted transition-colors disabled:opacity-50"
+          className="w-9 h-9 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground active:bg-muted transition-colors disabled:opacity-50"
           aria-label="Ablehnen"
         >
-          <UserX size={14} />
+          <UserX size={15} />
         </button>
         <button
           onClick={() => handle("accept")}
           disabled={!!loading}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500 text-white text-xs font-semibold active:bg-amber-600 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-amber-500 text-white text-xs font-semibold active:bg-amber-600 transition-colors disabled:opacity-50"
           aria-label="Annehmen"
         >
-          <UserCheck size={13} />
+          <UserCheck size={14} />
           {loading === "accept" ? "…" : "Annehmen"}
         </button>
       </div>
@@ -624,6 +639,19 @@ function FriendCard({
   const [showActions, setShowActions] = useState(false);
   const [removing, setRemoving] = useState(false);
   const p = fp.profile;
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showActions) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowActions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showActions]);
 
   async function handleRemove() {
     setRemoving(true);
@@ -634,10 +662,12 @@ function FriendCard({
 
   return (
     <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
+      {/* Avatar → profile */}
       <Link href={`/players/${p.id}`} className="flex-shrink-0">
         <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       </Link>
 
+      {/* Name + location → profile */}
       <Link href={`/players/${p.id}`} className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
         {p.location && (
@@ -645,50 +675,47 @@ function FriendCard({
         )}
       </Link>
 
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      {/* Actions */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Message */}
         <Link
           href={`/players/messages/${p.id}`}
-          className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground active:bg-muted/70 transition-colors"
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/70 active:bg-muted/70 transition-colors"
           aria-label="Nachricht senden"
         >
-          <MessageSquare size={14} />
-        </Link>
-        <Link
-          href={`/players/${p.id}`}
-          className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground active:bg-muted/70 transition-colors"
-          aria-label="Profil ansehen"
-        >
-          <ChevronRight size={14} />
+          <MessageSquare size={15} />
         </Link>
 
-        {/* ⋯ menu — dropdown anchored to button so it can't overlap it */}
-        <div className="relative flex-shrink-0">
+        {/* Three-dot overflow menu */}
+        <div className="relative" ref={menuRef}>
           <button
             onClick={() => setShowActions((v) => !v)}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground active:bg-muted transition-colors"
+            className={cn(
+              "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+              showActions
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
             aria-label="Optionen"
             aria-expanded={showActions}
+            aria-haspopup="menu"
           >
             <MoreHorizontal size={16} />
           </button>
 
           {showActions && (
-            <div className="absolute right-0 top-full mt-1.5 z-20 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[152px]">
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1.5 z-30 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[168px]"
+            >
               <button
+                role="menuitem"
                 onClick={handleRemove}
                 disabled={removing}
-                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-red-600 text-sm font-medium hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
               >
                 <UserX size={14} />
-                {removing ? "…" : "Freund entfernen"}
-              </button>
-              <div className="border-t border-border" />
-              <button
-                onClick={() => setShowActions(false)}
-                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-muted-foreground text-sm hover:bg-muted transition-colors"
-              >
-                <X size={14} />
-                Abbrechen
+                {removing ? "Wird entfernt…" : "Freund entfernen"}
               </button>
             </div>
           )}
@@ -717,17 +744,19 @@ function PendingSentCard({
   }
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border opacity-70">
+    <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border opacity-60">
       <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Anfrage ausstehend</p>
       </div>
       <button
         onClick={handle}
         disabled={cancelling}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50 active:bg-muted/70 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50 active:bg-muted/70 transition-colors"
       >
-        <X size={11} /> {cancelling ? "…" : "Widerrufen"}
+        <X size={11} />
+        {cancelling ? "…" : "Widerrufen"}
       </button>
     </div>
   );
@@ -766,8 +795,8 @@ export function PlayerAvatar({
         />
       ) : (
         <div
-          className="w-full h-full flex items-center justify-center font-bold text-white"
-          style={{ background: `hsl(${hue} 50% 48%)` }}
+          className="w-full h-full flex items-center justify-center font-semibold text-white"
+          style={{ background: `hsl(${hue} 45% 50%)` }}
         >
           {initial}
         </div>

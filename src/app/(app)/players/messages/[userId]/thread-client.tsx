@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, ArrowUp } from "lucide-react";
 import { PlayerAvatar } from "../../players-client";
 import { cn } from "@/lib/utils";
 import type { Message } from "@/types";
@@ -42,12 +42,20 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-resize textarea
+  function handleDraftChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setDraft(e.target.value);
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }
 
   async function handleSend() {
     const text = draft.trim();
@@ -55,6 +63,11 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
 
     setSending(true);
     setDraft("");
+
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
 
     // Optimistic message
     const optimistic: Message = {
@@ -85,7 +98,7 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
       setDraft(text);
     } finally {
       setSending(false);
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
     }
   }
 
@@ -99,7 +112,9 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
   // Group messages by date
   const grouped: { date: string; messages: Message[] }[] = [];
   for (const msg of messages) {
-    const d = new Date(msg.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const d = new Date(msg.created_at).toLocaleDateString("de-DE", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    });
     const last = grouped[grouped.length - 1];
     if (last?.date === d) {
       last.messages.push(msg);
@@ -109,12 +124,17 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
   }
 
   return (
-    // Fixed height = viewport minus bottom nav — prevents outer page scroll
-    <div className="flex flex-col h-[calc(100dvh-72px)] bg-background">
+    // Fixed positioning: completely removes the element from page flow,
+    // preventing the layout pb-[72px] from causing an outer page scroll.
+    <div className="fixed inset-x-0 top-0 bottom-[72px] flex flex-col bg-background">
 
       {/* Header */}
       <div className="flex-shrink-0 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-12 pb-3 flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 -ml-2 rounded-xl hover:bg-muted transition-colors">
+        <button
+          onClick={() => router.back()}
+          className="p-2 -ml-2 rounded-xl hover:bg-muted transition-colors"
+          aria-label="Zurück"
+        >
           <ArrowLeft size={20} />
         </button>
         <PlayerAvatar
@@ -123,19 +143,26 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
           size="sm"
         />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground leading-tight truncate">
+          <p className="font-display text-base font-semibold text-foreground leading-tight truncate">
             {otherUser.username}
           </p>
         </div>
       </div>
 
-      {/* Messages area — constrained height, scrollable */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-2">
-        <div className="flex flex-col gap-1 max-w-2xl mx-auto w-full">
+      {/* Messages area — flex-1 + overflow-y-auto = only this section scrolls */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex flex-col gap-0.5 max-w-2xl mx-auto w-full">
           {messages.length === 0 && (
-            <div className="text-center py-12">
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                <PlayerAvatar
+                  name={otherUser.username}
+                  avatarUrl={otherUser.avatar_url}
+                  size="sm"
+                />
+              </div>
               <p className="text-sm text-muted-foreground">
-                Starte das Gespräch mit {otherUser.username}!
+                Starte das Gespräch mit <span className="font-medium text-foreground">{otherUser.username}</span>
               </p>
             </div>
           )}
@@ -143,37 +170,52 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
           {grouped.map((group) => (
             <div key={group.date}>
               {/* Date divider */}
-              <div className="flex items-center gap-3 my-3">
+              <div className="flex items-center gap-3 my-4">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-[10px] text-muted-foreground font-medium">{group.date}</span>
+                <span className="text-[10px] text-muted-foreground/60 font-medium tracking-wide">
+                  {group.date}
+                </span>
                 <div className="flex-1 h-px bg-border" />
               </div>
 
               {group.messages.map((msg, i) => {
                 const isMe = msg.from_id === currentUserId;
                 const isOptimistic = msg.id.startsWith("opt-");
-                const showTime = i === group.messages.length - 1 ||
-                  group.messages[i + 1]?.from_id !== msg.from_id;
+                const nextMsg = group.messages[i + 1];
+                const isLastInRun = !nextMsg || nextMsg.from_id !== msg.from_id;
+                const showTime = isLastInRun;
 
                 return (
                   <div
                     key={msg.id}
-                    className={cn("flex mb-0.5", isMe ? "justify-end" : "justify-start")}
+                    className={cn(
+                      "flex",
+                      isMe ? "justify-end" : "justify-start",
+                      isLastInRun ? "mb-2" : "mb-0.5"
+                    )}
                   >
                     <div
                       className={cn(
-                        "max-w-[75%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed",
+                        "max-w-[78%] px-3.5 py-2 text-sm leading-relaxed",
                         isMe
-                          ? "bg-amber-500 text-white rounded-br-md"
-                          : "bg-card border border-border text-foreground rounded-bl-md",
-                        isOptimistic && "opacity-70"
+                          ? "bg-amber-500 text-white"
+                          : "bg-card border border-border text-foreground",
+                        // Bubble shape: full radius except one corner
+                        isMe
+                          ? isLastInRun
+                            ? "rounded-2xl rounded-br-md"
+                            : "rounded-2xl"
+                          : isLastInRun
+                            ? "rounded-2xl rounded-bl-md"
+                            : "rounded-2xl",
+                        isOptimistic && "opacity-60"
                       )}
                     >
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       {showTime && (
                         <p className={cn(
-                          "text-[10px] mt-0.5",
-                          isMe ? "text-white/60 text-right" : "text-muted-foreground"
+                          "text-[10px] mt-1",
+                          isMe ? "text-white/50 text-right" : "text-muted-foreground/60"
                         )}>
                           {formatMessageTime(msg.created_at)}
                         </p>
@@ -189,26 +231,26 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
         </div>
       </div>
 
-      {/* Compose input */}
-      <div className="flex-shrink-0 bg-background border-t border-border px-4 py-3">
+      {/* Compose bar */}
+      <div className="flex-shrink-0 bg-background border-t border-border/60 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-end gap-2">
           <textarea
-            ref={inputRef}
+            ref={textareaRef}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={handleDraftChange}
             onKeyDown={handleKeyDown}
-            placeholder="Nachricht schreiben…"
+            placeholder="Nachricht…"
             rows={1}
-            className="flex-1 min-w-0 resize-none py-2.5 px-3.5 rounded-2xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all max-h-32 overflow-y-auto"
-            style={{ lineHeight: "1.4" }}
+            className="flex-1 min-w-0 resize-none py-2.5 px-3.5 rounded-2xl border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all overflow-hidden"
+            style={{ lineHeight: "1.45" }}
           />
           <button
             onClick={handleSend}
             disabled={!draft.trim() || sending}
-            className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40 active:bg-amber-600 transition-colors"
+            className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center flex-shrink-0 disabled:opacity-35 hover:bg-amber-600 active:scale-95 active:bg-amber-600 transition-all"
             aria-label="Senden"
           >
-            <Send size={15} className="translate-x-0.5 -translate-y-0.5" />
+            <ArrowUp size={17} strokeWidth={2.5} />
           </button>
         </div>
       </div>
