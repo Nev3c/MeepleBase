@@ -6,9 +6,12 @@ import Link from "next/link";
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
   Users, MessageSquare, Mail, ChevronRight, MoreHorizontal,
+  MapPin, Navigation,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FriendProfile } from "@/types";
+
+type NearbyStatus = "idle" | "locating" | "loading" | "done" | "denied" | "error";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -19,6 +22,7 @@ interface SearchPlayer {
   avatar_url: string | null;
   location: string | null;
   friendship: { id: string; status: string; is_requester: boolean } | null;
+  distance_km?: number;
 }
 
 interface Props {
@@ -46,6 +50,10 @@ export function PlayersClient({
   const [searching, setSearching] = useState(false);
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [nearbyStatus, setNearbyStatus] = useState<NearbyStatus>("idle");
+  const [nearbyResults, setNearbyResults] = useState<SearchPlayer[] | null>(null);
+  const [nearbyRadius, setNearbyRadius] = useState(50);
+
   function handleSearchInput(val: string) {
     setSearchQuery(val);
     if (searchRef.current) clearTimeout(searchRef.current);
@@ -67,6 +75,38 @@ export function PlayersClient({
         setSearching(false);
       }
     }, 400);
+  }
+
+  function handleNearbySearch(radius = nearbyRadius) {
+    if (!navigator.geolocation) {
+      setNearbyStatus("error");
+      return;
+    }
+    setNearbyStatus("locating");
+    setNearbyResults(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        setNearbyStatus("loading");
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `/api/players/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}`
+          );
+          const data = await res.json() as { players: SearchPlayer[] };
+          setNearbyResults(data.players ?? []);
+          setNearbyStatus("done");
+        } catch {
+          setNearbyStatus("error");
+        }
+      },
+      () => setNearbyStatus("denied"),
+      { timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  function clearNearby() {
+    setNearbyStatus("idle");
+    setNearbyResults(null);
   }
 
   async function sendRequest(player: SearchPlayer) {
@@ -178,6 +218,12 @@ export function PlayersClient({
           onCancelRequest={cancelRequest}
           onRespondToRequest={respondToRequest}
           onRemoveFriend={removeFriend}
+          nearbyStatus={nearbyStatus}
+          nearbyResults={nearbyResults}
+          nearbyRadius={nearbyRadius}
+          onNearbySearch={handleNearbySearch}
+          onNearbyRadiusChange={setNearbyRadius}
+          onClearNearby={clearNearby}
         />
       </div>
     </div>
@@ -199,6 +245,12 @@ function SpielerTab({
   onCancelRequest,
   onRespondToRequest,
   onRemoveFriend,
+  nearbyStatus,
+  nearbyResults,
+  nearbyRadius,
+  onNearbySearch,
+  onNearbyRadiusChange,
+  onClearNearby,
 }: {
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
@@ -212,17 +264,28 @@ function SpielerTab({
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
   onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
   onRemoveFriend: (fId: string) => Promise<void>;
+  nearbyStatus: NearbyStatus;
+  nearbyResults: SearchPlayer[] | null;
+  nearbyRadius: number;
+  onNearbySearch: (radius?: number) => void;
+  onNearbyRadiusChange: (r: number) => void;
+  onClearNearby: () => void;
 }) {
+  const showNearby = nearbyStatus !== "idle";
+
   return (
     <div className="flex flex-col gap-0 px-4 pb-8">
       {/* Search */}
-      <div className="pt-4 pb-3">
+      <div className="pt-4 pb-2">
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => onSearchInput(e.target.value)}
+            onChange={(e) => {
+              onSearchInput(e.target.value);
+              if (showNearby) onClearNearby();
+            }}
             placeholder="Spieler suchen…"
             className="w-full h-11 pl-9 pr-4 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all min-w-0"
           />
@@ -238,7 +301,95 @@ function SpielerTab({
         </div>
       </div>
 
-      {/* Search Results */}
+      {/* Nearby search button row */}
+      {!showSearch && (
+        <div className="flex items-center gap-2 pb-3">
+          <div className="flex gap-1">
+            {[25, 50, 100].map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => {
+                  onNearbyRadiusChange(r);
+                  onNearbySearch(r);
+                }}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors border",
+                  nearbyStatus !== "idle" && nearbyRadius === r
+                    ? "bg-amber-500 text-white border-amber-500"
+                    : "bg-muted text-muted-foreground border-transparent hover:border-border"
+                )}
+              >
+                {r} km
+              </button>
+            ))}
+          </div>
+          {showNearby ? (
+            <button
+              onClick={onClearNearby}
+              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X size={12} /> Schließen
+            </button>
+          ) : (
+            <button
+              onClick={() => onNearbySearch()}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted border border-border text-xs font-medium text-foreground hover:border-amber-400 transition-colors"
+            >
+              <Navigation size={12} />
+              In meiner Nähe
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Nearby results */}
+      {showNearby && !showSearch && (
+        <div className="flex flex-col gap-2 mb-4">
+          {(nearbyStatus === "locating" || nearbyStatus === "loading") && (
+            <p className="text-xs text-muted-foreground px-1 animate-pulse">
+              {nearbyStatus === "locating" ? "Standort wird ermittelt…" : "Spieler werden gesucht…"}
+            </p>
+          )}
+          {nearbyStatus === "denied" && (
+            <div className="py-4 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+              <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium text-foreground">Standortzugriff verweigert</p>
+              <p className="text-xs text-muted-foreground mt-1">Bitte in den Browser-Einstellungen erlauben.</p>
+            </div>
+          )}
+          {nearbyStatus === "error" && (
+            <p className="text-sm text-red-600 px-1">Fehler beim Abrufen der Spieler. Bitte erneut versuchen.</p>
+          )}
+          {nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length === 0 && (
+            <div className="py-8 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+              <MapPin size={24} className="text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium text-foreground">Keine Spieler in der Nähe</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Im Umkreis von {nearbyRadius} km gibt es noch keine Spieler. Versuche einen größeren Radius.
+              </p>
+            </div>
+          )}
+          {nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length > 0 && (
+            <>
+              <p className="text-xs text-muted-foreground font-medium px-0.5">
+                {nearbyResults.length} {nearbyResults.length === 1 ? "Spieler" : "Spieler"} im Umkreis von {nearbyRadius} km
+              </p>
+              {nearbyResults.map((player) => (
+                <SearchResultCard
+                  key={player.id}
+                  player={player}
+                  onSendRequest={onSendRequest}
+                  onCancelRequest={onCancelRequest}
+                  showDistance
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Text Search Results */}
       {showSearch ? (
         <div className="flex flex-col gap-2">
           {searching && (
@@ -335,10 +486,12 @@ function SearchResultCard({
   player,
   onSendRequest,
   onCancelRequest,
+  showDistance,
 }: {
   player: SearchPlayer;
   onSendRequest: (p: SearchPlayer) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
+  showDistance?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const f = player.friendship;
@@ -360,7 +513,17 @@ function SearchResultCard({
     <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
       <PlayerAvatar name={player.username} avatarUrl={player.avatar_url} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{player.username}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-foreground truncate">{player.username}</p>
+          {showDistance && player.distance_km !== undefined && (
+            <span className="flex-shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
+              <MapPin size={9} />
+              {player.distance_km < 1
+                ? `< 1 km`
+                : `${Math.round(player.distance_km)} km`}
+            </span>
+          )}
+        </div>
         {player.location && (
           <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{player.location}</p>
         )}

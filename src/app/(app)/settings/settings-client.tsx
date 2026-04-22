@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock, MapPin, Locate } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile, LibraryVisibility } from "@/types";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
+type LocationStatus = "idle" | "detecting" | "detected" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type TranslatePhase = "idle" | "counting" | "running" | "done" | "error";
 type RefreshPhase   = "idle" | "running" | "done" | "error";
@@ -27,6 +28,10 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const [libraryVisibility, setLibraryVisibility] = useState<LibraryVisibility>(
     (profile?.library_visibility as LibraryVisibility) ?? "friends"
   );
+  const [location, setLocation] = useState(profile?.location ?? "");
+  const [locationLat, setLocationLat] = useState<number | null>(profile?.location_lat ?? null);
+  const [locationLng, setLocationLng] = useState<number | null>(profile?.location_lng ?? null);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
   const [bggStatus, setBggStatus] = useState<BggStatus>("idle");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -83,12 +88,46 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [bggUsername, originalBgg]);
 
+  async function detectLocation() {
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      return;
+    }
+    setLocationStatus("detecting");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&zoom=10&accept-language=de`,
+            { headers: { "User-Agent": "MeepleBase/1.0" } }
+          );
+          const data = await res.json() as { address?: Record<string, string> };
+          const addr = data.address ?? {};
+          const city =
+            addr.city ?? addr.town ?? addr.village ?? addr.municipality ?? addr.county ?? addr.state ?? "";
+          setLocation(city);
+          setLocationLat(latitude);
+          setLocationLng(longitude);
+          setLocationStatus("detected");
+        } catch {
+          // Geolocation worked, just use coords without city name
+          setLocationLat(latitude);
+          setLocationLng(longitude);
+          setLocationStatus("detected");
+        }
+      },
+      () => setLocationStatus("error"),
+      { timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
   async function handleSave() {
     setSaveStatus("saving");
     setSaveError(null);
 
     const supabase = createClient();
-    const updates: Record<string, string | null> = {};
+    const updates: Record<string, string | number | null> = {};
 
     const trimmedName = displayName.trim();
     if (trimmedName !== (profile?.display_name ?? "")) {
@@ -114,6 +153,17 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     const originalVisibility = (profile?.library_visibility as LibraryVisibility) ?? "friends";
     if (libraryVisibility !== originalVisibility) {
       updates.library_visibility = libraryVisibility;
+    }
+
+    const trimmedLocation = location.trim();
+    if (trimmedLocation !== (profile?.location ?? "")) {
+      updates.location = trimmedLocation || null;
+    }
+    if (locationLat !== (profile?.location_lat ?? null)) {
+      updates.location_lat = locationLat;
+    }
+    if (locationLng !== (profile?.location_lng ?? null)) {
+      updates.location_lng = locationLng;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -252,7 +302,10 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const hasChanges =
     displayName.trim() !== (profile?.display_name ?? "") ||
     bggUsername.trim() !== originalBgg ||
-    libraryVisibility !== originalVisibility;
+    libraryVisibility !== originalVisibility ||
+    location.trim() !== (profile?.location ?? "") ||
+    locationLat !== (profile?.location_lat ?? null) ||
+    locationLng !== (profile?.location_lng ?? null);
 
   const canSave =
     hasChanges &&
@@ -302,6 +355,64 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                 placeholder="z.B. Max Mustermann"
                 className="h-11 px-3.5 rounded-xl border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all"
               />
+            </div>
+
+            {/* Standort */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="location" className="text-sm font-medium text-foreground">
+                Standort
+              </label>
+              <p className="text-xs text-muted-foreground -mt-1 leading-relaxed">
+                Wird anderen Spielern angezeigt und ermöglicht die Suche nach Spielern in deiner Nähe.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <MapPin size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    id="location"
+                    type="text"
+                    value={location}
+                    onChange={(e) => {
+                      setLocation(e.target.value);
+                      // Clear coords if user manually edits location text
+                      if (locationStatus === "detected") setLocationStatus("idle");
+                      setLocationLat(null);
+                      setLocationLng(null);
+                    }}
+                    placeholder="z.B. Ulm"
+                    className="w-full h-11 pl-9 pr-3.5 rounded-xl border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all min-w-0"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  disabled={locationStatus === "detecting"}
+                  className="flex items-center gap-1.5 px-3 h-11 rounded-xl border border-border bg-background text-sm text-muted-foreground hover:text-foreground hover:border-amber-400 transition-all disabled:opacity-50 flex-shrink-0"
+                  title="Aktuellen Standort erkennen"
+                >
+                  {locationStatus === "detecting" ? (
+                    <SpinnerIcon />
+                  ) : (
+                    <Locate size={15} />
+                  )}
+                </button>
+              </div>
+              {locationStatus === "detected" && locationLat !== null && (
+                <p className="text-xs text-green-700 font-medium flex items-center gap-1">
+                  <Check size={12} /> Standort erkannt{location ? ` · ${location}` : ""}
+                </p>
+              )}
+              {locationStatus === "error" && (
+                <p className="text-xs text-red-600">
+                  Standortzugriff verweigert. Bitte in den Browser-Einstellungen erlauben oder Ort manuell eingeben.
+                </p>
+              )}
+              {location && locationLat === null && locationStatus !== "detecting" && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  Nur als Text gespeichert — kein GPS-Matching für „In meiner Nähe".
+                  <button type="button" onClick={detectLocation} className="underline text-amber-600 ml-0.5">Erkennen</button>
+                </p>
+              )}
             </div>
           </div>
         </section>
