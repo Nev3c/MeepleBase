@@ -122,7 +122,7 @@ export function PlayerProfileClient({
           <ArrowLeft size={20} />
         </button>
         <span className="font-display text-lg font-semibold flex-1 min-w-0 truncate">
-          {p.display_name ?? p.username}
+          {p.username}
         </span>
         {unreadFromUser > 0 && (
           <Link
@@ -142,15 +142,14 @@ export function PlayerProfileClient({
         {/* Profile Header Card */}
         <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-4 shadow-card">
           <PlayerAvatar
-            name={p.display_name ?? p.username}
+            name={p.username}
             avatarUrl={p.avatar_url}
             size="lg"
           />
           <div className="flex-1 min-w-0">
             <h1 className="font-display text-xl font-semibold text-foreground leading-tight">
-              {p.display_name ?? p.username}
+              {p.username}
             </h1>
-            <p className="text-sm text-muted-foreground">@{p.username}</p>
             {p.location && (
               <p className="text-xs text-muted-foreground mt-1">{p.location}</p>
             )}
