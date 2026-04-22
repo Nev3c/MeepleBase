@@ -13,7 +13,11 @@ const NAV_ITEMS = [
   { href: "/profile", label: "Profil",     icon: User    },
 ];
 
-export function BottomNav() {
+interface BottomNavProps {
+  unreadMessages?: number;
+}
+
+export function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
   const pathname = usePathname();
 
   return (
@@ -25,6 +29,8 @@ export function BottomNav() {
       <div className="flex items-stretch max-w-lg mx-auto">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = pathname.startsWith(href);
+          const showBadge = href === "/players" && unreadMessages > 0;
+
           return (
             <Link
               key={href}
@@ -44,11 +50,20 @@ export function BottomNav() {
                 "absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full transition-colors duration-200",
                 isActive ? "bg-amber-500" : "bg-transparent"
               )} />
-              <Icon
-                size={20}
-                strokeWidth={2}
-                className="transition-colors duration-200"
-              />
+
+              <span className="relative">
+                <Icon
+                  size={20}
+                  strokeWidth={2}
+                  className="transition-colors duration-200"
+                />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
+                  </span>
+                )}
+              </span>
+
               <span className="text-[9px] font-semibold tracking-wide leading-none">
                 {label}
               </span>

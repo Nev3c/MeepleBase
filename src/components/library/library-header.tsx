@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import type { Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
+export type LibraryTab = "bibliothek" | "spielen";
+
 interface LibraryHeaderProps {
   user?: User | null;
   profile?: Profile | null;
@@ -17,19 +19,23 @@ interface LibraryHeaderProps {
   onSortFilter?: () => void;
   sortFilterActive?: boolean;
   sortFilterCount?: number;
+  activeTab?: LibraryTab;
+  onTabChange?: (tab: LibraryTab) => void;
 }
 
 
-export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilterActive, sortFilterCount = 0 }: LibraryHeaderProps) {
+export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilterActive, sortFilterCount = 0, activeTab, onTabChange }: LibraryHeaderProps) {
   const { view, setView, filter, setFilter } = useLibraryStore();
 
   const displayName = profile?.display_name ?? profile?.username ?? user?.email?.split("@")[0] ?? "";
   const avatarUrl = profile?.avatar_url ?? user?.user_metadata?.avatar_url;
   const initial = displayName[0]?.toUpperCase() ?? "?";
 
+  const onBibliothekTab = !activeTab || activeTab === "bibliothek";
+
   return (
     <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border">
-      <div className="px-4 pt-4 pb-3 max-w-2xl mx-auto">
+      <div className={cn("px-4 pt-4 max-w-2xl mx-auto", onTabChange ? "pb-0" : "pb-3")}>
         {/* Title row */}
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -38,8 +44,8 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* Add game button */}
-            {onAddGame && (
+            {/* Add game button — only on Bibliothek tab */}
+            {onAddGame && onBibliothekTab && (
               <Button
                 onClick={onAddGame}
                 size="icon-sm"
@@ -49,38 +55,40 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
                 <Plus size={16} strokeWidth={2.5} />
               </Button>
             )}
-            {/* View toggle */}
-            <div className="flex items-center bg-muted rounded-lg p-0.5">
-              <button
-                onClick={() => setView("grid")}
-                className={cn(
-                  "p-1.5 rounded-md transition-all duration-200",
-                  view === "grid"
-                    ? "bg-white shadow-sm text-amber-500"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                aria-label="Rasteransicht"
-                aria-pressed={view === "grid"}
-              >
-                <LayoutGrid size={16} strokeWidth={2} />
-              </button>
-              <button
-                onClick={() => setView("list")}
-                className={cn(
-                  "p-1.5 rounded-md transition-all duration-200",
-                  view === "list"
-                    ? "bg-white shadow-sm text-amber-500"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                aria-label="Listenansicht"
-                aria-pressed={view === "list"}
-              >
-                <List size={16} strokeWidth={2} />
-              </button>
-            </div>
+            {/* View toggle — only on Bibliothek tab */}
+            {onBibliothekTab && (
+              <div className="flex items-center bg-muted rounded-lg p-0.5">
+                <button
+                  onClick={() => setView("grid")}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all duration-200",
+                    view === "grid"
+                      ? "bg-white shadow-sm text-amber-500"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  aria-label="Rasteransicht"
+                  aria-pressed={view === "grid"}
+                >
+                  <LayoutGrid size={16} strokeWidth={2} />
+                </button>
+                <button
+                  onClick={() => setView("list")}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all duration-200",
+                    view === "list"
+                      ? "bg-white shadow-sm text-amber-500"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  aria-label="Listenansicht"
+                  aria-pressed={view === "list"}
+                >
+                  <List size={16} strokeWidth={2} />
+                </button>
+              </div>
+            )}
 
-            {/* Combined sort + filter button */}
-            {onSortFilter && (
+            {/* Combined sort + filter button — only on Bibliothek tab */}
+            {onSortFilter && onBibliothekTab && (
               <div className="relative">
                 <Button
                   variant="ghost"
@@ -116,21 +124,43 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
           </div>
         </div>
 
-        {/* Search + active sort hint */}
-        <div className="flex flex-col gap-1.5">
-          <div className="relative">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <Input
-              type="search"
-              placeholder="Spiel suchen…"
-              className="pl-10"
-              value={filter.search ?? ""}
-              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-              aria-label="Bibliothek durchsuchen"
-            />
+        {/* Search — only on Bibliothek tab */}
+        {onBibliothekTab && (
+          <div className={cn("flex flex-col gap-1.5", onTabChange ? "mb-0" : "")}>
+            <div className="relative">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Spiel suchen…"
+                className="pl-10"
+                value={filter.search ?? ""}
+                onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+                aria-label="Bibliothek durchsuchen"
+              />
+            </div>
           </div>
+        )}
 
-        </div>
+        {/* Tab switcher */}
+        {onTabChange && (
+          <div className="flex gap-0 -mx-4 px-4 mt-3">
+            {(["bibliothek", "spielen"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => onTabChange(t)}
+                className={cn(
+                  "flex-1 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === t
+                    ? "border-amber-500 text-amber-600"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t === "bibliothek" ? "Bibliothek" : "Spielen"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </header>
   );

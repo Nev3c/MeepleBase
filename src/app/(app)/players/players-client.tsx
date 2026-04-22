@@ -5,30 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
-  Users, MessageSquare, Mail, BookOpen, ChevronRight,
-  UserSearch, Star, Dices,
+  Users, MessageSquare, Mail, ChevronRight, MoreHorizontal,
 } from "lucide-react";
-import { cn, formatPlayerCount, formatPlaytime } from "@/lib/utils";
-import type { FriendProfile, GameStatus } from "@/types";
+import { cn } from "@/lib/utils";
+import type { FriendProfile } from "@/types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-
-interface LibraryGame {
-  game_id: string;
-  status: GameStatus;
-  personal_rating: number | null;
-  game: {
-    id: string;
-    name: string;
-    thumbnail_url: string | null;
-    min_players: number | null;
-    max_players: number | null;
-    min_playtime: number | null;
-    max_playtime: number | null;
-    rating_avg: number | null;
-    year_published: number | null;
-  } | null;
-}
 
 interface SearchPlayer {
   id: string;
@@ -39,17 +21,12 @@ interface SearchPlayer {
   friendship: { id: string; status: string; is_requester: boolean } | null;
 }
 
-type MainTab = "freunde" | "spiele";
-type SpielSubTab = "ungespielt" | "heute";
-
 interface Props {
   currentUserId: string;
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
   unreadCount: number;
-  userGames: LibraryGame[];
-  playCountMap: Record<string, number>;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -59,18 +36,11 @@ export function PlayersClient({
   pendingReceived: initialPendingReceived,
   pendingSent: initialPendingSent,
   unreadCount,
-  userGames,
-  playCountMap,
 }: Props) {
-  const [tab, setTab] = useState<MainTab>("freunde");
-  const [spielTab, setSpielTab] = useState<SpielSubTab>("ungespielt");
-
-  // Local state for friends (so UI updates optimistically)
   const [friends, setFriends] = useState(initialFriends);
   const [pendingReceived, setPendingReceived] = useState(initialPendingReceived);
   const [pendingSent, setPendingSent] = useState(initialPendingSent);
 
-  // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchPlayer[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -107,7 +77,6 @@ export function PlayersClient({
     });
     if (res.ok) {
       const data = await res.json() as { id: string };
-      // Optimistic: update search result to show pending
       setSearchResults((prev) =>
         prev?.map((p) =>
           p.id === player.id
@@ -115,13 +84,16 @@ export function PlayersClient({
             : p
         ) ?? null
       );
-      // Add to pendingSent
       setPendingSent((prev) => [
         {
           friendship_id: data.id,
           friendship_status: "pending",
           is_requester: true,
-          profile: { id: player.id, username: player.username, display_name: player.display_name, avatar_url: player.avatar_url, location: player.location, library_visibility: "friends" },
+          profile: {
+            id: player.id, username: player.username,
+            display_name: player.display_name, avatar_url: player.avatar_url,
+            location: player.location, library_visibility: "friends",
+          },
         },
         ...prev,
       ]);
@@ -166,80 +138,47 @@ export function PlayersClient({
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)]">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-0">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="font-display text-2xl font-semibold text-foreground">Spieler</h1>
-            {/* Messages link */}
-            <Link
-              href="/players/messages"
-              className="relative p-2 rounded-xl hover:bg-muted transition-colors"
-              aria-label="Nachrichten"
-            >
-              <Mail size={20} className="text-muted-foreground" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Link>
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-3">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-foreground leading-tight">Spieler</h1>
+            {totalPending > 0 && (
+              <p className="text-xs text-amber-600 font-medium mt-0.5">
+                {totalPending} offene {totalPending === 1 ? "Anfrage" : "Anfragen"}
+              </p>
+            )}
           </div>
-
-          {/* Tabs */}
-          <div className="flex gap-0 border-b border-border -mx-4 px-4">
-            {([
-              { key: "freunde" as MainTab, label: "Spieler", icon: UserSearch },
-              { key: "spiele" as MainTab, label: "Spiele", icon: BookOpen },
-            ] as const).map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={cn(
-                  "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
-                  tab === key
-                    ? "border-amber-500 text-amber-600"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon size={14} />
-                {label}
-                {key === "freunde" && totalPending > 0 && (
-                  <span className="ml-0.5 w-4 h-4 bg-amber-500 text-white text-[10px] font-bold rounded-full inline-flex items-center justify-center">
-                    {totalPending}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+          <Link
+            href="/players/messages"
+            className="relative p-2 rounded-xl hover:bg-muted transition-colors"
+            aria-label="Nachrichten"
+          >
+            <Mail size={20} className="text-muted-foreground" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Link>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 max-w-2xl mx-auto w-full">
-        {tab === "freunde" ? (
-          <SpielerTab
-            friends={friends}
-            pendingReceived={pendingReceived}
-            pendingSent={pendingSent}
-            searchQuery={searchQuery}
-            searchResults={searchResults}
-            searching={searching}
-            showSearch={showSearch}
-            onSearchInput={handleSearchInput}
-            onSendRequest={sendRequest}
-            onCancelRequest={cancelRequest}
-            onRespondToRequest={respondToRequest}
-            onRemoveFriend={removeFriend}
-          />
-        ) : (
-          <SpielTab
-            activeTab={spielTab}
-            setActiveTab={setSpielTab}
-            userGames={userGames}
-            playCountMap={playCountMap}
-          />
-        )}
+        <SpielerTab
+          friends={friends}
+          pendingReceived={pendingReceived}
+          pendingSent={pendingSent}
+          searchQuery={searchQuery}
+          searchResults={searchResults}
+          searching={searching}
+          showSearch={showSearch}
+          onSearchInput={handleSearchInput}
+          onSendRequest={sendRequest}
+          onCancelRequest={cancelRequest}
+          onRespondToRequest={respondToRequest}
+          onRemoveFriend={removeFriend}
+        />
       </div>
     </div>
   );
@@ -284,12 +223,12 @@ function SpielerTab({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchInput(e.target.value)}
-            placeholder="Spieler suchen (Nutzername / Name)…"
+            placeholder="Spieler suchen…"
             className="w-full h-11 pl-9 pr-4 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all min-w-0"
           />
           {searchQuery.length > 0 && (
             <button
-              onClick={() => { onSearchInput(""); }}
+              onClick={() => onSearchInput("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground p-0.5"
               aria-label="Suche löschen"
             >
@@ -308,7 +247,7 @@ function SpielerTab({
           {!searching && searchResults !== null && searchResults.length === 0 && (
             <div className="py-8 text-center">
               <p className="text-sm text-muted-foreground">Kein Spieler gefunden.</p>
-              <p className="text-xs text-muted-foreground mt-1">Versuche es mit einem anderen Namen.</p>
+              <p className="text-xs text-muted-foreground mt-1">Versuche einen anderen Nutzernamen.</p>
             </div>
           )}
           {(searchResults ?? []).map((player) => (
@@ -369,7 +308,6 @@ function SpielerTab({
                     onRemove={onRemoveFriend}
                   />
                 ))}
-                {/* Pending sent */}
                 {pendingSent.length > 0 && (
                   <>
                     <p className="text-xs text-muted-foreground mt-3 mb-1 font-medium">Gesendete Anfragen</p>
@@ -420,12 +358,9 @@ function SearchResultCard({
 
   return (
     <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
-      <PlayerAvatar name={player.display_name ?? player.username} avatarUrl={player.avatar_url} size="md" />
+      <PlayerAvatar name={player.username} avatarUrl={player.avatar_url} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
-          {player.display_name ?? player.username}
-        </p>
-        <p className="text-xs text-muted-foreground truncate">@{player.username}</p>
+        <p className="text-sm font-medium text-foreground truncate">{player.username}</p>
         {player.location && (
           <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{player.location}</p>
         )}
@@ -484,12 +419,12 @@ function PendingRequestCard({
 
   return (
     <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
-      <PlayerAvatar name={p.display_name ?? p.username} avatarUrl={p.avatar_url} size="md" />
+      <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
-          {p.display_name ?? p.username}
-        </p>
-        <p className="text-xs text-muted-foreground">@{p.username}</p>
+        <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
+        {p.location && (
+          <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{p.location}</p>
+        )}
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <button
@@ -537,14 +472,11 @@ function FriendCard({
   return (
     <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
       <Link href={`/players/${p.id}`} className="flex-shrink-0">
-        <PlayerAvatar name={p.display_name ?? p.username} avatarUrl={p.avatar_url} size="md" />
+        <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       </Link>
 
       <Link href={`/players/${p.id}`} className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
-          {p.display_name ?? p.username}
-        </p>
-        <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
+        <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
         {p.location && (
           <p className="text-xs text-muted-foreground/60 truncate mt-0.5">{p.location}</p>
         )}
@@ -565,29 +497,40 @@ function FriendCard({
         >
           <ChevronRight size={14} />
         </Link>
-      </div>
 
-      {/* Long press / hold for remove — using a visible button on the right */}
-      <button
-        onClick={() => setShowActions((v) => !v)}
-        className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground/40 active:bg-muted transition-colors"
-        aria-label="Optionen"
-      >
-        <span className="text-lg leading-none">⋯</span>
-      </button>
-
-      {/* Inline remove action */}
-      {showActions && (
-        <div className="absolute right-4 z-10">
+        {/* ⋯ menu — dropdown anchored to button so it can't overlap it */}
+        <div className="relative flex-shrink-0">
           <button
-            onClick={handleRemove}
-            disabled={removing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-medium shadow-sm"
+            onClick={() => setShowActions((v) => !v)}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground active:bg-muted transition-colors"
+            aria-label="Optionen"
+            aria-expanded={showActions}
           >
-            <UserX size={12} /> {removing ? "…" : "Entfernen"}
+            <MoreHorizontal size={16} />
           </button>
+
+          {showActions && (
+            <div className="absolute right-0 top-full mt-1.5 z-20 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[152px]">
+              <button
+                onClick={handleRemove}
+                disabled={removing}
+                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                <UserX size={14} />
+                {removing ? "…" : "Freund entfernen"}
+              </button>
+              <div className="border-t border-border" />
+              <button
+                onClick={() => setShowActions(false)}
+                className="w-full flex items-center gap-2 px-3.5 py-2.5 text-muted-foreground text-sm hover:bg-muted transition-colors"
+              >
+                <X size={14} />
+                Abbrechen
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -612,10 +555,9 @@ function PendingSentCard({
 
   return (
     <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border opacity-70">
-      <PlayerAvatar name={p.display_name ?? p.username} avatarUrl={p.avatar_url} size="md" />
+      <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{p.display_name ?? p.username}</p>
-        <p className="text-xs text-muted-foreground">@{p.username}</p>
+        <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
       </div>
       <button
         onClick={handle}
@@ -666,288 +608,6 @@ export function PlayerAvatar({
         >
           {initial}
         </div>
-      )}
-    </div>
-  );
-}
-
-// ── Spiele Tab (from discover) ─────────────────────────────────────────────────
-
-function SpielTab({
-  activeTab,
-  setActiveTab,
-  userGames,
-  playCountMap,
-}: {
-  activeTab: SpielSubTab;
-  setActiveTab: (t: SpielSubTab) => void;
-  userGames: LibraryGame[];
-  playCountMap: Record<string, number>;
-}) {
-  return (
-    <div className="flex flex-col">
-      <div className="flex gap-1 px-4 pt-3 pb-2">
-        {([
-          { key: "ungespielt" as SpielSubTab, label: "Ungespielt" },
-          { key: "heute" as SpielSubTab, label: "Was heute spielen?" },
-        ] as const).map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setActiveTab(key)}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
-              activeTab === key
-                ? "bg-amber-500 text-white"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === "ungespielt" && <UngespieltTab userGames={userGames} playCountMap={playCountMap} />}
-      {activeTab === "heute" && <HeuteTab userGames={userGames} playCountMap={playCountMap} />}
-    </div>
-  );
-}
-
-// ── Ungespielt ─────────────────────────────────────────────────────────────────
-
-function UngespieltTab({
-  userGames,
-  playCountMap,
-}: {
-  userGames: LibraryGame[];
-  playCountMap: Record<string, number>;
-}) {
-  const unplayed = userGames
-    .filter((ug) => ug.status === "owned" && !playCountMap[ug.game_id] && ug.game)
-    .sort((a, b) => (b.personal_rating ?? b.game?.rating_avg ?? 0) - (a.personal_rating ?? a.game?.rating_avg ?? 0));
-
-  if (unplayed.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-        <div className="text-5xl mb-4">🎉</div>
-        <h3 className="font-display text-xl font-semibold mb-2">Alles gespielt!</h3>
-        <p className="text-muted-foreground text-sm">Du hast alle deine Spiele mindestens einmal gespielt. Respekt!</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-4 pb-8">
-      <p className="text-xs text-muted-foreground mb-3 font-medium">
-        {unplayed.length} {unplayed.length === 1 ? "Spiel" : "Spiele"} noch nie gespielt · sortiert nach Bewertung
-      </p>
-      <div className="flex flex-col gap-2">
-        {unplayed.map((ug) => {
-          const g = ug.game!;
-          return (
-            <Link
-              key={ug.game_id}
-              href={`/games/${g.id}`}
-              className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card hover:shadow-card-hover transition-all active:scale-[0.99]"
-            >
-              <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                {g.thumbnail_url ? (
-                  <Image src={g.thumbnail_url} alt={g.name} fill className="object-cover" sizes="56px" loading="lazy" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-amber-100">
-                    <span className="text-amber-600 font-bold text-xl">{g.name[0]}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
-                {g.year_published && <p className="text-xs text-muted-foreground">{g.year_published}</p>}
-                <div className="flex items-center gap-3 mt-1">
-                  {(g.min_players || g.max_players) && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Users size={10} /> {formatPlayerCount(g.min_players, g.max_players)}
-                    </span>
-                  )}
-                  {(g.min_playtime || g.max_playtime) && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock size={10} /> {formatPlaytime(g.min_playtime, g.max_playtime)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                {ug.personal_rating != null ? (
-                  <span className="flex items-center gap-0.5 text-xs font-bold text-amber-500">
-                    <Star size={10} fill="currentColor" />{ug.personal_rating}
-                  </span>
-                ) : g.rating_avg != null ? (
-                  <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                    <Star size={9} strokeWidth={1.5} />{g.rating_avg.toFixed(1)}
-                  </span>
-                ) : null}
-                <ChevronRight size={14} className="text-muted-foreground" />
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Was heute spielen? ─────────────────────────────────────────────────────────
-
-function HeuteTab({
-  userGames,
-  playCountMap,
-}: {
-  userGames: LibraryGame[];
-  playCountMap: Record<string, number>;
-}) {
-  const [players, setPlayers] = useState(3);
-  const [time, setTime] = useState(90);
-  const [suggestions, setSuggestions] = useState<LibraryGame[] | null>(null);
-
-  const ownedGames = userGames.filter((ug) => ug.status === "owned" && ug.game);
-
-  function findGames() {
-    const matches = ownedGames.filter((ug) => {
-      const g = ug.game!;
-      return (
-        (g.min_players == null || players >= g.min_players) &&
-        (g.max_players == null || players <= g.max_players) &&
-        (g.min_playtime == null || g.min_playtime <= time)
-      );
-    });
-
-    setSuggestions(
-      matches
-        .sort((a, b) => {
-          const rA = a.personal_rating ?? a.game?.rating_avg ?? 0;
-          const rB = b.personal_rating ?? b.game?.rating_avg ?? 0;
-          if (rB !== rA) return rB - rA;
-          return (playCountMap[b.game_id] ?? 0) - (playCountMap[a.game_id] ?? 0);
-        })
-        .slice(0, 8)
-    );
-  }
-
-  return (
-    <div className="px-4 pb-8">
-      <div className="bg-card border border-border rounded-2xl p-4 mb-4">
-        <div className="flex flex-col gap-4">
-          <div>
-            <label className="text-sm font-medium flex items-center gap-1.5 mb-2">
-              <Users size={14} className="text-amber-500" /> Spieleranzahl
-            </label>
-            <div className="flex gap-1.5 flex-wrap">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => { setPlayers(n); setSuggestions(null); }}
-                  className={cn(
-                    "w-9 h-9 rounded-xl text-sm font-semibold transition-all",
-                    players === n ? "bg-amber-500 text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
-                  )}
-                  aria-pressed={players === n}
-                >
-                  {n === 8 ? "8+" : n}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium flex items-center gap-1.5">
-                <Clock size={14} className="text-amber-500" /> Max. Zeit
-              </label>
-              <span className="text-sm font-bold text-amber-600 w-16 text-right">
-                {time < 60 ? `${time} Min` : `${Math.floor(time / 60)}h${time % 60 > 0 ? ` ${time % 60}m` : ""}`}
-              </span>
-            </div>
-            <input
-              type="range" min={15} max={240} step={15} value={time}
-              onChange={(e) => { setTime(Number(e.target.value)); setSuggestions(null); }}
-              className="w-full accent-amber-500"
-            />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-              <span>15 Min</span><span>4h</span>
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={findGames}
-          className="w-full mt-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
-        >
-          <Dices size={16} /> Spiele finden
-        </button>
-      </div>
-
-      {suggestions !== null && (
-        suggestions.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-muted-foreground text-sm">Kein passendes Spiel gefunden.</p>
-            <p className="text-xs text-muted-foreground mt-1">Versuch mehr Spieler oder mehr Zeit.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-xs text-muted-foreground mb-3 font-medium">
-              {suggestions.length} passende Spiele für {players} Spieler · max. {time} Min.
-            </p>
-            <div className="flex flex-col gap-2">
-              {suggestions.map((ug) => {
-                const g = ug.game!;
-                return (
-                  <Link
-                    key={ug.game_id}
-                    href={`/games/${g.id}`}
-                    className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card active:scale-[0.99] transition-all"
-                  >
-                    <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                      {g.thumbnail_url ? (
-                        <Image src={g.thumbnail_url} alt={g.name} fill className="object-cover" sizes="56px" loading="lazy" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-amber-100">
-                          <span className="text-amber-600 font-bold text-xl">{g.name[0]}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        {(g.min_players || g.max_players) && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Users size={10} /> {formatPlayerCount(g.min_players, g.max_players)}
-                          </span>
-                        )}
-                        {(g.min_playtime || g.max_playtime) && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock size={10} /> {formatPlaytime(g.min_playtime, g.max_playtime)}
-                          </span>
-                        )}
-                      </div>
-                      {playCountMap[ug.game_id] > 0 && (
-                        <p className="text-[10px] text-amber-600 font-medium mt-0.5">{playCountMap[ug.game_id]}× gespielt</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      {ug.personal_rating != null ? (
-                        <span className="flex items-center gap-0.5 text-xs font-bold text-amber-500">
-                          <Star size={10} fill="currentColor" />{ug.personal_rating}
-                        </span>
-                      ) : g.rating_avg != null ? (
-                        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                          <Star size={9} strokeWidth={1.5} />{g.rating_avg.toFixed(1)}
-                        </span>
-                      ) : null}
-                      <ChevronRight size={14} className="text-muted-foreground" />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </>
-        )
       )}
     </div>
   );
