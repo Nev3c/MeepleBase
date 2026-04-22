@@ -77,7 +77,6 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
         const real = await res.json() as Message;
         setMessages((prev) => prev.map((m) => m.id === optimistic.id ? real : m));
       } else {
-        // Revert optimistic on error
         setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
         setDraft(text);
       }
@@ -91,7 +90,6 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Send on Enter (without shift)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -111,32 +109,33 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
   }
 
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
+    // Fixed height = viewport minus bottom nav — prevents outer page scroll
+    <div className="flex flex-col h-[calc(100dvh-72px)] bg-background">
+
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-12 pb-3 flex items-center gap-3">
+      <div className="flex-shrink-0 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-12 pb-3 flex items-center gap-3">
         <button onClick={() => router.back()} className="p-2 -ml-2 rounded-xl hover:bg-muted transition-colors">
           <ArrowLeft size={20} />
         </button>
         <PlayerAvatar
-          name={otherUser.display_name ?? otherUser.username}
+          name={otherUser.username}
           avatarUrl={otherUser.avatar_url}
           size="sm"
         />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-foreground leading-tight truncate">
-            {otherUser.display_name ?? otherUser.username}
+            {otherUser.username}
           </p>
-          <p className="text-xs text-muted-foreground">@{otherUser.username}</p>
         </div>
       </div>
 
-      {/* Messages area */}
+      {/* Messages area — constrained height, scrollable */}
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-2">
         <div className="flex flex-col gap-1 max-w-2xl mx-auto w-full">
           {messages.length === 0 && (
             <div className="text-center py-12">
               <p className="text-sm text-muted-foreground">
-                Starte das Gespräch mit {otherUser.display_name ?? otherUser.username}!
+                Starte das Gespräch mit {otherUser.username}!
               </p>
             </div>
           )}
@@ -190,8 +189,8 @@ export function ThreadClient({ currentUserId, otherUser, initialMessages }: Prop
         </div>
       </div>
 
-      {/* Compose input — fixed to bottom above bottom nav */}
-      <div className="sticky bottom-0 bg-background border-t border-border px-4 py-3">
+      {/* Compose input */}
+      <div className="flex-shrink-0 bg-background border-t border-border px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-end gap-2">
           <textarea
             ref={inputRef}

@@ -78,7 +78,7 @@ export function MessagesClient({ conversations }: Props) {
             >
               <div className="relative flex-shrink-0">
                 <PlayerAvatar
-                  name={conv.other_display_name ?? conv.other_username}
+                  name={conv.other_username}
                   avatarUrl={conv.other_avatar_url}
                   size="md"
                 />
@@ -92,7 +92,7 @@ export function MessagesClient({ conversations }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className={cn("text-sm truncate", conv.unread_count > 0 ? "font-semibold text-foreground" : "font-medium text-foreground")}>
-                    {conv.other_display_name ?? conv.other_username}
+                    {conv.other_username}
                   </p>
                   <p className="text-[11px] text-muted-foreground flex-shrink-0">
                     {formatTime(conv.last_message_at)}
