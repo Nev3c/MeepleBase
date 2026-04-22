@@ -6,12 +6,14 @@ import Link from "next/link";
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
   Users, MessageSquare, Mail, MoreHorizontal,
-  MapPin, LocateFixed,
+  MapPin, LocateFixed, ArrowDownAZ, Ruler,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FriendProfile } from "@/types";
 
 type NearbyStatus = "idle" | "locating" | "loading" | "done" | "denied" | "error";
+type SortMode = "az" | "entfernung";
+type PlayersTab = "freunde" | "suche";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -41,10 +43,12 @@ export function PlayersClient({
   pendingSent: initialPendingSent,
   unreadCount,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<PlayersTab>("freunde");
   const [friends, setFriends] = useState(initialFriends);
   const [pendingReceived, setPendingReceived] = useState(initialPendingReceived);
   const [pendingSent, setPendingSent] = useState(initialPendingSent);
 
+  // Search state — kept here so it persists across tab switches
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchPlayer[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -54,9 +58,17 @@ export function PlayersClient({
   const [nearbyResults, setNearbyResults] = useState<SearchPlayer[] | null>(null);
   const [nearbyRadius, setNearbyRadius] = useState(50);
 
+  const [sortMode, setSortMode] = useState<SortMode>("az");
+
   function handleSearchInput(val: string) {
     setSearchQuery(val);
     if (searchRef.current) clearTimeout(searchRef.current);
+
+    // If typing, clear nearby results
+    if (val.trim().length >= 2) {
+      setNearbyStatus("idle");
+      setNearbyResults(null);
+    }
 
     if (val.trim().length < 2) {
       setSearchResults(null);
@@ -82,6 +94,9 @@ export function PlayersClient({
       setNearbyStatus("error");
       return;
     }
+    // Clear text search when doing nearby
+    setSearchQuery("");
+    setSearchResults(null);
     setNearbyStatus("locating");
     setNearbyResults(null);
     navigator.geolocation.getCurrentPosition(
@@ -95,6 +110,7 @@ export function PlayersClient({
           const data = await res.json() as { players: SearchPlayer[] };
           setNearbyResults(data.players ?? []);
           setNearbyStatus("done");
+          setSortMode("entfernung"); // default to distance sort for nearby
         } catch {
           setNearbyStatus("error");
         }
@@ -104,9 +120,12 @@ export function PlayersClient({
     );
   }
 
-  function clearNearby() {
+  function clearSearch() {
+    setSearchQuery("");
+    setSearchResults(null);
     setNearbyStatus("idle");
     setNearbyResults(null);
+    setSortMode("az");
   }
 
   async function sendRequest(player: SearchPlayer) {
@@ -117,13 +136,12 @@ export function PlayersClient({
     });
     if (res.ok) {
       const data = await res.json() as { id: string };
-      setSearchResults((prev) =>
-        prev?.map((p) =>
-          p.id === player.id
-            ? { ...p, friendship: { id: data.id, status: "pending", is_requester: true } }
-            : p
-        ) ?? null
-      );
+      const updateFriendship = (p: SearchPlayer) =>
+        p.id === player.id
+          ? { ...p, friendship: { id: data.id, status: "pending", is_requester: true } }
+          : p;
+      setSearchResults((prev) => prev?.map(updateFriendship) ?? null);
+      setNearbyResults((prev) => prev?.map(updateFriendship) ?? null);
       setPendingSent((prev) => [
         {
           friendship_id: data.id,
@@ -144,9 +162,9 @@ export function PlayersClient({
     const res = await fetch(`/api/friendships/${friendshipId}`, { method: "DELETE" });
     if (res.ok) {
       setPendingSent((prev) => prev.filter((f) => f.friendship_id !== friendshipId));
-      setSearchResults((prev) =>
-        prev?.map((p) => p.id === playerId ? { ...p, friendship: null } : p) ?? null
-      );
+      const clearFn = (p: SearchPlayer) => p.id === playerId ? { ...p, friendship: null } : p;
+      setSearchResults((prev) => prev?.map(clearFn) ?? null);
+      setNearbyResults((prev) => prev?.map(clearFn) ?? null);
     }
   }
 
@@ -166,324 +184,464 @@ export function PlayersClient({
   }
 
   async function removeFriend(friendshipId: string) {
+    const removed = friends.find((f) => f.friendship_id === friendshipId);
     const res = await fetch(`/api/friendships/${friendshipId}`, { method: "DELETE" });
     if (res.ok) {
       setFriends((prev) => prev.filter((f) => f.friendship_id !== friendshipId));
+      // Critical: also clear friendship from search/nearby results so user can re-add
+      if (removed) {
+        const userId = removed.profile.id;
+        const clearFn = (p: SearchPlayer) => p.id === userId ? { ...p, friendship: null } : p;
+        setSearchResults((prev) => prev?.map(clearFn) ?? null);
+        setNearbyResults((prev) => prev?.map(clearFn) ?? null);
+      }
     }
   }
 
   const totalPending = pendingReceived.length;
-  const showSearch = searchQuery.trim().length >= 2;
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)]">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-3">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-2xl font-semibold text-foreground leading-tight">Spieler</h1>
-            {totalPending > 0 && (
-              <p className="text-xs text-amber-600 font-medium mt-0.5">
-                {totalPending} offene {totalPending === 1 ? "Anfrage" : "Anfragen"}
-              </p>
-            )}
+      {/* Sticky header with tab bar */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-0">
+        <div className="max-w-2xl mx-auto">
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h1 className="font-display text-2xl font-semibold text-foreground leading-tight">
+                Spieler
+              </h1>
+              {totalPending > 0 && activeTab === "freunde" && (
+                <p className="text-xs text-amber-600 font-medium mt-0.5">
+                  {totalPending} offene {totalPending === 1 ? "Anfrage" : "Anfragen"}
+                </p>
+              )}
+            </div>
+            <Link
+              href="/players/messages"
+              className="relative p-2.5 rounded-xl hover:bg-muted transition-colors"
+              aria-label="Nachrichten"
+            >
+              <Mail size={20} className="text-muted-foreground" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </Link>
           </div>
-          <Link
-            href="/players/messages"
-            className="relative p-2.5 rounded-xl hover:bg-muted transition-colors"
-            aria-label="Nachrichten"
-          >
-            <Mail size={20} className="text-muted-foreground" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </Link>
+
+          {/* Tab switcher */}
+          <div className="flex gap-1 p-1 bg-muted/70 rounded-xl mb-0">
+            <TabButton
+              active={activeTab === "freunde"}
+              onClick={() => setActiveTab("freunde")}
+              badge={totalPending > 0 ? totalPending : undefined}
+            >
+              Freunde
+            </TabButton>
+            <TabButton
+              active={activeTab === "suche"}
+              onClick={() => setActiveTab("suche")}
+            >
+              Suche
+            </TabButton>
+          </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 max-w-2xl mx-auto w-full">
-        <SpielerTab
-          friends={friends}
-          pendingReceived={pendingReceived}
-          pendingSent={pendingSent}
-          searchQuery={searchQuery}
-          searchResults={searchResults}
-          searching={searching}
-          showSearch={showSearch}
-          onSearchInput={handleSearchInput}
-          onSendRequest={sendRequest}
-          onCancelRequest={cancelRequest}
-          onRespondToRequest={respondToRequest}
-          onRemoveFriend={removeFriend}
-          nearbyStatus={nearbyStatus}
-          nearbyResults={nearbyResults}
-          nearbyRadius={nearbyRadius}
-          onNearbySearch={handleNearbySearch}
-          onNearbyRadiusChange={setNearbyRadius}
-          onClearNearby={clearNearby}
-        />
+        {activeTab === "freunde" ? (
+          <FreundeTab
+            friends={friends}
+            pendingReceived={pendingReceived}
+            pendingSent={pendingSent}
+            onRespondToRequest={respondToRequest}
+            onRemoveFriend={removeFriend}
+            onCancelRequest={cancelRequest}
+          />
+        ) : (
+          <SucheTab
+            searchQuery={searchQuery}
+            searchResults={searchResults}
+            searching={searching}
+            nearbyStatus={nearbyStatus}
+            nearbyResults={nearbyResults}
+            nearbyRadius={nearbyRadius}
+            sortMode={sortMode}
+            onSearchInput={handleSearchInput}
+            onNearbySearch={handleNearbySearch}
+            onNearbyRadiusChange={setNearbyRadius}
+            onClearSearch={clearSearch}
+            onSortChange={setSortMode}
+            onSendRequest={sendRequest}
+            onCancelRequest={cancelRequest}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-// ── Spieler Tab ────────────────────────────────────────────────────────────────
+// ── Tab Button ────────────────────────────────────────────────────────────────
 
-function SpielerTab({
+function TabButton({
+  active,
+  onClick,
+  children,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  badge?: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+      {badge !== undefined && (
+        <span className={cn(
+          "text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center",
+          active ? "bg-amber-500 text-white" : "bg-amber-500/20 text-amber-600"
+        )}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ── Freunde Tab ───────────────────────────────────────────────────────────────
+
+function FreundeTab({
   friends,
   pendingReceived,
   pendingSent,
-  searchQuery,
-  searchResults,
-  searching,
-  showSearch,
-  onSearchInput,
-  onSendRequest,
-  onCancelRequest,
   onRespondToRequest,
   onRemoveFriend,
-  nearbyStatus,
-  nearbyResults,
-  nearbyRadius,
-  onNearbySearch,
-  onNearbyRadiusChange,
-  onClearNearby,
+  onCancelRequest,
 }: {
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
+  onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
+  onRemoveFriend: (fId: string) => Promise<void>;
+  onCancelRequest: (fId: string, pId: string) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col px-4 pt-4 pb-8 gap-4">
+      {/* Incoming requests */}
+      {pendingReceived.length > 0 && (
+        <section>
+          <SectionLabel>Anfragen ({pendingReceived.length})</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {pendingReceived.map((fp) => (
+              <PendingRequestCard key={fp.friendship_id} fp={fp} onRespond={onRespondToRequest} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Friends */}
+      <section>
+        {friends.length > 0 && (
+          <SectionLabel>Freunde ({friends.length})</SectionLabel>
+        )}
+
+        {friends.length === 0 && pendingReceived.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <Users size={28} className="text-muted-foreground" />
+            </div>
+            <h3 className="font-display text-lg font-semibold text-foreground mb-2">
+              Noch keine Freunde
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+              Wechsle zum Tab &quot;Suche&quot; um andere Spieler zu finden.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {friends.map((fp) => (
+              <FriendCard key={fp.friendship_id} fp={fp} onRemove={onRemoveFriend} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Sent requests */}
+      {pendingSent.length > 0 && (
+        <section>
+          <SectionLabel>Gesendete Anfragen</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {pendingSent.map((fp) => (
+              <PendingSentCard key={fp.friendship_id} fp={fp} onCancel={onCancelRequest} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Suche Tab ─────────────────────────────────────────────────────────────────
+
+function SucheTab({
+  searchQuery,
+  searchResults,
+  searching,
+  nearbyStatus,
+  nearbyResults,
+  nearbyRadius,
+  sortMode,
+  onSearchInput,
+  onNearbySearch,
+  onNearbyRadiusChange,
+  onClearSearch,
+  onSortChange,
+  onSendRequest,
+  onCancelRequest,
+}: {
   searchQuery: string;
   searchResults: SearchPlayer[] | null;
   searching: boolean;
-  showSearch: boolean;
-  onSearchInput: (v: string) => void;
-  onSendRequest: (p: SearchPlayer) => Promise<void>;
-  onCancelRequest: (fId: string, pId: string) => Promise<void>;
-  onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
-  onRemoveFriend: (fId: string) => Promise<void>;
   nearbyStatus: NearbyStatus;
   nearbyResults: SearchPlayer[] | null;
   nearbyRadius: number;
+  sortMode: SortMode;
+  onSearchInput: (v: string) => void;
   onNearbySearch: (radius?: number) => void;
   onNearbyRadiusChange: (r: number) => void;
-  onClearNearby: () => void;
+  onClearSearch: () => void;
+  onSortChange: (mode: SortMode) => void;
+  onSendRequest: (p: SearchPlayer) => Promise<void>;
+  onCancelRequest: (fId: string, pId: string) => Promise<void>;
 }) {
-  const showNearby = nearbyStatus !== "idle";
+  // Determine which results are active and merge
+  const isNearby = nearbyStatus === "done" && nearbyResults !== null;
+  const activeResults: SearchPlayer[] = searchResults ?? (isNearby ? nearbyResults! : []);
+  const hasDistances = activeResults.some((p) => p.distance_km !== undefined);
+  const hasAnyResults = activeResults.length > 0;
+
+  // Sort results
+  const sortedResults = [...activeResults].sort((a, b) => {
+    if (sortMode === "entfernung" && hasDistances) {
+      return (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity);
+    }
+    return a.username.localeCompare(b.username, "de", { sensitivity: "base" });
+  });
+
+  const isLoading = searching || nearbyStatus === "locating" || nearbyStatus === "loading";
+  const showEmpty =
+    !isLoading &&
+    ((searchResults !== null && searchResults.length === 0) ||
+      (nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length === 0));
 
   return (
-    <div className="flex flex-col px-4 pb-8">
-      {/* Search input */}
-      <div className="pt-4 pb-2">
-        <div className="relative">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              onSearchInput(e.target.value);
-              if (showNearby) onClearNearby();
-            }}
-            placeholder="Spieler suchen…"
-            className="w-full h-11 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all min-w-0"
-          />
-          {searchQuery.length > 0 && (
-            <button
-              onClick={() => onSearchInput("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
-              aria-label="Suche löschen"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
+    <div className="flex flex-col px-4 pt-4 pb-8 gap-3">
+      {/* Text search input */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => onSearchInput(e.target.value)}
+          placeholder="Spielername eingeben…"
+          className="w-full h-11 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all min-w-0"
+        />
+        {(searchQuery.length > 0 || isNearby) && (
+          <button
+            onClick={onClearSearch}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+            aria-label="Suche zurücksetzen"
+          >
+            <X size={12} />
+          </button>
+        )}
       </div>
 
-      {/* Nearby search controls */}
-      {!showSearch && (
-        <div className="flex items-center gap-2 pb-4">
-          <div className="flex gap-1.5">
-            {[25, 50, 100].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => {
-                  onNearbyRadiusChange(r);
-                  onNearbySearch(r);
-                }}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                  nearbyStatus !== "idle" && nearbyRadius === r
-                    ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                    : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-foreground"
-                )}
-              >
-                {r} km
-              </button>
-            ))}
-          </div>
-          {showNearby ? (
+      {/* Nearby section */}
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-muted-foreground font-medium mr-1">Umkreis:</p>
+        <div className="flex gap-1.5">
+          {[25, 50, 100].map((r) => (
             <button
-              onClick={onClearNearby}
-              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              key={r}
+              type="button"
+              onClick={() => {
+                onNearbyRadiusChange(r);
+                onNearbySearch(r);
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+                isNearby && nearbyRadius === r
+                  ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                  : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-foreground"
+              )}
             >
-              <X size={11} />
-              Schließen
+              {r} km
             </button>
-          ) : (
-            <button
-              onClick={() => onNearbySearch()}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card border border-border text-xs font-medium text-foreground hover:border-amber-400 hover:text-amber-600 transition-colors"
-            >
-              <LocateFixed size={12} />
-              In meiner Nähe
-            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => onNearbySearch()}
+          disabled={nearbyStatus === "locating" || nearbyStatus === "loading"}
+          className={cn(
+            "ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
+            isNearby
+              ? "bg-amber-50 border-amber-300 text-amber-700"
+              : "bg-card border-border text-foreground hover:border-amber-400 hover:text-amber-600"
           )}
+        >
+          <LocateFixed size={12} />
+          {isNearby ? "Aktualisieren" : "In meiner Nähe"}
+        </button>
+      </div>
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex items-center gap-2 py-1 px-0.5">
+          <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            {nearbyStatus === "locating"
+              ? "Standort wird ermittelt…"
+              : nearbyStatus === "loading"
+              ? "Spieler werden gesucht…"
+              : "Suche…"}
+          </p>
         </div>
       )}
 
-      {/* Nearby results */}
-      {showNearby && !showSearch && (
-        <div className="flex flex-col gap-2 mb-5">
-          {(nearbyStatus === "locating" || nearbyStatus === "loading") && (
-            <div className="flex items-center gap-2 py-2 px-1">
-              <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
-              <p className="text-xs text-muted-foreground">
-                {nearbyStatus === "locating" ? "Standort wird ermittelt…" : "Spieler werden gesucht…"}
-              </p>
-            </div>
-          )}
-          {nearbyStatus === "denied" && (
-            <div className="py-6 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
-              <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium text-foreground">Standortzugriff verweigert</p>
-              <p className="text-xs text-muted-foreground mt-1">Bitte in den Browser-Einstellungen erlauben.</p>
-            </div>
-          )}
-          {nearbyStatus === "error" && (
-            <div className="py-4 px-1">
-              <p className="text-sm text-red-600">Fehler beim Abrufen des Standorts. Bitte erneut versuchen.</p>
-            </div>
-          )}
-          {nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length === 0 && (
-            <div className="py-8 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
-              <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium text-foreground">Keine Spieler in der Nähe</p>
-              <p className="text-xs text-muted-foreground mt-1 px-4">
-                Im Umkreis von {nearbyRadius} km noch niemand gefunden. Versuch einen größeren Radius.
-              </p>
-            </div>
-          )}
-          {nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length > 0 && (
+      {/* Error / denied states */}
+      {nearbyStatus === "denied" && (
+        <div className="py-6 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+          <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm font-medium text-foreground">Standortzugriff verweigert</p>
+          <p className="text-xs text-muted-foreground mt-1">Bitte in den Browser-Einstellungen erlauben.</p>
+        </div>
+      )}
+      {nearbyStatus === "error" && (
+        <p className="text-sm text-red-600 px-0.5">Standort konnte nicht ermittelt werden.</p>
+      )}
+
+      {/* Empty state */}
+      {showEmpty && (
+        <div className="py-10 text-center">
+          {isNearby ? (
             <>
-              <p className="text-xs text-muted-foreground font-medium px-0.5 mb-1">
-                {nearbyResults.length} {nearbyResults.length === 1 ? "Spieler" : "Spieler"} im Umkreis von {nearbyRadius} km
+              <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium text-foreground mb-1">Keine Spieler in der Nähe</p>
+              <p className="text-xs text-muted-foreground">
+                Im Umkreis von {nearbyRadius} km noch niemand gefunden.
               </p>
-              {nearbyResults.map((player) => (
-                <SearchResultCard
-                  key={player.id}
-                  player={player}
-                  onSendRequest={onSendRequest}
-                  onCancelRequest={onCancelRequest}
-                  showDistance
-                />
-              ))}
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-foreground mb-1">Kein Spieler gefunden</p>
+              <p className="text-xs text-muted-foreground">Versuche einen anderen Nutzernamen.</p>
             </>
           )}
         </div>
       )}
 
-      {/* Text search results */}
-      {showSearch ? (
-        <div className="flex flex-col gap-2">
-          {searching && (
-            <div className="flex items-center gap-2 py-2 px-1">
-              <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
-              <p className="text-xs text-muted-foreground">Suche…</p>
-            </div>
-          )}
-          {!searching && searchResults !== null && searchResults.length === 0 && (
-            <div className="py-10 text-center">
-              <p className="text-sm font-medium text-foreground mb-1">Kein Spieler gefunden</p>
-              <p className="text-xs text-muted-foreground">Versuche einen anderen Nutzernamen.</p>
-            </div>
-          )}
-          {(searchResults ?? []).map((player) => (
-            <SearchResultCard
-              key={player.id}
-              player={player}
-              onSendRequest={onSendRequest}
-              onCancelRequest={onCancelRequest}
-            />
-          ))}
-        </div>
-      ) : (
+      {/* Results with sort bar */}
+      {hasAnyResults && (
         <>
-          {/* Pending incoming requests */}
-          {pendingReceived.length > 0 && (
-            <section className="mb-5">
-              <SectionLabel>Anfragen ({pendingReceived.length})</SectionLabel>
-              <div className="flex flex-col gap-2">
-                {pendingReceived.map((fp) => (
-                  <PendingRequestCard
-                    key={fp.friendship_id}
-                    fp={fp}
-                    onRespond={onRespondToRequest}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+          {/* Sort bar */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground font-medium">
+              {sortedResults.length} {sortedResults.length === 1 ? "Spieler" : "Spieler"}
+              {isNearby && ` im Umkreis von ${nearbyRadius} km`}
+            </p>
+            <div className="flex gap-1 p-0.5 bg-muted/60 rounded-lg">
+              <SortButton
+                active={sortMode === "az"}
+                onClick={() => onSortChange("az")}
+                icon={<ArrowDownAZ size={12} />}
+                label="A–Z"
+              />
+              <SortButton
+                active={sortMode === "entfernung"}
+                disabled={!hasDistances}
+                onClick={() => hasDistances && onSortChange("entfernung")}
+                icon={<Ruler size={12} />}
+                label="Entfernung"
+              />
+            </div>
+          </div>
 
-          {/* Friends list */}
-          <section>
-            {friends.length > 0 && (
-              <SectionLabel>Freunde ({friends.length})</SectionLabel>
-            )}
-
-            {friends.length === 0 && pendingReceived.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                  <Users size={28} className="text-muted-foreground" />
-                </div>
-                <h3 className="font-display text-lg font-semibold text-foreground mb-2">
-                  Noch keine Freunde
-                </h3>
-                <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-                  Suche nach anderen Spielern und schick ihnen eine Freundschaftsanfrage.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {friends.map((fp) => (
-                  <FriendCard
-                    key={fp.friendship_id}
-                    fp={fp}
-                    onRemove={onRemoveFriend}
-                  />
-                ))}
-                {pendingSent.length > 0 && (
-                  <>
-                    <div className="mt-3 mb-1">
-                      <SectionLabel>Gesendete Anfragen</SectionLabel>
-                    </div>
-                    {pendingSent.map((fp) => (
-                      <PendingSentCard
-                        key={fp.friendship_id}
-                        fp={fp}
-                        onCancel={onCancelRequest}
-                      />
-                    ))}
-                  </>
-                )}
-              </div>
-            )}
-          </section>
+          {/* Result cards */}
+          <div className="flex flex-col gap-2">
+            {sortedResults.map((player) => (
+              <SearchResultCard
+                key={player.id}
+                player={player}
+                onSendRequest={onSendRequest}
+                onCancelRequest={onCancelRequest}
+                showDistance={isNearby}
+              />
+            ))}
+          </div>
         </>
       )}
+
+      {/* Idle hint — no query entered yet */}
+      {!isLoading && searchResults === null && !isNearby && nearbyStatus !== "denied" && nearbyStatus !== "error" && (
+        <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+            <Search size={24} className="text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground mb-1">Spieler finden</p>
+            <p className="text-xs text-muted-foreground max-w-[220px] leading-relaxed">
+              Suche nach Nutzernamen oder finde Spieler in deiner Nähe.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ── Sort Button ───────────────────────────────────────────────────────────────
+
+function SortButton({
+  active,
+  disabled,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-all",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground",
+        disabled && "opacity-40 cursor-not-allowed"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -617,7 +775,6 @@ function PendingRequestCard({
           onClick={() => handle("accept")}
           disabled={!!loading}
           className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-amber-500 text-white text-xs font-semibold active:bg-amber-600 transition-colors disabled:opacity-50"
-          aria-label="Annehmen"
         >
           <UserCheck size={14} />
           {loading === "accept" ? "…" : "Annehmen"}
@@ -641,7 +798,6 @@ function FriendCard({
   const p = fp.profile;
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!showActions) return;
     function handleClickOutside(e: MouseEvent) {
@@ -662,12 +818,10 @@ function FriendCard({
 
   return (
     <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
-      {/* Avatar → profile */}
       <Link href={`/players/${p.id}`} className="flex-shrink-0">
         <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       </Link>
 
-      {/* Name + location → profile */}
       <Link href={`/players/${p.id}`} className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
         {p.location && (
@@ -675,9 +829,7 @@ function FriendCard({
         )}
       </Link>
 
-      {/* Actions */}
       <div className="flex items-center gap-1 flex-shrink-0">
-        {/* Message */}
         <Link
           href={`/players/messages/${p.id}`}
           className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/70 active:bg-muted/70 transition-colors"
@@ -686,7 +838,6 @@ function FriendCard({
           <MessageSquare size={15} />
         </Link>
 
-        {/* Three-dot overflow menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setShowActions((v) => !v)}

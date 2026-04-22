@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
-type LocationStatus = "idle" | "detecting" | "detected" | "error";
+type LocationStatus = "idle" | "detecting" | "geocoding" | "detected" | "not-found" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type TranslatePhase = "idle" | "counting" | "running" | "done" | "error";
 type RefreshPhase   = "idle" | "running" | "done" | "error";
@@ -53,6 +53,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const refreshAbort = useRef(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geocodeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const originalBgg = profile?.bgg_username ?? "";
 
   // BGG-Username live prüfen (nur wenn geändert)
@@ -373,11 +374,37 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                     type="text"
                     value={location}
                     onChange={(e) => {
-                      setLocation(e.target.value);
-                      // Clear coords if user manually edits location text
-                      if (locationStatus === "detected") setLocationStatus("idle");
+                      const val = e.target.value;
+                      setLocation(val);
                       setLocationLat(null);
                       setLocationLng(null);
+
+                      if (geocodeRef.current) clearTimeout(geocodeRef.current);
+
+                      if (val.trim().length < 2) {
+                        setLocationStatus("idle");
+                        return;
+                      }
+
+                      setLocationStatus("geocoding");
+                      geocodeRef.current = setTimeout(async () => {
+                        try {
+                          const res = await fetch(
+                            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val.trim())}&format=json&limit=1`,
+                            { headers: { "User-Agent": "MeepleBase/1.0" } }
+                          );
+                          const data = await res.json() as Array<{ lat: string; lon: string }>;
+                          if (data.length > 0) {
+                            setLocationLat(parseFloat(data[0].lat));
+                            setLocationLng(parseFloat(data[0].lon));
+                            setLocationStatus("detected");
+                          } else {
+                            setLocationStatus("not-found");
+                          }
+                        } catch {
+                          setLocationStatus("idle");
+                        }
+                      }, 800);
                     }}
                     placeholder="z.B. Ulm"
                     className="w-full h-11 pl-9 pr-3.5 rounded-xl border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all min-w-0"
@@ -397,20 +424,25 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                   )}
                 </button>
               </div>
+              {locationStatus === "geocoding" && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin inline-block" />
+                  Koordinaten werden ermittelt…
+                </p>
+              )}
               {locationStatus === "detected" && locationLat !== null && (
                 <p className="text-xs text-green-700 font-medium flex items-center gap-1">
-                  <Check size={12} /> Standort erkannt{location ? ` · ${location}` : ""}
+                  <Check size={12} /> Koordinaten gefunden{location ? ` · ${location}` : ""}
+                </p>
+              )}
+              {locationStatus === "not-found" && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  Ort nicht gefunden — bitte genauer eingeben (z.B. Stadt oder PLZ).
                 </p>
               )}
               {locationStatus === "error" && (
                 <p className="text-xs text-red-600">
                   Standortzugriff verweigert. Bitte in den Browser-Einstellungen erlauben oder Ort manuell eingeben.
-                </p>
-              )}
-              {location && locationLat === null && locationStatus !== "detecting" && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  Nur als Text — ohne GPS kein Nähe-Matching.
-                  <button type="button" onClick={detectLocation} className="underline text-amber-600 ml-0.5">Jetzt erkennen</button>
                 </p>
               )}
             </div>
