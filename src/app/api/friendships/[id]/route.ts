@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 function makeSupabase() {
@@ -45,12 +46,19 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-  const { error } = await supabase
+  // Use admin client to bypass RLS — we verify ownership manually via the .or() filter
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { error, count } = await admin
     .from("friendships")
-    .delete()
+    .delete({ count: "exact" })
     .eq("id", params.id)
     .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (count === 0) return NextResponse.json({ error: "Nicht gefunden oder keine Berechtigung" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

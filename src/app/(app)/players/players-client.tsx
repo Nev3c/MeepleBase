@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
   Users, MessageSquare, Mail, MoreHorizontal,
-  MapPin, LocateFixed, ArrowDownAZ, Ruler,
+  MapPin, LocateFixed, ArrowDownAZ,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FriendProfile } from "@/types";
@@ -64,12 +64,6 @@ export function PlayersClient({
     setSearchQuery(val);
     if (searchRef.current) clearTimeout(searchRef.current);
 
-    // If typing, clear nearby results
-    if (val.trim().length >= 2) {
-      setNearbyStatus("idle");
-      setNearbyResults(null);
-    }
-
     if (val.trim().length < 2) {
       setSearchResults(null);
       return;
@@ -94,9 +88,6 @@ export function PlayersClient({
       setNearbyStatus("error");
       return;
     }
-    // Clear text search when doing nearby
-    setSearchQuery("");
-    setSearchResults(null);
     setNearbyStatus("locating");
     setNearbyResults(null);
     navigator.geolocation.getCurrentPosition(
@@ -110,7 +101,6 @@ export function PlayersClient({
           const data = await res.json() as { players: SearchPlayer[] };
           setNearbyResults(data.players ?? []);
           setNearbyStatus("done");
-          setSortMode("entfernung"); // default to distance sort for nearby
         } catch {
           setNearbyStatus("error");
         }
@@ -120,12 +110,17 @@ export function PlayersClient({
     );
   }
 
+  function handleSortChange(mode: SortMode) {
+    setSortMode(mode);
+    // Switching to Entfernung mode auto-triggers nearby search if not yet done
+    if (mode === "entfernung" && nearbyStatus === "idle") {
+      handleNearbySearch(nearbyRadius);
+    }
+  }
+
   function clearSearch() {
     setSearchQuery("");
     setSearchResults(null);
-    setNearbyStatus("idle");
-    setNearbyResults(null);
-    setSortMode("az");
   }
 
   async function sendRequest(player: SearchPlayer) {
@@ -274,7 +269,7 @@ export function PlayersClient({
             onNearbySearch={handleNearbySearch}
             onNearbyRadiusChange={setNearbyRadius}
             onClearSearch={clearSearch}
-            onSortChange={setSortMode}
+            onSortChange={handleSortChange}
             onSendRequest={sendRequest}
             onCancelRequest={cancelRequest}
           />
@@ -395,6 +390,8 @@ function FreundeTab({
 
 // ── Suche Tab ─────────────────────────────────────────────────────────────────
 
+const RADIUS_OPTIONS = [25, 50, 100] as const;
+
 function SucheTab({
   searchQuery,
   searchResults,
@@ -426,88 +423,144 @@ function SucheTab({
   onSendRequest: (p: SearchPlayer) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
 }) {
-  // Determine which results are active and merge
-  const isNearby = nearbyStatus === "done" && nearbyResults !== null;
-  const activeResults: SearchPlayer[] = searchResults ?? (isNearby ? nearbyResults! : []);
-  const hasDistances = activeResults.some((p) => p.distance_km !== undefined);
-  const hasAnyResults = activeResults.length > 0;
+  const isNearbyMode = sortMode === "entfernung";
+  const [localFilter, setLocalFilter] = useState("");
 
-  // Sort results
-  const sortedResults = [...activeResults].sort((a, b) => {
-    if (sortMode === "entfernung" && hasDistances) {
-      return (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity);
-    }
-    return a.username.localeCompare(b.username, "de", { sensitivity: "base" });
-  });
+  // Determine active result set
+  const rawResults: SearchPlayer[] = isNearbyMode
+    ? (nearbyResults ?? [])
+    : (searchResults ?? []);
+
+  // In Entfernung mode, text input is a client-side filter
+  const visibleResults = isNearbyMode && localFilter.trim().length > 0
+    ? rawResults.filter((p) =>
+        p.username.toLowerCase().includes(localFilter.toLowerCase()) ||
+        (p.display_name ?? "").toLowerCase().includes(localFilter.toLowerCase())
+      )
+    : rawResults;
+
+  // Sort: A-Z mode = API already returns relevance order; Entfernung = sort by distance
+  const sortedResults = isNearbyMode
+    ? [...visibleResults].sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
+    : [...visibleResults].sort((a, b) =>
+        a.username.localeCompare(b.username, "de", { sensitivity: "base" })
+      );
 
   const isLoading = searching || nearbyStatus === "locating" || nearbyStatus === "loading";
+  const nearbyDone = nearbyStatus === "done" && nearbyResults !== null;
+
   const showEmpty =
     !isLoading &&
-    ((searchResults !== null && searchResults.length === 0) ||
-      (nearbyStatus === "done" && nearbyResults !== null && nearbyResults.length === 0));
+    ((isNearbyMode && nearbyDone && rawResults.length === 0) ||
+      (!isNearbyMode && searchResults !== null && searchResults.length === 0));
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-8 gap-3">
-      {/* Text search input */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => onSearchInput(e.target.value)}
-          placeholder="Spielername eingeben…"
-          className="w-full h-11 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all min-w-0"
-        />
-        {(searchQuery.length > 0 || isNearby) && (
-          <button
-            onClick={onClearSearch}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
-            aria-label="Suche zurücksetzen"
-          >
-            <X size={12} />
-          </button>
-        )}
-      </div>
 
-      {/* Nearby section */}
-      <div className="flex items-center gap-2">
-        <p className="text-xs text-muted-foreground font-medium mr-1">Umkreis:</p>
-        <div className="flex gap-1.5">
-          {[25, 50, 100].map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => {
-                onNearbyRadiusChange(r);
-                onNearbySearch(r);
-              }}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                isNearby && nearbyRadius === r
-                  ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                  : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-foreground"
-              )}
-            >
-              {r} km
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => onNearbySearch()}
-          disabled={nearbyStatus === "locating" || nearbyStatus === "loading"}
-          className={cn(
-            "ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors",
-            isNearby
-              ? "bg-amber-50 border-amber-300 text-amber-700"
-              : "bg-card border-border text-foreground hover:border-amber-400 hover:text-amber-600"
-          )}
+      {/* ── Mode switcher ── */}
+      <div className="flex gap-1 p-1 bg-muted/70 rounded-xl">
+        <ModeButton
+          active={!isNearbyMode}
+          icon={<ArrowDownAZ size={13} />}
+          onClick={() => onSortChange("az")}
         >
-          <LocateFixed size={12} />
-          {isNearby ? "Aktualisieren" : "In meiner Nähe"}
-        </button>
+          A–Z
+        </ModeButton>
+        <ModeButton
+          active={isNearbyMode}
+          icon={<LocateFixed size={13} />}
+          onClick={() => onSortChange("entfernung")}
+        >
+          Entfernung
+        </ModeButton>
       </div>
 
-      {/* Loading state */}
+      {/* ── A–Z mode: text search ── */}
+      {!isNearbyMode && (
+        <div className="relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchInput(e.target.value)}
+            placeholder="Spielername eingeben…"
+            className="w-full h-11 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all min-w-0"
+          />
+          {searchQuery.length > 0 && (
+            <button
+              onClick={onClearSearch}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+              aria-label="Suche zurücksetzen"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Entfernung mode: radius chips + optional local filter ── */}
+      {isNearbyMode && (
+        <>
+          {/* Radius chips */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground font-medium mr-0.5">Umkreis:</span>
+            {RADIUS_OPTIONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => {
+                  onNearbyRadiusChange(r);
+                  onNearbySearch(r);
+                }}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+                  nearbyRadius === r && (nearbyDone || isLoading)
+                    ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                    : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-amber-700"
+                )}
+              >
+                {r} km
+              </button>
+            ))}
+            {/* Refresh button */}
+            {nearbyDone && (
+              <button
+                onClick={() => onNearbySearch(nearbyRadius)}
+                className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card"
+                aria-label="Aktualisieren"
+              >
+                <LocateFixed size={11} />
+                Neu
+              </button>
+            )}
+          </div>
+
+          {/* Local filter — only shown when results exist */}
+          {nearbyDone && rawResults.length > 0 && (
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
+              <input
+                type="text"
+                value={localFilter}
+                onChange={(e) => setLocalFilter(e.target.value)}
+                placeholder="Ergebnisse filtern…"
+                className="w-full h-9 pl-8 pr-8 rounded-xl border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all min-w-0"
+              />
+              {localFilter.length > 0 && (
+                <button
+                  onClick={() => setLocalFilter("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-muted text-muted-foreground"
+                  aria-label="Filter löschen"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Loading ── */}
       {isLoading && (
         <div className="flex items-center gap-2 py-1 px-0.5">
           <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
@@ -521,7 +574,7 @@ function SucheTab({
         </div>
       )}
 
-      {/* Error / denied states */}
+      {/* ── Error / denied ── */}
       {nearbyStatus === "denied" && (
         <div className="py-6 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
           <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
@@ -533,10 +586,10 @@ function SucheTab({
         <p className="text-sm text-red-600 px-0.5">Standort konnte nicht ermittelt werden.</p>
       )}
 
-      {/* Empty state */}
+      {/* ── Empty state ── */}
       {showEmpty && (
         <div className="py-10 text-center">
-          {isNearby ? (
+          {isNearbyMode ? (
             <>
               <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground mb-1">Keine Spieler in der Nähe</p>
@@ -553,49 +606,27 @@ function SucheTab({
         </div>
       )}
 
-      {/* Results with sort bar */}
-      {hasAnyResults && (
-        <>
-          {/* Sort bar */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground font-medium">
-              {sortedResults.length} {sortedResults.length === 1 ? "Spieler" : "Spieler"}
-              {isNearby && ` im Umkreis von ${nearbyRadius} km`}
-            </p>
-            <div className="flex gap-1 p-0.5 bg-muted/60 rounded-lg">
-              <SortButton
-                active={sortMode === "az"}
-                onClick={() => onSortChange("az")}
-                icon={<ArrowDownAZ size={12} />}
-                label="A–Z"
-              />
-              <SortButton
-                active={sortMode === "entfernung"}
-                disabled={!hasDistances}
-                onClick={() => hasDistances && onSortChange("entfernung")}
-                icon={<Ruler size={12} />}
-                label="Entfernung"
-              />
-            </div>
-          </div>
-
-          {/* Result cards */}
-          <div className="flex flex-col gap-2">
-            {sortedResults.map((player) => (
-              <SearchResultCard
-                key={player.id}
-                player={player}
-                onSendRequest={onSendRequest}
-                onCancelRequest={onCancelRequest}
-                showDistance={isNearby}
-              />
-            ))}
-          </div>
-        </>
+      {/* ── Results ── */}
+      {sortedResults.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground/70 px-0.5">
+            {sortedResults.length} {sortedResults.length === 1 ? "Spieler" : "Spieler"}
+            {isNearbyMode && ` im Umkreis von ${nearbyRadius} km`}
+          </p>
+          {sortedResults.map((player) => (
+            <SearchResultCard
+              key={player.id}
+              player={player}
+              onSendRequest={onSendRequest}
+              onCancelRequest={onCancelRequest}
+              showDistance={isNearbyMode}
+            />
+          ))}
+        </div>
       )}
 
-      {/* Idle hint — no query entered yet */}
-      {!isLoading && searchResults === null && !isNearby && nearbyStatus !== "denied" && nearbyStatus !== "error" && (
+      {/* ── Idle hint (A-Z mode, no query yet) ── */}
+      {!isNearbyMode && !isLoading && searchResults === null && (
         <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
           <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
             <Search size={24} className="text-muted-foreground" />
@@ -603,7 +634,7 @@ function SucheTab({
           <div>
             <p className="text-sm font-medium text-foreground mb-1">Spieler finden</p>
             <p className="text-xs text-muted-foreground max-w-[220px] leading-relaxed">
-              Suche nach Nutzernamen oder finde Spieler in deiner Nähe.
+              Gib einen Spielernamen ein oder wechsle zu &quot;Entfernung&quot; für die Umkreissuche.
             </p>
           </div>
         </div>
@@ -612,35 +643,31 @@ function SucheTab({
   );
 }
 
-// ── Sort Button ───────────────────────────────────────────────────────────────
+// ── Mode Button (A-Z / Entfernung switcher) ────────────────────────────────────
 
-function SortButton({
+function ModeButton({
   active,
-  disabled,
   onClick,
   icon,
-  label,
+  children,
 }: {
   active: boolean;
-  disabled?: boolean;
   onClick: () => void;
   icon: React.ReactNode;
-  label: string;
+  children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
       className={cn(
-        "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-all",
+        "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all",
         active
           ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-        disabled && "opacity-40 cursor-not-allowed"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}
-      {label}
+      {children}
     </button>
   );
 }

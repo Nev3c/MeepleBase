@@ -94,7 +94,19 @@ export async function POST(req: NextRequest) {
     )
     .maybeSingle();
 
-  if (existing) return NextResponse.json({ error: "Anfrage bereits vorhanden", existing }, { status: 409 });
+  // Active or pending friendship — block re-add
+  if (existing && existing.status !== "declined") {
+    return NextResponse.json({ error: "Anfrage bereits vorhanden", existing }, { status: 409 });
+  }
+
+  // Stale "declined" record — remove it so the fresh INSERT below can succeed
+  if (existing?.status === "declined") {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    await admin.from("friendships").delete().eq("id", existing.id);
+  }
 
   const { data, error } = await supabase
     .from("friendships")
