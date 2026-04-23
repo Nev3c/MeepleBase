@@ -22,8 +22,8 @@ function ScoreTracker() {
   const router = useRouter();
   const nextId = useRef(3);
   const [players, setPlayers] = useState<Player[]>([
-    { id: 1, name: "Spieler 1", score: 0 },
-    { id: 2, name: "Spieler 2", score: 0 },
+    { id: 1, name: "", score: 0 },
+    { id: 2, name: "", score: 0 },
   ]);
   const [activePlayer, setActivePlayer] = useState<number>(1);
   const [history, setHistory] = useState<{ playerId: number; delta: number }[]>([]);
@@ -42,7 +42,7 @@ function ScoreTracker() {
 
   const addPlayer = useCallback(() => {
     const id = nextId.current++;
-    setPlayers((prev) => [...prev, { id, name: `Spieler ${prev.length + 1}`, score: 0 }]);
+    setPlayers((prev) => [...prev, { id, name: "", score: 0 }]);
   }, []);
 
   const removePlayer = useCallback((id: number) => {
@@ -117,7 +117,7 @@ function ScoreTracker() {
               )}
             >
               {isWinner && <Trophy size={12} className={isActive ? "text-amber-400" : "text-amber-500"} />}
-              <span className="max-w-[72px] truncate">{p.name}</span>
+              <span className="max-w-[72px] truncate">{p.name || `Spieler ${p.id}`}</span>
               <span className={cn(
                 "font-display font-bold text-sm ml-0.5 tabular-nums",
                 isActive ? "text-amber-400" : "text-amber-500"
@@ -143,7 +143,7 @@ function ScoreTracker() {
               value={active.name}
               onChange={(e) => updateName(active.id, e.target.value)}
               className="flex-1 min-w-0 text-sm font-semibold bg-transparent focus:outline-none text-foreground border-b border-transparent focus:border-amber-400 transition-colors pb-0.5"
-              placeholder="Name…"
+              placeholder={`Spieler ${active.id}`}
             />
             <div className="flex items-center gap-2">
               <button
@@ -211,7 +211,7 @@ function ScoreTracker() {
                     ? <Trophy size={13} className="text-amber-500 flex-shrink-0" />
                     : <span className="w-[13px] flex-shrink-0" />
                   }
-                  <span className="flex-1 text-sm font-medium text-foreground truncate">{p.name}</span>
+                  <span className="flex-1 text-sm font-medium text-foreground truncate">{p.name || `Spieler ${p.id}`}</span>
                   <span className="font-display text-base font-bold text-amber-500 tabular-nums">{p.score}</span>
                 </button>
               );

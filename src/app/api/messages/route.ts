@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { sendPushToUser } from "@/lib/push";
 
 function makeSupabase() {
   const cookieStore = cookies();
@@ -106,5 +107,31 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Send push to recipient (fire-and-forget, don't block the response)
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+  const { data: sender } = await admin
+    .from("profiles")
+    .select("username, notify_messages")
+    .eq("id", user.id)
+    .single();
+  const { data: recipient } = await admin
+    .from("profiles")
+    .select("notify_messages")
+    .eq("id", to_id)
+    .single();
+
+  // Only send if recipient hasn't disabled message notifications
+  if (recipient?.notify_messages !== false) {
+    sendPushToUser(to_id, {
+      title: `Neue Nachricht von ${sender?.username ?? "jemandem"}`,
+      body: content.trim().length > 80 ? content.trim().slice(0, 80) + "…" : content.trim(),
+      url: `/players/messages/${user.id}`,
+    }).catch(() => { /* ignore push errors */ });
+  }
+
   return NextResponse.json(data, { status: 201 });
 }

@@ -26,6 +26,8 @@ export interface Profile {
   location_lng: number | null;
   is_public: boolean;
   library_visibility: LibraryVisibility;
+  notify_messages: boolean | null;
+  notify_friend_accepted: boolean | null;
   created_at: string;
   updated_at: string;
 }

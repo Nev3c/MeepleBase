@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock, MapPin, Locate } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock, MapPin, Locate, Bell, BellOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile, LibraryVisibility } from "@/types";
@@ -14,6 +14,7 @@ type LocationStatus = "idle" | "detecting" | "geocoding" | "detected" | "not-fou
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type TranslatePhase = "idle" | "counting" | "running" | "done" | "error";
 type RefreshPhase   = "idle" | "running" | "done" | "error";
+type PushPermission = "unsupported" | "default" | "granted" | "denied";
 
 interface SettingsClientProps {
   user: User;
@@ -52,6 +53,13 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const [refreshErrors, setRefreshErrors] = useState(0);
   const refreshAbort = useRef(false);
 
+  // ── Notification state ────────────────────────────────────────────────────
+  const [notifyMessages, setNotifyMessages] = useState<boolean>(profile?.notify_messages !== false);
+  const [notifyFriendAccepted, setNotifyFriendAccepted] = useState<boolean>(profile?.notify_friend_accepted !== false);
+  const [pushPermission, setPushPermission] = useState<PushPermission>("unsupported");
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const geocodeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const originalBgg = profile?.bgg_username ?? "";
@@ -88,6 +96,74 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [bggUsername, originalBgg]);
+
+  // ── Push subscription state check ─────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      setPushPermission("unsupported");
+      return;
+    }
+    setPushPermission(Notification.permission as PushPermission);
+    navigator.serviceWorker.ready.then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      setPushSubscribed(!!sub);
+    }).catch(() => {});
+  }, []);
+
+  async function handleSubscribePush() {
+    if (pushPermission === "unsupported") return;
+    setPushLoading(true);
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission as PushPermission);
+      if (permission !== "granted") return;
+
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "") as unknown as BufferSource,
+      });
+
+      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
+      if (res.ok) setPushSubscribed(true);
+    } catch (e) {
+      console.error("Push subscribe error:", e);
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
+  async function handleUnsubscribePush() {
+    setPushLoading(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        await fetch("/api/push/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint }),
+        });
+      }
+      setPushSubscribed(false);
+    } catch (e) {
+      console.error("Push unsubscribe error:", e);
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
+  async function saveNotifyPref(key: "notify_messages" | "notify_friend_accepted", value: boolean) {
+    const supabase = createClient();
+    await supabase.from("profiles").update({ [key]: value }).eq("id", user.id);
+  }
 
   async function detectLocation() {
     if (!navigator.geolocation) {
@@ -730,6 +806,118 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
           </div>
         </section>
 
+        {/* ── Benachrichtigungen ────────────────────────────── */}
+        <section>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Benachrichtigungen</p>
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-4">
+
+            {/* Push permission / subscribe button */}
+            {pushPermission === "unsupported" ? (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Dein Browser unterstützt leider keine Push-Benachrichtigungen.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-0.5">Push-Benachrichtigungen</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Erhalte Benachrichtigungen direkt auf deinem Gerät – auch wenn die App im Hintergrund läuft.
+                  </p>
+                </div>
+
+                {pushPermission === "denied" ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 leading-relaxed">
+                    Benachrichtigungen sind in deinen Browser-Einstellungen blockiert. Erlaube sie dort, um sie hier aktivieren zu können.
+                  </p>
+                ) : pushSubscribed ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-green-700 font-medium flex items-center gap-1.5">
+                      <Check size={13} /> Aktiv auf diesem Gerät
+                    </span>
+                    <button
+                      onClick={handleUnsubscribePush}
+                      disabled={pushLoading}
+                      className="flex items-center gap-1.5 px-3 h-8 rounded-lg border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:border-red-300 hover:text-red-600 transition-all disabled:opacity-50"
+                    >
+                      {pushLoading ? <SpinnerIcon /> : <BellOff size={13} />}
+                      Deaktivieren
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSubscribePush}
+                    disabled={pushLoading}
+                    className="flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium hover:bg-amber-100 active:bg-amber-200 transition-colors disabled:opacity-50"
+                  >
+                    {pushLoading ? <SpinnerIcon /> : <Bell size={15} />}
+                    {pushPermission === "default" ? "Benachrichtigungen aktivieren" : "Auf diesem Gerät aktivieren"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Notification type toggles */}
+            <div className="flex flex-col gap-0 border-t border-border pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2.5">Benachrichtigen bei…</p>
+
+              {/* Nachrichten toggle */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex-1 min-w-0 pr-4">
+                  <p className="text-sm font-medium text-foreground">Neue Nachricht</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Wenn dir jemand schreibt</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifyMessages}
+                  onClick={async () => {
+                    const next = !notifyMessages;
+                    setNotifyMessages(next);
+                    await saveNotifyPref("notify_messages", next);
+                  }}
+                  className={cn(
+                    "relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2",
+                    notifyMessages ? "bg-amber-500" : "bg-muted"
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                    notifyMessages ? "translate-x-5" : "translate-x-0"
+                  )} />
+                </button>
+              </div>
+
+              <div className="h-px bg-border" />
+
+              {/* Freundschaftsanfrage angenommen toggle */}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="flex-1 min-w-0 pr-4">
+                  <p className="text-sm font-medium text-foreground">Freundschaftsanfrage angenommen</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Wenn jemand deine Anfrage bestätigt</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={notifyFriendAccepted}
+                  onClick={async () => {
+                    const next = !notifyFriendAccepted;
+                    setNotifyFriendAccepted(next);
+                    await saveNotifyPref("notify_friend_accepted", next);
+                  }}
+                  className={cn(
+                    "relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2",
+                    notifyFriendAccepted ? "bg-amber-500" : "bg-muted"
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                    notifyFriendAccepted ? "translate-x-5" : "translate-x-0"
+                  )} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
         {/* ── Privatsphäre ──────────────────────────────────── */}
         <section>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Privatsphäre</p>
@@ -805,6 +993,17 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
       </div>
     </div>
   );
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 function SpinnerIcon() {

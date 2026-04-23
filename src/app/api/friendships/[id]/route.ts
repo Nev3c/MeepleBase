@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { sendPushToUser } from "@/lib/push";
 
 function makeSupabase() {
   const cookieStore = cookies();
@@ -30,13 +31,35 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const newStatus = action === "accept" ? "accepted" : "declined";
 
-  const { error } = await supabase
+  const { data: friendship, error } = await supabase
     .from("friendships")
     .update({ status: newStatus })
     .eq("id", params.id)
-    .eq("addressee_id", user.id); // Only the addressee can accept/decline
+    .eq("addressee_id", user.id) // Only the addressee can accept/decline
+    .select("requester_id")
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Notify the requester when their request is accepted
+  if (action === "accept" && friendship?.requester_id) {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const [{ data: accepter }, { data: requester }] = await Promise.all([
+      admin.from("profiles").select("username").eq("id", user.id).single(),
+      admin.from("profiles").select("notify_friend_accepted").eq("id", friendship.requester_id).single(),
+    ]);
+    if (requester?.notify_friend_accepted !== false) {
+      sendPushToUser(friendship.requester_id, {
+        title: "Freundschaftsanfrage angenommen",
+        body: `${accepter?.username ?? "Jemand"} hat deine Anfrage angenommen.`,
+        url: `/players/${user.id}`,
+      }).catch(() => { /* ignore */ });
+    }
+  }
+
   return NextResponse.json({ ok: true, status: newStatus });
 }
 
