@@ -550,3 +550,33 @@ BGG blockiert alle Anfragen von Vercel/Cloud-IPs mit 401.
 **Supabase Storage — Admin-Client für Uploads:**
 → Für Storage-Admin-Operationen (Upload, Bucket-Verwaltung) IMMER `createClient` aus `@supabase/supabase-js` direkt verwenden, NICHT `createServerClient` aus `@supabase/ssr`.
 → `createServerClient` mit service_role kann bei Storage-Operationen unbehandelte Exceptions werfen statt `{error}` zurückzugeben.
+
+**Friendship DELETE — Admin-Client Pflicht:**
+→ `DELETE /api/friendships/[id]` MUSS den Admin-Client verwenden, nicht den anon SSR-Client.
+→ Hintergrund: RLS-Policy erlaubt DELETE nur für requester/addressee — der anon-Client prüft das korrekt, löscht aber "erfolgreich" (HTTP 200) ohne tatsächliche Rows zu löschen wenn Supabase intern einen Fehler hat. Admin-Client + `{ count: "exact" }` liefert echte Zeilenzählung.
+→ Ownership-Prüfung passiert weiterhin explizit via `.or(requester_id.eq.${user.id},addressee_id.eq.${user.id})` — kein Sicherheitsproblem.
+→ Wenn `count === 0` nach DELETE → 404 zurückgeben (verhindert stilles Scheitern).
+
+**Friendship Re-Add nach "declined":**
+→ PATCH /api/friendships/[id] mit `action: "decline"` setzt Status auf "declined" (löscht nicht).
+→ Damit ein neues Freundschaftsgesuch möglich ist, muss POST /api/friendships einen existierenden "declined"-Record zuerst via Admin-Client löschen, dann frisch inserieren.
+→ Logik: `if (existing && existing.status !== "declined") return 409; if (existing?.status === "declined") await admin.delete(existing.id);`
+
+**Spieler-Suche — Sofortanzeige ohne Eingabe:**
+→ `/api/players/search` gibt bei leerem `q` alle Spieler A-Z zurück (Limit 50) statt early-return [].
+→ `page.tsx` lädt alle Spieler server-seitig (parallel zu Friendships + Messages via `Promise.all`), inkl. Friendship-Status aus dem bereits geholten Friendship-Map.
+→ `PlayersClient` erhält `initialSearchResults: SearchPlayer[]` als Prop und setzt `searchResults` damit initial. Beim Löschen der Suche → Reset auf `initialSearchResults` (nicht `null`).
+
+**SucheTab — Moduswechsler als primäre Navigation:**
+→ A-Z / Entfernung Toggle ist der primäre Moduswechsler (oben, volle Breite), nicht eine Sortierfunktion unter den Ergebnissen.
+→ A-Z-Modus: Text-Suche API-basiert. Entfernung-Modus: GPS auto-triggert beim ersten Wechsel.
+→ Im Entfernung-Modus: kompakte Radius-Chips (25/50/100 km), optional client-seitiger Textfilter wenn Ergebnisse geladen.
+→ Kein separater "In meiner Nähe"-Button mehr — der Moduswechsel erledigt das.
+
+**Projekt-Deployment-Setup (Stand April 2026):**
+→ Lokaler Ordner: `C:\Users\User\Desktop\Claude - Meeple Base\meeplebase`
+→ GitHub: `https://github.com/Nev3c/MeepleBase` (Branch: `main`)
+→ Vercel: Auto-Deploy bei jedem Push auf `main`
+→ Pre-push Hook: TypeScript-Check (`tsc --noEmit`) läuft automatisch vor jedem `git push`
+→ Für Code-Änderungen via Chat: immer `git push` am Ende — Vercel baut dann automatisch
+→ claude.ai Browser/Android: nur für Planung/Diskussion geeignet; Datei-Edits und git-Befehle erfordern Claude Code Desktop
