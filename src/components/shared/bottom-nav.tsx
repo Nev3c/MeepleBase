@@ -36,7 +36,7 @@ export function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
               key={href}
               href={href}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 px-1 min-h-[52px]",
+                "flex flex-col items-center justify-center gap-1 flex-1 py-3 px-1 min-h-[56px]",
                 "transition-colors duration-200 ease-out relative",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 isActive
@@ -53,7 +53,7 @@ export function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
 
               <span className="relative">
                 <Icon
-                  size={20}
+                  size={22}
                   strokeWidth={2}
                   className="transition-colors duration-200"
                 />
@@ -64,7 +64,7 @@ export function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
                 )}
               </span>
 
-              <span className="text-[9px] font-semibold tracking-wide leading-none">
+              <span className="text-[11px] font-semibold tracking-wide leading-none">
                 {label}
               </span>
             </Link>
