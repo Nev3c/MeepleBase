@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock, MapPin, Locate, Bell, BellOff } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, Languages, X, RefreshCw, Globe, Users, Lock, MapPin, Locate, Bell, BellOff, Camera, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import type { Profile, LibraryVisibility } from "@/types";
@@ -54,6 +54,73 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const refreshAbort = useRef(false);
 
   // ── Notification state ────────────────────────────────────────────────────
+  // ── Avatar upload state ────────────────────────────────────────────────────
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  const currentAvatar = avatarPreview ?? profile?.avatar_url ?? (user.user_metadata?.avatar_url as string | undefined) ?? null;
+  const displayInitial = (profile?.display_name ?? profile?.username ?? user.email ?? "?")[0].toUpperCase();
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarError(null);
+
+    // Client-side preview + compression via canvas
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          setAvatarPreview(URL.createObjectURL(blob));
+          setAvatarUploading(true);
+          try {
+            const fd = new FormData();
+            fd.append("file", blob, "avatar.jpg");
+            const res = await fetch("/api/avatar", { method: "POST", body: fd });
+            const data = await res.json() as { url?: string; error?: string };
+            if (!res.ok) throw new Error(data.error ?? "Upload fehlgeschlagen");
+            setAvatarPreview(data.url ?? null);
+            router.refresh();
+          } catch (err) {
+            setAvatarError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+            setAvatarPreview(null);
+          } finally {
+            setAvatarUploading(false);
+          }
+        }, "image/jpeg", 0.85);
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  }
+
+  async function handleRemoveAvatar() {
+    setAvatarUploading(true);
+    setAvatarError(null);
+    try {
+      await fetch("/api/avatar", { method: "DELETE" });
+      setAvatarPreview(null);
+      router.refresh();
+    } catch {
+      setAvatarError("Entfernen fehlgeschlagen");
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
   const [notifyMessages, setNotifyMessages] = useState<boolean>(profile?.notify_messages !== false);
   const [notifyFriendAccepted, setNotifyFriendAccepted] = useState<boolean>(profile?.notify_friend_accepted !== false);
   const [pushPermission, setPushPermission] = useState<PushPermission>("unsupported");
@@ -412,6 +479,60 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
         <section>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Profil</p>
           <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-4">
+
+            {/* Avatar upload */}
+            <div className="flex items-center gap-4 pb-1">
+              <div className="relative flex-shrink-0">
+                {/* Avatar circle */}
+                {currentAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={currentAvatar}
+                    alt="Profilbild"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-amber-100 border-2 border-border flex items-center justify-center">
+                    <span className="text-2xl font-bold text-amber-600 font-display">{displayInitial}</span>
+                  </div>
+                )}
+                {/* Uploading spinner overlay */}
+                {avatarUploading && (
+                  <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                    <SpinnerIcon />
+                  </div>
+                )}
+                {/* Camera button */}
+                <label className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-amber-500 border-2 border-white flex items-center justify-center cursor-pointer hover:bg-amber-600 transition-colors shadow-sm">
+                  <Camera size={11} className="text-white" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={handleAvatarChange}
+                    disabled={avatarUploading}
+                  />
+                </label>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {profile?.display_name ?? profile?.username ?? user.email}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                {currentAvatar && !avatarUploading && (
+                  <button
+                    onClick={handleRemoveAvatar}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 mt-1.5 transition-colors"
+                  >
+                    <Trash2 size={11} /> Bild entfernen
+                  </button>
+                )}
+                {avatarError && (
+                  <p className="text-xs text-red-600 mt-1">{avatarError}</p>
+                )}
+              </div>
+            </div>
 
             {/* E-Mail (read-only) */}
             <div className="flex flex-col gap-1">
