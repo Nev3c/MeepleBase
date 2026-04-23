@@ -33,6 +33,7 @@ interface Props {
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
   unreadCount: number;
+  initialSearchResults: SearchPlayer[];
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ export function PlayersClient({
   pendingReceived: initialPendingReceived,
   pendingSent: initialPendingSent,
   unreadCount,
+  initialSearchResults,
 }: Props) {
   const [activeTab, setActiveTab] = useState<PlayersTab>("freunde");
   const [friends, setFriends] = useState(initialFriends);
@@ -50,7 +52,7 @@ export function PlayersClient({
 
   // Search state — kept here so it persists across tab switches
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchPlayer[] | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchPlayer[] | null>(initialSearchResults);
   const [searching, setSearching] = useState(false);
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -65,7 +67,7 @@ export function PlayersClient({
     if (searchRef.current) clearTimeout(searchRef.current);
 
     if (val.trim().length < 2) {
-      setSearchResults(null);
+      setSearchResults(initialSearchResults);
       return;
     }
 
@@ -120,7 +122,7 @@ export function PlayersClient({
 
   function clearSearch() {
     setSearchQuery("");
-    setSearchResults(null);
+    setSearchResults(initialSearchResults);
   }
 
   async function sendRequest(player: SearchPlayer) {
@@ -450,9 +452,7 @@ function SucheTab({
   const nearbyDone = nearbyStatus === "done" && nearbyResults !== null;
 
   const showEmpty =
-    !isLoading &&
-    ((isNearbyMode && nearbyDone && rawResults.length === 0) ||
-      (!isNearbyMode && searchResults !== null && searchResults.length === 0));
+    !isLoading && isNearbyMode && nearbyDone && rawResults.length === 0;
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-8 gap-3">
@@ -586,23 +586,14 @@ function SucheTab({
         <p className="text-sm text-red-600 px-0.5">Standort konnte nicht ermittelt werden.</p>
       )}
 
-      {/* ── Empty state ── */}
+      {/* ── Empty state (Entfernung mode only) ── */}
       {showEmpty && (
         <div className="py-10 text-center">
-          {isNearbyMode ? (
-            <>
-              <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium text-foreground mb-1">Keine Spieler in der Nähe</p>
-              <p className="text-xs text-muted-foreground">
-                Im Umkreis von {nearbyRadius} km noch niemand gefunden.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-medium text-foreground mb-1">Kein Spieler gefunden</p>
-              <p className="text-xs text-muted-foreground">Versuche einen anderen Nutzernamen.</p>
-            </>
-          )}
+          <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm font-medium text-foreground mb-1">Keine Spieler in der Nähe</p>
+          <p className="text-xs text-muted-foreground">
+            Im Umkreis von {nearbyRadius} km noch niemand gefunden.
+          </p>
         </div>
       )}
 
@@ -625,18 +616,11 @@ function SucheTab({
         </div>
       )}
 
-      {/* ── Idle hint (A-Z mode, no query yet) ── */}
-      {!isNearbyMode && !isLoading && searchResults === null && (
-        <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
-          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-            <Search size={24} className="text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-foreground mb-1">Spieler finden</p>
-            <p className="text-xs text-muted-foreground max-w-[220px] leading-relaxed">
-              Gib einen Spielernamen ein oder wechsle zu &quot;Entfernung&quot; für die Umkreissuche.
-            </p>
-          </div>
+      {/* ── Empty (A-Z mode, search returned nothing) ── */}
+      {!isNearbyMode && !isLoading && searchQuery.length >= 2 && searchResults !== null && searchResults.length === 0 && (
+        <div className="py-10 text-center">
+          <p className="text-sm font-medium text-foreground mb-1">Kein Spieler gefunden</p>
+          <p className="text-xs text-muted-foreground">Versuche einen anderen Nutzernamen.</p>
         </div>
       )}
     </div>

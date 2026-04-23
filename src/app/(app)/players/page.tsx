@@ -17,10 +17,11 @@ export default async function PlayersPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Fetch friendships + unread messages in parallel
+  // Fetch friendships, unread messages, and all players in parallel
   const [
     { data: friendships },
     { data: messages },
+    { data: allProfiles },
   ] = await Promise.all([
     supabase
       .from("friendships")
@@ -32,6 +33,12 @@ export default async function PlayersPage() {
       .select("id, from_id, to_id, read_at")
       .eq("to_id", user.id)
       .is("read_at", null),
+    admin
+      .from("profiles")
+      .select("id, username, display_name, avatar_url, location")
+      .neq("id", user.id)
+      .order("username", { ascending: true })
+      .limit(50),
   ]);
 
   // Unread message count
@@ -79,6 +86,26 @@ export default async function PlayersPage() {
     }
   }
 
+  // Build friendship map for the initial player list
+  const friendshipMap = new Map<string, { id: string; status: string; is_requester: boolean }>();
+  for (const f of friendships ?? []) {
+    const otherId = f.requester_id === user.id ? f.addressee_id : f.requester_id;
+    friendshipMap.set(otherId, {
+      id: f.id,
+      status: f.status,
+      is_requester: f.requester_id === user.id,
+    });
+  }
+
+  const initialSearchResults = (allProfiles ?? []).map((p) => ({
+    id: p.id,
+    username: p.username,
+    display_name: p.display_name,
+    avatar_url: p.avatar_url,
+    location: p.location,
+    friendship: friendshipMap.get(p.id) ?? null,
+  }));
+
   return (
     <PlayersClient
       currentUserId={user.id}
@@ -86,6 +113,7 @@ export default async function PlayersPage() {
       pendingReceived={pendingReceived}
       pendingSent={pendingSent}
       unreadCount={unreadCount}
+      initialSearchResults={initialSearchResults}
     />
   );
 }

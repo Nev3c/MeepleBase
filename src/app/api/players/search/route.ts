@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
   const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
-  if (q.length < 2) return NextResponse.json({ players: [] });
 
   // Use service role to bypass RLS on profiles (search must see all users)
   const admin = createAdminClient(
@@ -28,12 +27,19 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: profiles, error } = await admin
+  let query = admin
     .from("profiles")
     .select("id, username, display_name, avatar_url, location")
     .neq("id", user.id)
-    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
-    .limit(20);
+    .order("username", { ascending: true })
+    .limit(50);
+
+  // When a query is provided, filter by username/display_name
+  if (q.length >= 2) {
+    query = query.or(`username.ilike.%${q}%,display_name.ilike.%${q}%`);
+  }
+
+  const { data: profiles, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!profiles?.length) return NextResponse.json({ players: [] });
