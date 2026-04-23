@@ -26,7 +26,7 @@ export function BottomNav({ unreadMessages = 0 }: BottomNavProps) {
       style={{ transform: "translateZ(0)", willChange: "transform" }}
       aria-label="Hauptnavigation"
     >
-      <div className="flex items-stretch max-w-lg mx-auto">
+      <div className="flex items-stretch max-w-lg mx-auto px-2">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = pathname.startsWith(href);
           const showBadge = href === "/players" && unreadMessages > 0;
