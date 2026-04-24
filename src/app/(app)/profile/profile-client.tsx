@@ -107,16 +107,12 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
         {/* Avatar */}
         <div className="relative inline-block mb-3">
           {avatarUrl ? (
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white shadow-card mx-auto">
-              <Image
-                src={avatarUrl}
-                alt={displayName}
-                width={80}
-                height={80}
-                className="object-cover"
-                priority
-              />
-            </div>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt={displayName}
+              className="w-20 h-20 rounded-full object-cover border-2 border-white shadow-card mx-auto block"
+            />
           ) : (
             <div className="w-20 h-20 rounded-full bg-amber-500 flex items-center justify-center border-2 border-white shadow-card mx-auto">
               <span className="font-display text-3xl font-bold text-white">{initial}</span>

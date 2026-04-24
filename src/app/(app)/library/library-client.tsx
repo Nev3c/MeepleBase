@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
 import { Users, Clock, Star, ChevronRight, Dices } from "lucide-react";
-import { LibraryHeader, type LibraryTab } from "@/components/library/library-header";
+import { LibraryHeader } from "@/components/library/library-header";
 import { LibraryEmptyState } from "@/components/library/library-empty-state";
 import { LibrarySortFilterSheet } from "@/components/library/library-sort-filter-sheet";
 import { GameCard } from "@/components/library/game-card";
@@ -34,7 +34,7 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetInitialTab, setSheetInitialTab] = useState<"search" | "import">("search");
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [libraryTab, setLibraryTab] = useState<LibraryTab>("bibliothek");
+  // Spielen-Tab wurde aus der Bibliothek entfernt (→ später unter Partien)
 
   // Defer search input so typing stays instant while filter catches up
   const deferredSearch = useDeferredValue(filter.search);
@@ -149,13 +149,9 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           onSortFilter={() => setFilterSheetOpen(true)}
           sortFilterActive={sortFilterActive}
           sortFilterCount={tagFilterCount}
-          activeTab={libraryTab}
-          onTabChange={setLibraryTab}
         />
 
-        {libraryTab === "spielen" ? (
-          <SpielenTab userGames={initialGames} playCounts={playCounts} />
-        ) : isEmpty ? (
+        {isEmpty ? (
           isFiltered ? (
             <div className="flex flex-col items-center justify-center flex-1 px-6 py-16 text-center">
               <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">

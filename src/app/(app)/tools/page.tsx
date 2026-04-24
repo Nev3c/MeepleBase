@@ -634,12 +634,12 @@ function SoundBoard() {
               <StopCircle size={13} /> Stop
             </button>
           </div>
-          {/* Hidden iframe — audio only plays here */}
+          {/* YouTube player — must be visible for mobile autoplay to work */}
           <iframe
             ref={iframeRef}
-            className="w-full"
-            style={{ height: 0, border: "none" }}
+            className="w-full aspect-video"
             allow="autoplay; encrypted-media"
+            allowFullScreen
             title="Soundboard Player"
           />
         </div>
@@ -647,6 +647,179 @@ function SoundBoard() {
 
       <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-2">
         Sounds werden lokal gespeichert. YouTube-Links müssen öffentliche Videos sein.
+      </p>
+    </section>
+  );
+}
+
+// ── Timer ─────────────────────────────────────────────────────────────────────
+
+const TIMER_PRESETS = [
+  { label: "30 Sek", value: 30 },
+  { label: "1 Min",  value: 60 },
+  { label: "2 Min",  value: 120 },
+  { label: "3 Min",  value: 180 },
+  { label: "5 Min",  value: 300 },
+  { label: "10 Min", value: 600 },
+];
+
+function playBell(volume = 0.7) {
+  try {
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.connect(gain1); gain1.connect(ctx.destination);
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, now);
+    osc1.frequency.exponentialRampToValueAtTime(660, now + 0.4);
+    gain1.gain.setValueAtTime(volume, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    osc1.start(now); osc1.stop(now + 1.2);
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2); gain2.connect(ctx.destination);
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1100, now + 0.5);
+    osc2.frequency.exponentialRampToValueAtTime(800, now + 1.0);
+    gain2.gain.setValueAtTime(volume * 0.6, now + 0.5);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+    osc2.start(now + 0.5); osc2.stop(now + 1.8);
+  } catch { /* AudioContext not available */ }
+}
+
+function GameTimer() {
+  const [selected, setSelected] = useState(60);
+  const [remaining, setRemaining] = useState(60);
+  const [running, setRunning] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState("");
+  const [customSeconds, setCustomSeconds] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  function startTimer() {
+    if (remaining === 0) return;
+    setFinished(false);
+    setRunning(true);
+    intervalRef.current = setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          clearInterval(intervalRef.current!);
+          setRunning(false);
+          setFinished(true);
+          playBell();
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+  }
+
+  function pauseTimer() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setRunning(false);
+  }
+
+  function resetTimer(duration?: number) {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setRunning(false);
+    setFinished(false);
+    setRemaining(duration ?? selected);
+  }
+
+  function selectPreset(v: number) {
+    resetTimer(v);
+    setSelected(v);
+    setShowCustom(false);
+    setCustomMinutes("");
+    setCustomSeconds("");
+  }
+
+  function applyCustom() {
+    const total = (parseInt(customMinutes) || 0) * 60 + (parseInt(customSeconds) || 0);
+    if (total <= 0) return;
+    setSelected(total);
+    resetTimer(total);
+    setShowCustom(false);
+  }
+
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - (selected > 0 ? remaining / selected : 0));
+  const displayMin = Math.floor(remaining / 60);
+  const displaySec = remaining % 60;
+  const isPreset = TIMER_PRESETS.some((p) => p.value === selected);
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="font-display text-lg font-semibold text-[#1E2A3A]">Timer</h2>
+
+      {/* Presets */}
+      <div className="flex gap-1.5 flex-wrap">
+        {TIMER_PRESETS.map((p) => (
+          <button key={p.value} onClick={() => selectPreset(p.value)} className={cn("px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border", !showCustom && selected === p.value ? "bg-[#1E2A3A] text-white border-transparent" : "bg-muted border-transparent text-foreground hover:border-amber-300")}>
+            {p.label}
+          </button>
+        ))}
+        <button onClick={() => setShowCustom((v) => !v)} className={cn("px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border", showCustom || (!isPreset && remaining !== selected) ? "bg-[#1E2A3A] text-white border-transparent" : "bg-muted border-transparent text-muted-foreground hover:border-amber-300")}>
+          Eigene
+        </button>
+      </div>
+
+      {showCustom && (
+        <div className="bg-card rounded-2xl border border-border p-3 flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-1">
+            <input type="number" inputMode="numeric" min={0} max={99} value={customMinutes} onChange={(e) => setCustomMinutes(e.target.value)} placeholder="0" className="w-14 h-10 rounded-xl border border-border bg-background text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            <span className="text-sm text-muted-foreground font-medium">Min</span>
+            <input type="number" inputMode="numeric" min={0} max={59} value={customSeconds} onChange={(e) => setCustomSeconds(e.target.value)} placeholder="0" className="w-14 h-10 rounded-xl border border-border bg-background text-center text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            <span className="text-sm text-muted-foreground font-medium">Sek</span>
+          </div>
+          <button onClick={applyCustom} className="px-4 h-10 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors flex-shrink-0">OK</button>
+        </div>
+      )}
+
+      {/* Ring */}
+      <div className={cn("bg-card rounded-3xl border border-border shadow-card p-6 flex flex-col items-center gap-6 transition-all", finished && "bg-amber-50 border-amber-300")}>
+        <div className="relative w-36 h-36 flex items-center justify-center">
+          <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r={radius} fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/40" />
+            <circle cx="60" cy="60" r={radius} fill="none" stroke={finished ? "#f59e0b" : remaining < 11 ? "#ef4444" : "#1E2A3A"} strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: running ? "stroke-dashoffset 1s linear" : "none" }} />
+          </svg>
+          <div className="flex flex-col items-center">
+            {finished ? (
+              <span className="font-display text-2xl font-bold text-amber-500">Zeit!</span>
+            ) : (
+              <span className={cn("font-display text-4xl font-bold tabular-nums leading-none", remaining < 11 && !finished ? "text-red-500" : "text-[#1E2A3A]")}>
+                {displayMin > 0 ? `${displayMin}:${String(displaySec).padStart(2, "0")}` : String(displaySec)}
+              </span>
+            )}
+            {!finished && displayMin === 0 && <span className="text-xs text-muted-foreground mt-0.5">Sekunden</span>}
+          </div>
+        </div>
+
+        <div className="flex gap-3 w-full">
+          <button onClick={() => resetTimer()} className="w-12 h-12 rounded-2xl bg-muted text-muted-foreground flex items-center justify-center hover:text-foreground transition-colors flex-shrink-0" title="Zurücksetzen">
+            <RotateCcw size={16} />
+          </button>
+          {running ? (
+            <button onClick={pauseTimer} className="flex-1 h-12 rounded-2xl bg-[#1E2A3A] text-white font-semibold text-sm hover:bg-[#253347] active:scale-[0.97] transition-all">Pause</button>
+          ) : (
+            <button onClick={startTimer} disabled={remaining === 0} className="flex-1 h-12 rounded-2xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 active:scale-[0.97] transition-all disabled:opacity-40 shadow-sm">
+              {finished ? "Nochmal" : remaining < selected && remaining > 0 ? "Weiter" : "Start"}
+            </button>
+          )}
+          <button onClick={() => playBell(0.4)} className="w-12 h-12 rounded-2xl bg-muted text-muted-foreground flex items-center justify-center hover:text-foreground transition-colors flex-shrink-0" title="Ton testen">
+            <Volume2 size={16} />
+          </button>
+        </div>
+        {finished && <p className="text-sm text-amber-700 font-medium text-center -mt-2">Zeit abgelaufen! 🔔</p>}
+      </div>
+
+      <p className="text-[11px] text-muted-foreground text-center px-4 leading-relaxed">
+        Lautsprecher-Button zum Testen. Timer läuft nur solange diese Seite offen ist.
       </p>
     </section>
   );
