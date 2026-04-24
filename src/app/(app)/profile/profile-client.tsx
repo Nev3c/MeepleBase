@@ -136,65 +136,79 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
         )}
       </div>
 
-      {/* Statistiken */}
-      <div className="px-4 mb-4">
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard icon={<Library size={18} className="text-amber-500" />} value={gameCount.toString()} label="Spiele" />
-          <StatCard icon={<Dices size={18} className="text-amber-500" />} value={playCount.toString()} label="Partien" />
-          <StatCard icon={<Star size={18} className="text-amber-500" />} value={favoriteLabel} label="Lieblingsspiel" sub={favoriteSub} />
-          {libraryValue != null && (
-            <StatCard
-              icon={<Euro size={18} className="text-amber-500" />}
-              value={libraryValue.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " €"}
-              label="Sammlungswert"
-            />
-          )}
-          {(uniqueCategoryCount ?? 0) > 0 && (
-            <StatCard
-              icon={<Tag size={18} className="text-amber-500" />}
-              value={(uniqueCategoryCount ?? 0).toString()}
-              label="Kategorien"
-            />
-          )}
-          {(uniqueMechanicCount ?? 0) > 0 && (
-            <StatCard
-              icon={<Cog size={18} className="text-amber-500" />}
-              value={(uniqueMechanicCount ?? 0).toString()}
-              label="Mechanismen"
-            />
+      {/* Statistiken — kompakte horizontale Band */}
+      <div className="px-4 mb-3">
+        <div className="bg-card rounded-2xl border border-border shadow-card px-2 py-3">
+          <div className="flex items-stretch">
+            {/* Spiele */}
+            <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+              <span className="font-display text-xl font-bold text-foreground leading-tight">{gameCount}</span>
+              <span className="text-[10px] text-muted-foreground font-medium">Spiele</span>
+            </div>
+            <div className="w-px bg-border my-1" />
+            {/* Partien */}
+            <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+              <span className="font-display text-xl font-bold text-foreground leading-tight">{playCount}</span>
+              <span className="text-[10px] text-muted-foreground font-medium">Partien</span>
+            </div>
+            {favoriteGame && (
+              <>
+                <div className="w-px bg-border my-1" />
+                <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+                  <span className="font-display text-base font-bold text-foreground leading-tight truncate max-w-[72px] text-center">{favoriteLabel}</span>
+                  {favoriteSub && <span className="text-[9px] text-amber-600 font-bold leading-none">{favoriteSub}</span>}
+                  <span className="text-[10px] text-muted-foreground font-medium">Lieblingsspiel</span>
+                </div>
+              </>
+            )}
+            {libraryValue != null && (
+              <>
+                <div className="w-px bg-border my-1" />
+                <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+                  <span className="font-display text-base font-bold text-foreground leading-tight">
+                    {libraryValue >= 1000
+                      ? (libraryValue / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + "k"
+                      : libraryValue.toLocaleString("de-DE", { maximumFractionDigits: 0 })}€
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-medium">Sammlungswert</span>
+                </div>
+              </>
+            )}
+          </div>
+          {/* Sekundäre Statistiken */}
+          {((uniqueCategoryCount ?? 0) > 0 || (uniqueMechanicCount ?? 0) > 0) && (
+            <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-border/50 px-2">
+              {(uniqueCategoryCount ?? 0) > 0 && (
+                <span className="text-[10px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
+                </span>
+              )}
+              {(uniqueMechanicCount ?? 0) > 0 && (
+                <span className="text-[10px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      {/* QR Codes */}
+      {/* QR-Aktionen — kompakte Button-Zeile */}
       <div className="px-4 mb-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex gap-2">
           <button
             onClick={() => setQrModal("app")}
-            className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 shadow-card hover:shadow-card-hover active:scale-[0.98] transition-all"
+            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-card border border-border shadow-card text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.98] transition-all touch-manipulation"
           >
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-              <Share2 size={18} className="text-amber-600" />
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-semibold text-foreground">App teilen</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">MeepleBase einladen</p>
-            </div>
-            <QrCode size={12} className="text-muted-foreground" />
+            <Share2 size={14} className="text-amber-500 flex-shrink-0" />
+            App teilen
           </button>
-
           <button
             onClick={() => setQrModal("friend")}
-            className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 shadow-card hover:shadow-card-hover active:scale-[0.98] transition-all"
+            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-card border border-border shadow-card text-sm font-semibold text-foreground hover:bg-muted active:scale-[0.98] transition-all touch-manipulation"
           >
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-              <UserPlus size={18} className="text-amber-600" />
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-semibold text-foreground">Kontakt-QR</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Als Freund adden</p>
-            </div>
-            <QrCode size={12} className="text-muted-foreground" />
+            <UserPlus size={14} className="text-amber-500 flex-shrink-0" />
+            Kontakt-QR
           </button>
         </div>
       </div>

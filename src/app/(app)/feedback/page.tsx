@@ -28,7 +28,6 @@ export default async function FeedbackPage() {
   return (
     <FeedbackClient
       userId={user.id}
-      username={profile?.username ?? user.email?.split("@")[0] ?? "Anonym"}
       initialFeedback={(feedback ?? []) as Feedback[]}
       isAdmin={isAdmin}
     />
