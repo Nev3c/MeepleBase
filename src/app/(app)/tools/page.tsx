@@ -848,11 +848,12 @@ export default function ToolsPage() {
               key={id}
               onClick={() => setTab(id)}
               className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold py-2.5 border-b-2 transition-all",
+                "flex-1 flex flex-col items-center justify-center py-2 border-b-2 transition-all gap-0.5",
                 tab === id ? "border-amber-500 text-amber-600" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
-              {icon}{label}
+              {icon}
+              <span className={cn("text-[10px] font-semibold leading-none transition-all", tab === id ? "opacity-100" : "opacity-0 h-0 overflow-hidden")}>{label}</span>
             </button>
           ))}
         </div>

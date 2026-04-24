@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Search, LayoutGrid, List, SlidersHorizontal, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,7 +111,8 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
               <Link href="/profile" aria-label="Zum Profil" className="flex-shrink-0">
                 {avatarUrl ? (
                   <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-border">
-                    <Image src={avatarUrl} alt={displayName} width={32} height={32} className="object-cover" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
                   </div>
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center border-2 border-white shadow-sm ring-1 ring-border">
