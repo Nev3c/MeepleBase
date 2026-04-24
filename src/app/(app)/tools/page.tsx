@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Minus, RotateCcw, Dices, ArrowRight,
   X, Trophy, Undo2, Crown, Hash, Volume2, Pencil, StopCircle, Clock,
+  // Soundboard icon picker
+  Music, Music2, Radio, Mic, Headphones, Speaker, Bell, Podcast,
+  Waves, Wind, Cloud, CloudRain, Sun, Moon, Flame, Zap, Snowflake,
+  TreePine, Leaf, Flower, Mountain, Bird, Fish, Shell, Bug,
+  Sword, Shield, Skull, Target, Wand2, Gem, Gamepad2,
+  Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
+  Dog, Cat, Rabbit, Heart, Star, Sparkles, Ghost,
+  Coffee, Wine, Home, Tent, Anchor, Ship, Plane, Rocket, Compass,
+  Timer, Key, Feather, Drama, Swords, MapPin,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -310,14 +320,35 @@ function CoinFlip() {
 
 // ── Soundboard ────────────────────────────────────────────────────────────────
 
-const EMOJI_PICKER = [
-  "🎵","🎶","🎸","🥁","🎻","🎹","🎷","🎺",
-  "🌊","🌙","🔥","⛈️","🌲","🌿","🌬️","🌸",
-  "🐉","⚔️","🧙","🏰","🎲","🗺️","🔮","💀",
-  "😴","⚡","🕯️","🌌","🌅","🌃","🎭","🎬",
-  "☕","🍺","🌍","🎯","🔔","🚀","💎","🎃",
-  "👑","🦁","🐺","🦅","🌋","❄️","🏔️","🌊",
-];
+// Lucide icon map for the soundboard picker
+const SOUND_ICON_MAP: Record<string, LucideIcon> = {
+  // Musik & Audio
+  Music2, Music, Radio, Mic, Headphones, Speaker, Bell, Podcast, Volume2,
+  // Natur & Wetter
+  Waves, Wind, Cloud, CloudRain, Sun, Moon, Flame, Zap, Snowflake,
+  TreePine, Leaf, Flower, Mountain, Bird, Fish, Shell, Bug,
+  // Fantasy & Abenteuer
+  Sword, Shield, Skull, Crown, Target, Wand2, Gem, Swords, Key, MapPin,
+  // Würfel & Spiel
+  Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Trophy, Gamepad2, Dices,
+  // Tiere
+  Dog, Cat, Rabbit,
+  // Stimmung & Atmosphäre
+  Heart, Star, Sparkles, Ghost, Drama, Feather, Coffee, Wine,
+  // Orte & Transport
+  Home, Tent, Anchor, Ship, Plane, Rocket, Compass,
+  // Zeit & Sonstiges
+  Timer, Clock,
+};
+
+const SOUND_ICON_KEYS = Object.keys(SOUND_ICON_MAP);
+
+// Renders a Lucide icon by name; falls back to plain text (emoji backwards-compat)
+function SoundIcon({ name, size = 28, className }: { name: string; size?: number; className?: string }) {
+  const Icon = SOUND_ICON_MAP[name];
+  if (Icon) return <Icon size={size} strokeWidth={1.5} className={className} />;
+  return <span className="text-3xl leading-none">{name}</span>;
+}
 
 interface SoundButton {
   id: string;
@@ -361,7 +392,7 @@ function SoundBoard() {
   const [editMode, setEditMode] = useState(false);
   const [formMode, setFormMode] = useState<FormMode>(null);
   const [formLabel, setFormLabel] = useState("");
-  const [formIcon, setFormIcon] = useState("🎵");
+  const [formIcon, setFormIcon] = useState("Music2");
   const [formUrl, setFormUrl] = useState("");
   const [showIconPicker, setShowIconPicker] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -478,7 +509,11 @@ function SoundBoard() {
                     !hasUrl && "opacity-40 cursor-not-allowed"
                   )}
                 >
-                  <span className="text-3xl leading-none">{btn.icon}</span>
+                  <SoundIcon
+                    name={btn.icon}
+                    size={28}
+                    className={isPlaying ? "text-white" : "text-foreground"}
+                  />
                   <span className={cn(
                     "text-xs font-semibold text-center px-2 leading-tight line-clamp-2",
                     isPlaying ? "text-white" : "text-foreground"
@@ -552,11 +587,11 @@ function SoundBoard() {
             <button
               onClick={() => setShowIconPicker((v) => !v)}
               className={cn(
-                "w-12 h-11 rounded-xl border flex items-center justify-center text-2xl flex-shrink-0 transition-colors",
-                showIconPicker ? "border-amber-400 bg-amber-50" : "border-border bg-background hover:border-amber-400"
+                "w-12 h-11 rounded-xl border flex items-center justify-center flex-shrink-0 transition-colors",
+                showIconPicker ? "border-amber-400 bg-amber-50 text-amber-600" : "border-border bg-background text-foreground hover:border-amber-400"
               )}
             >
-              {formIcon}
+              <SoundIcon name={formIcon} size={20} />
             </button>
             <input
               value={formLabel}
@@ -568,19 +603,24 @@ function SoundBoard() {
 
           {/* Icon picker grid */}
           {showIconPicker && (
-            <div className="grid grid-cols-8 gap-1 p-2.5 bg-muted/40 rounded-xl max-h-44 overflow-y-auto">
-              {EMOJI_PICKER.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => { setFormIcon(emoji); setShowIconPicker(false); }}
-                  className={cn(
-                    "w-9 h-9 rounded-lg text-xl flex items-center justify-center hover:bg-white transition-colors",
-                    formIcon === emoji && "bg-white ring-2 ring-amber-400"
-                  )}
-                >
-                  {emoji}
-                </button>
-              ))}
+            <div className="grid grid-cols-8 gap-1 p-2.5 bg-muted/40 rounded-xl max-h-52 overflow-y-auto">
+              {SOUND_ICON_KEYS.map((name) => {
+                const Icon = SOUND_ICON_MAP[name];
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    title={name}
+                    onClick={() => { setFormIcon(name); setShowIconPicker(false); }}
+                    className={cn(
+                      "w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors",
+                      formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600"
+                    )}
+                  >
+                    <Icon size={18} strokeWidth={1.5} />
+                  </button>
+                );
+              })}
             </div>
           )}
 

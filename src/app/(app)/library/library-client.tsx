@@ -196,6 +196,8 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
               <Shuffle size={11} aria-hidden="true" /> Zufällig
             </button>
           )}
+          {/* Trailing spacer — overflow-x-auto ignores padding-right without this */}
+          <span className="flex-shrink-0 w-4" aria-hidden="true" />
         </div>
 
         {isEmpty ? (
