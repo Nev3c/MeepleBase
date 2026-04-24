@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { ArrowLeft, MessageSquare, Bell, BellOff, X } from "lucide-react";
 import { PlayerAvatar } from "../players-client";
 import { cn } from "@/lib/utils";
 import type { ConversationSummary } from "@/types";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { useState } from "react";
 
 interface Props {
   currentUserId: string;
@@ -32,6 +34,11 @@ function formatTime(dateStr: string): string {
 export function MessagesClient({ conversations }: Props) {
   const router = useRouter();
   const totalUnread = conversations.reduce((sum, c) => sum + c.unread_count, 0);
+  const { state: pushState, loading: pushLoading, subscribe, unsubscribe } = usePushNotifications();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Show banner only when user hasn't decided yet
+  const showBanner = !bannerDismissed && pushState === "unsubscribed";
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
@@ -51,6 +58,51 @@ export function MessagesClient({ conversations }: Props) {
           </span>
         )}
       </div>
+
+      {/* Push notification banner */}
+      {showBanner && (
+        <div className="mx-4 mt-3 flex items-center gap-3 px-3.5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <Bell size={15} className="text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground leading-tight">Benachrichtigungen</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Lass dich bei neuen Nachrichten benachrichtigen.</p>
+          </div>
+          <button
+            onClick={subscribe}
+            disabled={pushLoading}
+            className="flex-shrink-0 px-3 py-1.5 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 disabled:opacity-60 transition-colors"
+          >
+            {pushLoading ? "…" : "Aktivieren"}
+          </button>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Schließen"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Subtle status when subscribed / denied */}
+      {pushState === "subscribed" && (
+        <div className="mx-4 mt-3 flex items-center justify-between gap-2 px-3.5 py-2 bg-green-50 border border-green-200 rounded-xl">
+          <div className="flex items-center gap-2">
+            <Bell size={13} className="text-green-600" />
+            <p className="text-xs text-green-700 font-medium">Benachrichtigungen aktiv</p>
+          </div>
+          <button
+            onClick={unsubscribe}
+            disabled={pushLoading}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
+          >
+            <BellOff size={12} />
+            Deaktivieren
+          </button>
+        </div>
+      )}
 
       {/* Empty state */}
       {conversations.length === 0 ? (
