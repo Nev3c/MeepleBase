@@ -338,11 +338,44 @@ const SOUND_ICON_MAP: Record<string, LucideIcon> = {
 
 const SOUND_ICON_KEYS = Object.keys(SOUND_ICON_MAP);
 
-// Renders a Lucide icon by name; falls back to plain text (emoji backwards-compat)
+// ── Dynamisches Icon-Loading ──────────────────────────────────────────────────
+// Curated MAP ist sofort verfügbar; alle anderen Lucide-Icons werden beim ersten
+// Öffnen des Pickers als einzelnes Code-Split-Chunk lazy geladen und gecacht.
+let _lucideModule: Record<string, LucideIcon> | null = null;
+
 function SoundIcon({ name, size = 28, className }: { name: string; size?: number; className?: string }) {
-  const Icon = SOUND_ICON_MAP[name];
-  if (Icon) return <Icon size={size} strokeWidth={1.5} className={className} />;
-  return <span className="text-3xl leading-none">{name}</span>;
+  // Kurierte Icons rendern sofort ohne State
+  const staticIcon = SOUND_ICON_MAP[name];
+  const [dynamicIcon, setDynamicIcon] = useState<LucideIcon | null>(
+    () => (_lucideModule?.[name] as LucideIcon | undefined) ?? null
+  );
+
+  useEffect(() => {
+    if (name in SOUND_ICON_MAP || dynamicIcon !== null) return;
+    const resolve = () => {
+      const ic = _lucideModule?.[name] as LucideIcon | undefined;
+      if (ic) { setDynamicIcon(() => ic); return; }
+      import("lucide-react").then((mod) => {
+        _lucideModule = mod as unknown as Record<string, LucideIcon>;
+        const loaded = _lucideModule[name] as LucideIcon | undefined;
+        if (loaded) setDynamicIcon(() => loaded);
+      });
+    };
+    resolve();
+  }, [name, staticIcon, dynamicIcon]);
+
+  const Icon = staticIcon ?? dynamicIcon;
+  if (!Icon) {
+    // Alte emoji-Einträge (backwards-compat)
+    if (!/^[A-Z]/.test(name)) return <span className="text-3xl leading-none">{name}</span>;
+    return (
+      <span
+        className="inline-block rounded-md bg-muted/50 animate-pulse"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return <Icon size={size} strokeWidth={1.5} className={className} />;
 }
 
 interface SoundButton {
@@ -391,10 +424,30 @@ function SoundBoard() {
   const [formUrl, setFormUrl] = useState("");
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState("");
+  const [allIconNames, setAllIconNames] = useState<string[] | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Load from localStorage client-side only
   useEffect(() => { setButtons(loadButtons()); }, []);
+
+  // Lazy-load full Lucide module when picker opens (once per session)
+  useEffect(() => {
+    if (!showIconPicker || allIconNames !== null) return;
+    if (_lucideModule) {
+      const names = Object.keys(_lucideModule)
+        .filter((k) => /^[A-Z][a-zA-Z0-9]+$/.test(k) && typeof (_lucideModule as Record<string, unknown>)[k] === "function")
+        .sort();
+      setAllIconNames(names);
+      return;
+    }
+    import("lucide-react").then((mod) => {
+      _lucideModule = mod as unknown as Record<string, LucideIcon>;
+      const names = Object.keys(mod)
+        .filter((k) => /^[A-Z][a-zA-Z0-9]+$/.test(k) && typeof (mod as Record<string, unknown>)[k] === "function")
+        .sort();
+      setAllIconNames(names);
+    });
+  }, [showIconPicker, allIconNames]);
 
   function playSound(btn: SoundButton) {
     const videoId = extractYouTubeId(btn.youtubeUrl);
@@ -600,46 +653,52 @@ function SoundBoard() {
             />
           </div>
 
-          {/* Icon picker mit Suche */}
+          {/* Icon picker mit Suche — kuratierte Liste sofort, alle ~1500 Lucide-Icons per Suchbegriff */}
           {showIconPicker && (
             <div className="flex flex-col gap-2 p-2.5 bg-muted/40 rounded-xl">
               <input
                 type="text"
                 value={iconSearch}
                 onChange={(e) => setIconSearch(e.target.value)}
-                placeholder="Suchen (z.B. rain, bell, sword…)"
+                placeholder="Suchen (z.B. fire, dragon, guitar…)"
                 className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                autoFocus
               />
               <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
                 {(() => {
                   const q = iconSearch.trim().toLowerCase();
-                  const visible = q
-                    ? SOUND_ICON_KEYS.filter((k) => k.toLowerCase().includes(q))
-                    : SOUND_ICON_KEYS;
-                  if (visible.length === 0) {
+                  // Mit Suchbegriff: alle Lucide-Icons durchsuchen (oder Fallback auf kuratierte Liste solange lädt)
+                  const pool = q ? (allIconNames ?? SOUND_ICON_KEYS) : SOUND_ICON_KEYS;
+                  const visible = q ? pool.filter((k) => k.toLowerCase().includes(q)) : pool;
+
+                  if (q && allIconNames === null) {
                     return (
-                      <p className="col-span-8 py-3 text-center text-xs text-muted-foreground">
-                        Kein Icon gefunden
+                      <p className="col-span-8 py-3 text-center text-xs text-muted-foreground animate-pulse">
+                        Icons werden geladen…
                       </p>
                     );
                   }
-                  return visible.map((name) => {
-                    const Icon = SOUND_ICON_MAP[name];
+                  if (visible.length === 0) {
                     return (
-                      <button
-                        key={name}
-                        type="button"
-                        title={name}
-                        onClick={() => { setFormIcon(name); setShowIconPicker(false); setIconSearch(""); }}
-                        className={cn(
-                          "w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors",
-                          formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600"
-                        )}
-                      >
-                        <Icon size={18} strokeWidth={1.5} />
-                      </button>
+                      <p className="col-span-8 py-3 text-center text-xs text-muted-foreground">
+                        Kein Icon gefunden für „{iconSearch}"
+                      </p>
                     );
-                  });
+                  }
+                  return visible.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      title={name}
+                      onClick={() => { setFormIcon(name); setShowIconPicker(false); setIconSearch(""); }}
+                      className={cn(
+                        "w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors",
+                        formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600"
+                      )}
+                    >
+                      <SoundIcon name={name} size={18} />
+                    </button>
+                  ));
                 })()}
               </div>
             </div>
@@ -895,6 +954,12 @@ function GameTimer() {
 export default function ToolsPage() {
   const [tab, setTab] = useState<"score" | "dice" | "coin" | "sound" | "timer">("score");
 
+  function changeTab(id: typeof tab) {
+    setTab(id);
+    // Scroll immer nach oben — verhindert dass Scroll-Position vom alten Tab übernommen wird
+    window.scrollTo(0, 0);
+  }
+
   const TAB_ITEMS = [
     { id: "score" as const, label: "Punkte", icon: <Trophy  size={15} /> },
     { id: "dice"  as const, label: "Würfel", icon: <Dices   size={15} /> },
@@ -911,7 +976,7 @@ export default function ToolsPage() {
           {TAB_ITEMS.map(({ id, label, icon }) => (
             <button
               key={id}
-              onClick={() => setTab(id)}
+              onClick={() => changeTab(id)}
               className={cn(
                 "flex-1 flex flex-col items-center justify-center py-2 border-b-2 transition-all gap-0.5",
                 tab === id ? "border-amber-500 text-amber-600" : "border-transparent text-muted-foreground hover:text-foreground"
