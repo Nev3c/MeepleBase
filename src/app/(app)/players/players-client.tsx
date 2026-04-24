@@ -34,7 +34,8 @@ interface Props {
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
-  unreadCount: number;
+  unreadByUser: Record<string, number>;
+  totalUnread: number;
   initialSearchResults: SearchPlayer[];
   forSaleGames: ForSaleGame[];
 }
@@ -45,7 +46,8 @@ export function PlayersClient({
   friends: initialFriends,
   pendingReceived: initialPendingReceived,
   pendingSent: initialPendingSent,
-  unreadCount,
+  unreadByUser,
+  totalUnread,
   initialSearchResults,
   forSaleGames,
 }: Props) {
@@ -204,19 +206,15 @@ export function PlayersClient({
 
             <Link
               href="/players/messages"
-              className="relative flex items-center gap-2 h-9 px-3 rounded-full bg-muted hover:bg-muted/80 active:bg-muted/60 transition-colors"
-              aria-label="Nachrichten"
+              className="relative flex items-center gap-1.5 h-9 px-3 rounded-full bg-muted hover:bg-muted/80 active:bg-muted/60 transition-colors"
+              aria-label="Alle Nachrichten"
             >
-              <Mail size={16} className="text-muted-foreground" />
-              {unreadCount > 0 ? (
-                <span className="text-xs font-bold text-amber-700">
-                  {unreadCount > 9 ? "9+" : unreadCount}
+              <Mail size={15} className="text-muted-foreground" />
+              <span className="text-xs text-muted-foreground font-medium">Chats</span>
+              {totalUnread > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-background">
+                  {totalUnread > 9 ? "9+" : totalUnread}
                 </span>
-              ) : (
-                <span className="text-xs text-muted-foreground font-medium sr-only">Nachrichten</span>
-              )}
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background" />
               )}
             </Link>
           </div>
@@ -250,6 +248,7 @@ export function PlayersClient({
             pendingReceived={pendingReceived}
             pendingSent={pendingSent}
             forSaleGames={forSaleGames}
+            unreadByUser={unreadByUser}
             onRespondToRequest={respondToRequest}
             onRemoveFriend={removeFriend}
             onCancelRequest={cancelRequest}
@@ -340,6 +339,7 @@ function FreundeTab({
   pendingReceived,
   pendingSent,
   forSaleGames,
+  unreadByUser,
   onRespondToRequest,
   onRemoveFriend,
   onCancelRequest,
@@ -348,6 +348,7 @@ function FreundeTab({
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
   forSaleGames: ForSaleGame[];
+  unreadByUser: Record<string, number>;
   onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
   onRemoveFriend: (fId: string) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
@@ -383,7 +384,12 @@ function FreundeTab({
         ) : (
           <div className="flex flex-col gap-2">
             {friends.map((fp) => (
-              <FriendCard key={fp.friendship_id} fp={fp} onRemove={onRemoveFriend} />
+              <FriendCard
+                key={fp.friendship_id}
+                fp={fp}
+                unreadCount={unreadByUser[fp.profile.id] ?? 0}
+                onRemove={onRemoveFriend}
+              />
             ))}
           </div>
         )}
@@ -442,7 +448,7 @@ function EmptyState({
 
 // ── Friend Card ────────────────────────────────────────────────────────────────
 
-function FriendCard({ fp, onRemove }: { fp: FriendProfile; onRemove: (fId: string) => Promise<void> }) {
+function FriendCard({ fp, unreadCount, onRemove }: { fp: FriendProfile; unreadCount: number; onRemove: (fId: string) => Promise<void> }) {
   const [showActions, setShowActions] = useState(false);
   const [removing, setRemoving] = useState(false);
   const p = fp.profile;
@@ -487,10 +493,20 @@ function FriendCard({ fp, onRemove }: { fp: FriendProfile; onRemove: (fId: strin
       <div className="flex items-center gap-1 flex-shrink-0">
         <Link
           href={`/players/messages/${p.id}`}
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-amber-50 hover:text-amber-600 active:bg-amber-100 transition-colors"
-          aria-label="Nachricht senden"
+          className={cn(
+            "relative w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+            unreadCount > 0
+              ? "bg-amber-500 text-white shadow-sm hover:bg-amber-600 active:bg-amber-700"
+              : "bg-muted text-muted-foreground hover:bg-amber-50 hover:text-amber-600 active:bg-amber-100"
+          )}
+          aria-label={unreadCount > 0 ? `${unreadCount} neue Nachricht${unreadCount > 1 ? "en" : ""}` : "Nachricht senden"}
         >
           <MessageSquare size={15} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 bg-white text-amber-600 text-[9px] font-bold rounded-full flex items-center justify-center border border-amber-200 shadow-sm">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
         </Link>
 
         <div className="relative" ref={menuRef}>

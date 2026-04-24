@@ -41,8 +41,12 @@ export default async function PlayersPage() {
       .limit(50),
   ]);
 
-  // Unread message count
-  const unreadCount = (messages ?? []).length;
+  // Unread messages per sender
+  const unreadByUser: Record<string, number> = {};
+  for (const msg of (messages ?? [])) {
+    unreadByUser[msg.from_id] = (unreadByUser[msg.from_id] ?? 0) + 1;
+  }
+  const totalUnread = Object.values(unreadByUser).reduce((s, c) => s + c, 0);
 
   // Build friend profiles
   const friends: FriendProfile[] = [];
@@ -141,7 +145,8 @@ export default async function PlayersPage() {
       friends={friends}
       pendingReceived={pendingReceived}
       pendingSent={pendingSent}
-      unreadCount={unreadCount}
+      unreadByUser={unreadByUser}
+      totalUnread={totalUnread}
       initialSearchResults={initialSearchResults}
       forSaleGames={forSaleGames}
     />
