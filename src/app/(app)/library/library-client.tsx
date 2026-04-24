@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
-import { Users, Clock, Star, ChevronRight, Dices, Shuffle } from "lucide-react";
+import { Users, Clock, Star, ChevronRight, ChevronDown, Dices, Shuffle } from "lucide-react";
 import { LibraryHeader } from "@/components/library/library-header";
 import { LibraryEmptyState } from "@/components/library/library-empty-state";
 import { LibrarySortFilterSheet } from "@/components/library/library-sort-filter-sheet";
@@ -34,6 +34,8 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetInitialTab, setSheetInitialTab] = useState<"search" | "import">("search");
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  // Schnellfilter-Karte: offen wenn bereits Filter gesetzt, sonst geschlossen
+  const [filterOpen, setFilterOpen] = useState(() => !!(filter.playerCount || filter.maxPlaytime));
   // Spielen-Tab wurde aus der Bibliothek entfernt (→ später unter Partien)
 
   // Defer search input so typing stays instant while filter catches up
@@ -169,89 +171,134 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           sortFilterCount={tagFilterCount}
         />
 
-        {/* ── Schnellfilter: Was spielen? ─────────────────────────────────────
+        {/* ── Schnellfilter: Was spielen? (einklappbar) ───────────────────────
             Im scrollbaren Content — nicht im sticky Header, damit dessen
-            Höhe konstant bleibt und das Bottom-Nav stabil liegt.
-            Card-Layout → kein overflow, kein Abschneiden.               */}
-        <div className="px-4 pt-3 pb-3 border-b border-border bg-background">
-          <div className="bg-muted/50 rounded-2xl p-3 flex flex-col gap-3">
+            Höhe konstant bleibt und das Bottom-Nav stabil liegt.         */}
+        {(() => {
+          const hasQuickFilter = !!(filter.playerCount || filter.maxPlaytime);
+          const summaryParts = [
+            filter.playerCount ? `${filter.playerCount === 8 ? "8+" : filter.playerCount} Sp.` : null,
+            filter.maxPlaytime
+              ? `≤ ${filter.maxPlaytime < 60 ? `${filter.maxPlaytime}m` : `${Math.floor(filter.maxPlaytime / 60)}h${filter.maxPlaytime % 60 > 0 ? `${filter.maxPlaytime % 60}m` : ""}`}`
+              : null,
+          ].filter(Boolean).join(" · ");
 
-            {/* Spieleranzahl */}
-            <div>
-              <div className="flex items-center gap-1 mb-2">
-                <Users size={11} className="text-muted-foreground" aria-hidden="true" />
-                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Spieler</span>
-              </div>
-              <div className="flex gap-1.5 flex-wrap">
-                {([1, 2, 3, 4, 5, 6, 7, 8] as const).map((n) => {
-                  const active = filter.playerCount === n;
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => handlePlayerCountChange(active ? null : n)}
-                      aria-pressed={active}
-                      className={cn(
-                        "w-8 h-8 rounded-xl text-sm font-semibold transition-all border",
-                        active
-                          ? "bg-amber-500 border-amber-500 text-white shadow-sm"
-                          : "bg-background border-border text-muted-foreground hover:border-amber-400 hover:text-foreground"
-                      )}
-                    >
-                      {n === 8 ? "8+" : n}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Max. Spielzeit */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1">
-                  <Clock size={11} className="text-muted-foreground" aria-hidden="true" />
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Max. Zeit</span>
-                </div>
-                <span className="text-xs font-bold text-amber-600">
-                  {filter.maxPlaytime
-                    ? filter.maxPlaytime < 60
-                      ? `${filter.maxPlaytime} Min`
-                      : `${Math.floor(filter.maxPlaytime / 60)}h${filter.maxPlaytime % 60 > 0 ? ` ${filter.maxPlaytime % 60}m` : ""}`
-                    : "Alle"}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={15}
-                max={240}
-                step={15}
-                value={filter.maxPlaytime ?? 240}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setFilter({ ...filter, maxPlaytime: v >= 240 ? undefined : v });
-                }}
-                className="w-full accent-amber-500"
-                aria-label="Maximale Spielzeit"
-              />
-              <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                <span>15 Min</span><span>Alle</span>
-              </div>
-            </div>
-
-            {/* Zufälliges Spiel — nur wenn Spielerfilter aktiv */}
-            {filter.playerCount != null && filteredGames.length > 0 && (
+          return (
+            <div className="px-4 py-2 border-b border-border bg-background">
+              {/* ── Toggle-Header ─────────────────────────────────────────── */}
               <button
                 type="button"
-                onClick={handleRandomPick}
-                className="flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-amber-400 text-amber-600 text-xs font-semibold hover:bg-amber-50 active:bg-amber-100 transition-all"
+                onClick={() => setFilterOpen((v) => !v)}
+                aria-expanded={filterOpen}
+                aria-label="Spielfilter ein-/ausklappen"
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-2.5 rounded-xl transition-colors touch-manipulation",
+                  hasQuickFilter
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-muted/50 text-muted-foreground hover:text-foreground"
+                )}
               >
-                <Shuffle size={13} aria-hidden="true" />
-                Zufällig · {filteredGames.length} {filteredGames.length === 1 ? "Spiel" : "Spiele"}
+                <Users size={13} aria-hidden="true" className="flex-shrink-0" />
+                <span className="text-xs font-semibold flex-1 text-left">
+                  {hasQuickFilter ? summaryParts : "Was spielen?"}
+                </span>
+                {hasQuickFilter && (
+                  <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" aria-hidden="true" />
+                )}
+                <ChevronDown
+                  size={14}
+                  aria-hidden="true"
+                  className={cn("flex-shrink-0 transition-transform duration-200", filterOpen && "rotate-180")}
+                />
               </button>
-            )}
 
-          </div>
-        </div>
+              {/* ── Einklappbarer Inhalt (CSS-Grid-Trick: 0fr → 1fr) ──────── */}
+              <div
+                className={cn(
+                  "grid transition-all duration-300 ease-out",
+                  filterOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                )}
+              >
+                <div className="overflow-hidden">
+                  <div className="pt-3 pb-1 flex flex-col gap-3">
+
+                    {/* Spieleranzahl */}
+                    <div>
+                      <div className="flex items-center gap-1 mb-2">
+                        <Users size={11} className="text-muted-foreground" aria-hidden="true" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Spieler</span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {([1, 2, 3, 4, 5, 6, 7, 8] as const).map((n) => {
+                          const active = filter.playerCount === n;
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => handlePlayerCountChange(active ? null : n)}
+                              aria-pressed={active}
+                              className={cn(
+                                "w-9 h-9 rounded-xl text-sm font-semibold transition-all border",
+                                active
+                                  ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                                  : "bg-background border-border text-muted-foreground hover:border-amber-400 hover:text-foreground"
+                              )}
+                            >
+                              {n === 8 ? "8+" : n}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Max. Spielzeit */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1">
+                          <Clock size={11} className="text-muted-foreground" aria-hidden="true" />
+                          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Max. Zeit</span>
+                        </div>
+                        <span className="text-xs font-bold text-amber-600">
+                          {filter.maxPlaytime
+                            ? filter.maxPlaytime < 60
+                              ? `${filter.maxPlaytime} Min`
+                              : `${Math.floor(filter.maxPlaytime / 60)}h${filter.maxPlaytime % 60 > 0 ? ` ${filter.maxPlaytime % 60}m` : ""}`
+                            : "Alle"}
+                        </span>
+                      </div>
+                      <input
+                        type="range" min={15} max={240} step={15}
+                        value={filter.maxPlaytime ?? 240}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setFilter({ ...filter, maxPlaytime: v >= 240 ? undefined : v });
+                        }}
+                        className="w-full accent-amber-500"
+                        aria-label="Maximale Spielzeit"
+                      />
+                      <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                        <span>15 Min</span><span>Alle</span>
+                      </div>
+                    </div>
+
+                    {/* Zufälliges Spiel — nur wenn Spielerfilter aktiv */}
+                    {filter.playerCount != null && filteredGames.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRandomPick}
+                        className="flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-amber-400 text-amber-600 text-xs font-semibold hover:bg-amber-50 active:bg-amber-100 transition-all"
+                      >
+                        <Shuffle size={13} aria-hidden="true" />
+                        Zufällig · {filteredGames.length} {filteredGames.length === 1 ? "Spiel" : "Spiele"}
+                      </button>
+                    )}
+
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {isEmpty ? (
           isFiltered ? (

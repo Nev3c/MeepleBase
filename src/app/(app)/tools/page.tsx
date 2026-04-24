@@ -414,17 +414,17 @@ const GERMAN_KEYWORDS: Record<string, string[]> = {
   skelett:    ["Skull"],
   geist:      ["Ghost"],
   // Orte & Gebäude
-  tor:        ["DoorOpen", "Door"],
-  tuer:       ["DoorOpen", "Door", "DoorClosed"],
+  tor:        ["DoorOpen", "DoorClosed"],
+  tuer:       ["DoorOpen", "DoorClosed"],
   burg:       ["Castle"],
   schloss:    ["Castle", "Lock"],
-  turm:       ["Tower", "Castle"],
+  turm:       ["Castle", "Mountain"],
   taverne:    ["Wine", "Coffee", "Home"],
   dorf:       ["Home", "MapPin"],
   kirche:     ["Church"],
   gefaengnis: ["Lock"],
   wald:       ["TreePine", "Trees", "Leaf"],
-  baum:       ["TreePine", "Tree", "Trees"],
+  baum:       ["TreePine", "Trees"],
   hoehle:     ["Mountain"],
   berg:       ["Mountain"],
   // Fahrzeuge & Transport
@@ -433,7 +433,7 @@ const GERMAN_KEYWORDS: Record<string, string[]> = {
   flugzeug:   ["Plane"],
   rakete:     ["Rocket"],
   kutsche:    ["Car"],
-  pferd:      ["Horse"],
+  pferd:      ["Dices"],
   // Zeit & Sonstiges
   uhr:        ["Clock", "Timer", "AlarmClock"],
   zeit:       ["Clock", "Timer"],
@@ -804,14 +804,18 @@ function SoundBoard() {
                     ));
                   }
 
-                  // Mit Suchbegriff: noch am Laden?
-                  if (allIconNames === null) {
+                  // Deutsche Keywords sofort (kein Warten auf Modul)
+                  const germanHits = searchGerman(q);
+                  // Englische Substring-Treffer nur wenn Modul geladen
+                  const englishHits = allIconNames
+                    ? allIconNames.filter((k) => k.toLowerCase().includes(q))
+                    : [];
+
+                  // Modul lädt noch UND keine deutschen Treffer → Lade-Hinweis
+                  if (allIconNames === null && germanHits.length === 0) {
                     return <p className="col-span-8 py-3 text-center text-xs text-muted-foreground animate-pulse">Icons werden geladen…</p>;
                   }
 
-                  // Deutsche Keywords zuerst, dann englischer Substring-Match
-                  const germanHits = searchGerman(q).filter((n) => allIconNames.includes(n));
-                  const englishHits = allIconNames.filter((k) => k.toLowerCase().includes(q));
                   const seen = new Set<string>();
                   const visible: string[] = [];
                   for (const n of [...germanHits, ...englishHits]) {
