@@ -615,9 +615,9 @@ function SoundBoard() {
         </div>
       )}
 
-      {/* Now playing */}
-      {playingId && (
-        <div className="rounded-2xl border border-amber-300 overflow-hidden shadow-sm">
+      {/* YouTube player — always in DOM so iframeRef is available on first click */}
+      <div className={cn("rounded-2xl border overflow-hidden shadow-sm transition-all", playingId ? "border-amber-300" : "border-border")}>
+        {playingId ? (
           <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border-b border-amber-200">
             <span className="flex gap-0.5 items-end h-3.5">
               {[0, 120, 240].map((d) => (
@@ -634,16 +634,20 @@ function SoundBoard() {
               <StopCircle size={13} /> Stop
             </button>
           </div>
-          {/* YouTube player — must be visible for mobile autoplay to work */}
-          <iframe
-            ref={iframeRef}
-            className="w-full aspect-video"
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-            title="Soundboard Player"
-          />
-        </div>
-      )}
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b border-border">
+            <Volume2 size={13} className="text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Wähle einen Sound…</span>
+          </div>
+        )}
+        <iframe
+          ref={iframeRef}
+          className="w-full aspect-video"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+          title="Soundboard Player"
+        />
+      </div>
 
       <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-2">
         Sounds werden lokal gespeichert. YouTube-Links müssen öffentliche Videos sein.

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search, LayoutGrid, List, SlidersHorizontal, Plus } from "lucide-react";
+import { Search, LayoutGrid, List, SlidersHorizontal, Plus, Users, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryStore } from "@/stores/library-store";
@@ -10,6 +10,15 @@ import type { Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
 export type LibraryTab = "bibliothek" | "spielen";
+
+const PLAYER_CHIPS = [
+  { label: "1", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4", value: 4 },
+  { label: "5", value: 5 },
+  { label: "6+", value: 6 },
+];
 
 interface LibraryHeaderProps {
   user?: User | null;
@@ -20,10 +29,14 @@ interface LibraryHeaderProps {
   sortFilterCount?: number;
   activeTab?: LibraryTab;
   onTabChange?: (tab: LibraryTab) => void;
+  /** Quick player-count filter — passed down from library-client */
+  playerCountFilter?: number | null;
+  onPlayerCountChange?: (n: number | null) => void;
+  onRandomPick?: () => void;
 }
 
 
-export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilterActive, sortFilterCount = 0, activeTab, onTabChange }: LibraryHeaderProps) {
+export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilterActive, sortFilterCount = 0, activeTab, onTabChange, playerCountFilter, onPlayerCountChange, onRandomPick }: LibraryHeaderProps) {
   const { view, setView, filter, setFilter } = useLibraryStore();
 
   const displayName = profile?.display_name ?? profile?.username ?? user?.email?.split("@")[0] ?? "";
@@ -86,6 +99,26 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
               </div>
             )}
 
+            {/* Player-count quick-filter button */}
+            {onPlayerCountChange && onBibliothekTab && (
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Für X Spieler filtern"
+                  onClick={() => onPlayerCountChange(playerCountFilter ? null : 2)}
+                  className={cn(playerCountFilter && "text-amber-500")}
+                >
+                  <Users size={16} strokeWidth={2} />
+                </Button>
+                {playerCountFilter && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
+                    {playerCountFilter === 6 ? "6+" : playerCountFilter}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Combined sort + filter button — only on Bibliothek tab */}
             {onSortFilter && onBibliothekTab && (
               <div className="relative">
@@ -126,7 +159,7 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
 
         {/* Search — only on Bibliothek tab */}
         {onBibliothekTab && (
-          <div className={cn("flex flex-col gap-1.5", onTabChange ? "mb-0" : "")}>
+          <div className={cn("flex flex-col gap-2", onTabChange ? "mb-0" : "")}>
             <div className="relative">
               <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <Input
@@ -138,6 +171,44 @@ export function LibraryHeader({ user, profile, onAddGame, onSortFilter, sortFilt
                 aria-label="Bibliothek durchsuchen"
               />
             </div>
+
+            {/* Player count chip row */}
+            {onPlayerCountChange && (
+              <div className="flex items-center gap-1.5 pb-1">
+                <span className="text-[11px] text-muted-foreground font-medium flex-shrink-0 flex items-center gap-1">
+                  <Users size={11} /> Spieler:
+                </span>
+                {PLAYER_CHIPS.map(({ label, value }) => {
+                  const active = playerCountFilter === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => onPlayerCountChange(active ? null : value)}
+                      className={cn(
+                        "h-7 min-w-[32px] px-2 rounded-full text-xs font-semibold transition-all border",
+                        active
+                          ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                          : "bg-background border-border text-muted-foreground hover:border-amber-400 hover:text-foreground"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                {/* Random pick — only when a player count is selected */}
+                {playerCountFilter && onRandomPick && (
+                  <button
+                    type="button"
+                    onClick={onRandomPick}
+                    title="Zufälliges Spiel für diese Spielerzahl"
+                    className="ml-auto h-7 px-2.5 rounded-full text-xs font-semibold border border-dashed border-amber-400 text-amber-600 hover:bg-amber-50 transition-all flex items-center gap-1"
+                  >
+                    <Shuffle size={11} /> Zufällig
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 

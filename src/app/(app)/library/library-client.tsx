@@ -30,7 +30,7 @@ interface LibraryClientProps {
 }
 
 export function LibraryClient({ initialGames, user, profile, playCounts }: LibraryClientProps) {
-  const { view, filter, sortKey } = useLibraryStore();
+  const { view, filter, setFilter, sortKey } = useLibraryStore();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetInitialTab, setSheetInitialTab] = useState<"search" | "import">("search");
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -139,6 +139,16 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
 
   function openAdd() { setSheetInitialTab("search"); setSheetOpen(true); }
 
+  function handlePlayerCountChange(n: number | null) {
+    setFilter({ ...filter, playerCount: n ?? undefined });
+  }
+
+  function handleRandomPick() {
+    if (filteredGames.length === 0) return;
+    const pick = filteredGames[Math.floor(Math.random() * filteredGames.length)];
+    if (pick?.game?.id) window.location.href = `/games/${pick.game.id}`;
+  }
+
   return (
     <>
       <div className="flex flex-col min-h-[calc(100dvh-72px)]">
@@ -149,6 +159,9 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           onSortFilter={() => setFilterSheetOpen(true)}
           sortFilterActive={sortFilterActive}
           sortFilterCount={tagFilterCount}
+          playerCountFilter={filter.playerCount ?? null}
+          onPlayerCountChange={handlePlayerCountChange}
+          onRandomPick={handleRandomPick}
         />
 
         {isEmpty ? (
