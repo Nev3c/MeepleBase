@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
   Users, MessageSquare, Mail, MoreHorizontal,
-  MapPin, LocateFixed, ArrowDownAZ, Tag,
+  MapPin, LocateFixed, ArrowDownAZ, Tag, ShoppingBag,
 } from "lucide-react";
 import type { ForSaleGame } from "@/types";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,6 @@ export function PlayersClient({
   const [pendingReceived, setPendingReceived] = useState(initialPendingReceived);
   const [pendingSent, setPendingSent] = useState(initialPendingSent);
 
-  // Search state — kept here so it persists across tab switches
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchPlayer[] | null>(initialSearchResults);
   const [searching, setSearching] = useState(false);
@@ -63,18 +62,15 @@ export function PlayersClient({
   const [nearbyStatus, setNearbyStatus] = useState<NearbyStatus>("idle");
   const [nearbyResults, setNearbyResults] = useState<SearchPlayer[] | null>(null);
   const [nearbyRadius, setNearbyRadius] = useState(50);
-
   const [sortMode, setSortMode] = useState<SortMode>("az");
 
   function handleSearchInput(val: string) {
     setSearchQuery(val);
     if (searchRef.current) clearTimeout(searchRef.current);
-
     if (val.trim().length < 2) {
       setSearchResults(initialSearchResults);
       return;
     }
-
     setSearching(true);
     searchRef.current = setTimeout(async () => {
       try {
@@ -90,10 +86,7 @@ export function PlayersClient({
   }
 
   function handleNearbySearch(radius = nearbyRadius) {
-    if (!navigator.geolocation) {
-      setNearbyStatus("error");
-      return;
-    }
+    if (!navigator.geolocation) { setNearbyStatus("error"); return; }
     setNearbyStatus("locating");
     setNearbyResults(null);
     navigator.geolocation.getCurrentPosition(
@@ -101,15 +94,11 @@ export function PlayersClient({
         setNearbyStatus("loading");
         try {
           const { latitude, longitude } = pos.coords;
-          const res = await fetch(
-            `/api/players/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}`
-          );
+          const res = await fetch(`/api/players/nearby?lat=${latitude}&lng=${longitude}&radius=${radius}`);
           const data = await res.json() as { players: SearchPlayer[] };
           setNearbyResults(data.players ?? []);
           setNearbyStatus("done");
-        } catch {
-          setNearbyStatus("error");
-        }
+        } catch { setNearbyStatus("error"); }
       },
       () => setNearbyStatus("denied"),
       { timeout: 10000, maximumAge: 60000 }
@@ -118,10 +107,7 @@ export function PlayersClient({
 
   function handleSortChange(mode: SortMode) {
     setSortMode(mode);
-    // Switching to Entfernung mode auto-triggers nearby search if not yet done
-    if (mode === "entfernung" && nearbyStatus === "idle") {
-      handleNearbySearch(nearbyRadius);
-    }
+    if (mode === "entfernung" && nearbyStatus === "idle") handleNearbySearch(nearbyRadius);
   }
 
   function clearSearch() {
@@ -137,12 +123,10 @@ export function PlayersClient({
     });
     if (res.ok) {
       const data = await res.json() as { id: string };
-      const updateFriendship = (p: SearchPlayer) =>
-        p.id === player.id
-          ? { ...p, friendship: { id: data.id, status: "pending", is_requester: true } }
-          : p;
-      setSearchResults((prev) => prev?.map(updateFriendship) ?? null);
-      setNearbyResults((prev) => prev?.map(updateFriendship) ?? null);
+      const updateFn = (p: SearchPlayer) =>
+        p.id === player.id ? { ...p, friendship: { id: data.id, status: "pending", is_requester: true } } : p;
+      setSearchResults((prev) => prev?.map(updateFn) ?? null);
+      setNearbyResults((prev) => prev?.map(updateFn) ?? null);
       setPendingSent((prev) => [
         {
           friendship_id: data.id,
@@ -178,9 +162,7 @@ export function PlayersClient({
     if (res.ok) {
       const entry = pendingReceived.find((f) => f.friendship_id === friendshipId);
       setPendingReceived((prev) => prev.filter((f) => f.friendship_id !== friendshipId));
-      if (action === "accept" && entry) {
-        setFriends((prev) => [...prev, { ...entry, friendship_status: "accepted" }]);
-      }
+      if (action === "accept" && entry) setFriends((prev) => [...prev, { ...entry, friendship_status: "accepted" }]);
     }
   }
 
@@ -189,7 +171,6 @@ export function PlayersClient({
     const res = await fetch(`/api/friendships/${friendshipId}`, { method: "DELETE" });
     if (res.ok) {
       setFriends((prev) => prev.filter((f) => f.friendship_id !== friendshipId));
-      // Critical: also clear friendship from search/nearby results so user can re-add
       if (removed) {
         const userId = removed.profile.id;
         const clearFn = (p: SearchPlayer) => p.id === userId ? { ...p, friendship: null } : p;
@@ -202,48 +183,58 @@ export function PlayersClient({
   const totalPending = pendingReceived.length;
 
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-72px)]">
-      {/* Sticky header with tab bar */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-0">
-        <div className="max-w-2xl mx-auto">
+    <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
+
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b border-border">
+        <div className="max-w-2xl mx-auto px-4 pt-4 pb-0">
+
           {/* Title row */}
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h1 className="font-display text-2xl font-semibold text-foreground leading-tight">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-baseline gap-2.5">
+              <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">
                 Spieler
               </h1>
-              {totalPending > 0 && activeTab === "freunde" && (
-                <p className="text-xs text-amber-600 font-medium mt-0.5">
-                  {totalPending} offene {totalPending === 1 ? "Anfrage" : "Anfragen"}
-                </p>
+              {totalPending > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
+                  {totalPending} {totalPending === 1 ? "Anfrage" : "Anfragen"}
+                </span>
               )}
             </div>
+
             <Link
               href="/players/messages"
-              className="relative p-2.5 rounded-xl hover:bg-muted transition-colors"
+              className="relative flex items-center gap-2 h-9 px-3 rounded-full bg-muted hover:bg-muted/80 active:bg-muted/60 transition-colors"
               aria-label="Nachrichten"
             >
-              <Mail size={20} className="text-muted-foreground" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              <Mail size={16} className="text-muted-foreground" />
+              {unreadCount > 0 ? (
+                <span className="text-xs font-bold text-amber-700">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
+              ) : (
+                <span className="text-xs text-muted-foreground font-medium sr-only">Nachrichten</span>
+              )}
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background" />
               )}
             </Link>
           </div>
 
-          {/* Tab switcher */}
-          <div className="flex gap-1 p-1 bg-muted/70 rounded-xl mb-0">
+          {/* Tab bar */}
+          <div className="flex gap-0">
             <TabButton
               active={activeTab === "freunde"}
               onClick={() => setActiveTab("freunde")}
               badge={totalPending > 0 ? totalPending : undefined}
+              icon={<Users size={14} />}
             >
               Freunde
             </TabButton>
             <TabButton
               active={activeTab === "suche"}
               onClick={() => setActiveTab("suche")}
+              icon={<Search size={14} />}
             >
               Suche
             </TabButton>
@@ -251,7 +242,7 @@ export function PlayersClient({
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       <div className="flex-1 max-w-2xl mx-auto w-full">
         {activeTab === "freunde" ? (
           <FreundeTab
@@ -293,32 +284,52 @@ function TabButton({
   onClick,
   children,
   badge,
+  icon,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
   badge?: number;
+  icon?: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+        "relative flex items-center justify-center gap-1.5 flex-1 py-2.5 text-sm font-medium transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
       )}
     >
+      {icon}
       {children}
       {badge !== undefined && (
-        <span className={cn(
-          "text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center",
-          active ? "bg-amber-500 text-white" : "bg-amber-500/20 text-amber-600"
-        )}>
+        <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
           {badge}
         </span>
       )}
+      {/* Active underline indicator */}
+      <span className={cn(
+        "absolute bottom-0 left-3 right-3 h-0.5 rounded-full transition-all duration-200",
+        active ? "bg-amber-500 opacity-100" : "opacity-0"
+      )} />
     </button>
+  );
+}
+
+// ── Section Label ──────────────────────────────────────────────────────────────
+
+function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/60">
+        {children}
+      </p>
+      {count !== undefined && (
+        <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+          {count}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -341,13 +352,16 @@ function FreundeTab({
   onRemoveFriend: (fId: string) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
 }) {
+  const isEmpty = friends.length === 0 && pendingReceived.length === 0;
+
   return (
-    <div className="flex flex-col px-4 pt-4 pb-8 gap-4">
+    <div className="flex flex-col px-4 pt-5 pb-10 gap-6">
+
       {/* Incoming requests */}
       {pendingReceived.length > 0 && (
         <section>
-          <SectionLabel>Anfragen ({pendingReceived.length})</SectionLabel>
-          <div className="flex flex-col gap-2">
+          <SectionLabel count={pendingReceived.length}>Anfragen</SectionLabel>
+          <div className="flex flex-col gap-2.5">
             {pendingReceived.map((fp) => (
               <PendingRequestCard key={fp.friendship_id} fp={fp} onRespond={onRespondToRequest} />
             ))}
@@ -355,24 +369,17 @@ function FreundeTab({
         </section>
       )}
 
-      {/* Friends */}
+      {/* Friends list */}
       <section>
-        {friends.length > 0 && (
-          <SectionLabel>Freunde ({friends.length})</SectionLabel>
-        )}
+        {!isEmpty && <SectionLabel count={friends.length}>Freunde</SectionLabel>}
 
-        {friends.length === 0 && pendingReceived.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-              <Users size={28} className="text-muted-foreground" />
-            </div>
-            <h3 className="font-display text-lg font-semibold text-foreground mb-2">
-              Noch keine Freunde
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-              Wechsle zum Tab &quot;Suche&quot; um andere Spieler zu finden.
-            </p>
-          </div>
+        {isEmpty ? (
+          <EmptyState
+            icon={<Users size={26} className="text-amber-400" />}
+            title="Noch keine Freunde"
+            subtitle='Wechsle zum Tab "Suche" um andere Spieler zu finden.'
+            iconBg="bg-amber-50"
+          />
         ) : (
           <div className="flex flex-col gap-2">
             {friends.map((fp) => (
@@ -382,11 +389,11 @@ function FreundeTab({
         )}
       </section>
 
-      {/* For-sale games from friends */}
+      {/* For-sale section */}
       {forSaleGames.length > 0 && (
         <section>
-          <SectionLabel>Zu Verkaufen ({forSaleGames.length})</SectionLabel>
-          <div className="flex flex-col gap-2">
+          <SectionLabel count={forSaleGames.length}>Zu Verkaufen</SectionLabel>
+          <div className="flex flex-col gap-2.5">
             {forSaleGames.map((item) => (
               <ForSaleCard key={item.id} item={item} />
             ))}
@@ -397,7 +404,7 @@ function FreundeTab({
       {/* Sent requests */}
       {pendingSent.length > 0 && (
         <section>
-          <SectionLabel>Gesendete Anfragen</SectionLabel>
+          <SectionLabel count={pendingSent.length}>Gesendete Anfragen</SectionLabel>
           <div className="flex flex-col gap-2">
             {pendingSent.map((fp) => (
               <PendingSentCard key={fp.friendship_id} fp={fp} onCancel={onCancelRequest} />
@@ -405,6 +412,206 @@ function FreundeTab({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+// ── Empty State ────────────────────────────────────────────────────────────────
+
+function EmptyState({
+  icon,
+  title,
+  subtitle,
+  iconBg = "bg-muted",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  iconBg?: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 text-center px-4">
+      <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-sm", iconBg)}>
+        {icon}
+      </div>
+      <h3 className="font-display text-base font-semibold text-foreground mb-1.5">{title}</h3>
+      <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">{subtitle}</p>
+    </div>
+  );
+}
+
+// ── Friend Card ────────────────────────────────────────────────────────────────
+
+function FriendCard({ fp, onRemove }: { fp: FriendProfile; onRemove: (fId: string) => Promise<void> }) {
+  const [showActions, setShowActions] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const p = fp.profile;
+  const menuRef = useRef<HTMLDivElement>(null);
+  const displayName = p.display_name ?? p.username;
+
+  useEffect(() => {
+    if (!showActions) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowActions(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showActions]);
+
+  async function handleRemove() {
+    setRemoving(true);
+    await onRemove(fp.friendship_id);
+    setRemoving(false);
+    setShowActions(false);
+  }
+
+  return (
+    <div className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow">
+      <Link href={`/players/${p.id}`} className="flex-shrink-0">
+        <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" ring />
+      </Link>
+
+      <Link href={`/players/${p.id}`} className="flex-1 min-w-0 py-0.5">
+        <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
+        {p.display_name && p.display_name !== p.username && (
+          <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
+        )}
+        {p.location && (
+          <p className="text-xs text-muted-foreground/60 truncate flex items-center gap-1 mt-0.5">
+            <MapPin size={9} />
+            {p.location}
+          </p>
+        )}
+      </Link>
+
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <Link
+          href={`/players/messages/${p.id}`}
+          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-amber-50 hover:text-amber-600 active:bg-amber-100 transition-colors"
+          aria-label="Nachricht senden"
+        >
+          <MessageSquare size={15} />
+        </Link>
+
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setShowActions((v) => !v)}
+            className={cn(
+              "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+              showActions ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"
+            )}
+            aria-label="Optionen"
+            aria-expanded={showActions}
+            aria-haspopup="menu"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+
+          {showActions && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1.5 z-30 bg-card border border-border rounded-2xl shadow-lg overflow-hidden min-w-[176px]"
+            >
+              <button
+                role="menuitem"
+                onClick={handleRemove}
+                disabled={removing}
+                className="w-full flex items-center gap-2.5 px-4 py-3.5 text-red-600 text-sm font-medium hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
+              >
+                <UserX size={14} />
+                {removing ? "Wird entfernt…" : "Freund entfernen"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Pending Request Card ───────────────────────────────────────────────────────
+
+function PendingRequestCard({ fp, onRespond }: { fp: FriendProfile; onRespond: (fId: string, action: "accept" | "decline") => Promise<void> }) {
+  const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
+  const p = fp.profile;
+  const displayName = p.display_name ?? p.username;
+
+  async function handle(action: "accept" | "decline") {
+    setLoading(action);
+    await onRespond(fp.friendship_id, action);
+    setLoading(null);
+  }
+
+  return (
+    <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm">
+      <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" ring />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
+        {p.display_name && p.display_name !== p.username && (
+          <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
+        )}
+        {p.location && (
+          <p className="text-xs text-amber-700/60 truncate flex items-center gap-1 mt-0.5">
+            <MapPin size={9} />
+            {p.location}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button
+          onClick={() => handle("decline")}
+          disabled={!!loading}
+          className="w-9 h-9 rounded-full bg-white border border-amber-200 flex items-center justify-center text-muted-foreground hover:border-red-200 hover:text-red-500 active:bg-red-50 transition-colors disabled:opacity-50"
+          aria-label="Ablehnen"
+        >
+          {loading === "decline" ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <X size={14} />}
+        </button>
+        <button
+          onClick={() => handle("accept")}
+          disabled={!!loading}
+          className="flex items-center gap-1.5 px-3.5 h-9 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 transition-colors disabled:opacity-50 shadow-sm"
+        >
+          {loading === "accept"
+            ? <span className="w-3 h-3 border-2 border-white/60 border-t-white rounded-full animate-spin" />
+            : <UserCheck size={13} />}
+          {loading === "accept" ? "…" : "Annehmen"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Pending Sent Card ──────────────────────────────────────────────────────────
+
+function PendingSentCard({ fp, onCancel }: { fp: FriendProfile; onCancel: (fId: string, pId: string) => Promise<void> }) {
+  const [cancelling, setCancelling] = useState(false);
+  const p = fp.profile;
+  const displayName = p.display_name ?? p.username;
+
+  async function handle() {
+    setCancelling(true);
+    await onCancel(fp.friendship_id, p.id);
+    setCancelling(false);
+  }
+
+  return (
+    <div className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-dashed border-border">
+      <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground truncate leading-tight">{displayName}</p>
+        <div className="flex items-center gap-1 mt-0.5">
+          <Clock size={10} className="text-muted-foreground/60" />
+          <p className="text-xs text-muted-foreground/60">Anfrage ausstehend</p>
+        </div>
+      </div>
+      <button
+        onClick={handle}
+        disabled={cancelling}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium border border-border hover:border-red-200 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 active:bg-red-100 transition-colors"
+      >
+        <X size={11} />
+        {cancelling ? "…" : "Widerrufen"}
+      </button>
     </div>
   );
 }
@@ -420,21 +627,14 @@ function ForSaleCard({ item }: { item: ForSaleGame }) {
   return (
     <Link
       href={`/players/${item.user_id}`}
-      className="flex items-center gap-3 p-3 bg-card rounded-xl border border-green-200 shadow-sm hover:shadow-md transition-all active:scale-[0.99]"
+      className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-green-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all active:scale-[0.99]"
     >
       {/* Cover */}
-      <div className="relative flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-muted">
+      <div className="relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-green-50">
         {item.game?.thumbnail_url ? (
-          <Image
-            src={item.game.thumbnail_url}
-            alt={item.game.name}
-            fill
-            className="object-cover"
-            sizes="56px"
-            loading="lazy"
-          />
+          <Image src={item.game.thumbnail_url} alt={item.game.name} fill className="object-cover" sizes="56px" loading="lazy" />
         ) : (
-          <div className="w-full h-full bg-green-100 flex items-center justify-center">
+          <div className="w-full h-full flex items-center justify-center">
             <Tag size={20} className="text-green-400" />
           </div>
         )}
@@ -442,16 +642,19 @@ function ForSaleCard({ item }: { item: ForSaleGame }) {
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-foreground text-sm leading-tight truncate">
+        <h3 className="font-semibold text-foreground text-sm leading-tight truncate">
           {item.game?.name ?? "Unbekanntes Spiel"}
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5 truncate">von {ownerName}</p>
       </div>
 
       {/* Price */}
-      <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
-        <span className="text-sm font-bold text-green-700">{priceLabel}</span>
-        <span className="text-[10px] text-muted-foreground">Anfragen →</span>
+      <div className="flex-shrink-0 flex flex-col items-end gap-1">
+        <span className="text-sm font-bold text-green-700 tabular-nums">{priceLabel}</span>
+        <span className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full font-medium">
+          <ShoppingBag size={9} />
+          Anfragen
+        </span>
       </div>
     </Link>
   );
@@ -462,20 +665,9 @@ function ForSaleCard({ item }: { item: ForSaleGame }) {
 const RADIUS_OPTIONS = [25, 50, 100] as const;
 
 function SucheTab({
-  searchQuery,
-  searchResults,
-  searching,
-  nearbyStatus,
-  nearbyResults,
-  nearbyRadius,
-  sortMode,
-  onSearchInput,
-  onNearbySearch,
-  onNearbyRadiusChange,
-  onClearSearch,
-  onSortChange,
-  onSendRequest,
-  onCancelRequest,
+  searchQuery, searchResults, searching, nearbyStatus, nearbyResults,
+  nearbyRadius, sortMode, onSearchInput, onNearbySearch, onNearbyRadiusChange,
+  onClearSearch, onSortChange, onSendRequest, onCancelRequest,
 }: {
   searchQuery: string;
   searchResults: SearchPlayer[] | null;
@@ -495,12 +687,8 @@ function SucheTab({
   const isNearbyMode = sortMode === "entfernung";
   const [localFilter, setLocalFilter] = useState("");
 
-  // Determine active result set
-  const rawResults: SearchPlayer[] = isNearbyMode
-    ? (nearbyResults ?? [])
-    : (searchResults ?? []);
+  const rawResults: SearchPlayer[] = isNearbyMode ? (nearbyResults ?? []) : (searchResults ?? []);
 
-  // In Entfernung mode, text input is a client-side filter
   const visibleResults = isNearbyMode && localFilter.trim().length > 0
     ? rawResults.filter((p) =>
         p.username.toLowerCase().includes(localFilter.toLowerCase()) ||
@@ -508,50 +696,38 @@ function SucheTab({
       )
     : rawResults;
 
-  // Sort: A-Z mode = API already returns relevance order; Entfernung = sort by distance
   const sortedResults = isNearbyMode
     ? [...visibleResults].sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
-    : [...visibleResults].sort((a, b) =>
-        a.username.localeCompare(b.username, "de", { sensitivity: "base" })
-      );
+    : [...visibleResults].sort((a, b) => a.username.localeCompare(b.username, "de", { sensitivity: "base" }));
 
   const isLoading = searching || nearbyStatus === "locating" || nearbyStatus === "loading";
   const nearbyDone = nearbyStatus === "done" && nearbyResults !== null;
-
-  const showEmpty =
-    !isLoading && isNearbyMode && nearbyDone && rawResults.length === 0;
+  const showEmpty = !isLoading && isNearbyMode && nearbyDone && rawResults.length === 0;
 
   return (
-    <div className="flex flex-col px-4 pt-4 pb-8 gap-3">
+    <div className="flex flex-col px-4 pt-4 pb-10 gap-3">
 
       {/* ── Mode switcher ── */}
-      <div className="flex gap-1 p-1 bg-muted/70 rounded-xl">
-        <ModeButton
-          active={!isNearbyMode}
-          icon={<ArrowDownAZ size={13} />}
-          onClick={() => onSortChange("az")}
-        >
+      <div className="flex p-1 bg-muted/60 rounded-xl gap-1">
+        <ModeButton active={!isNearbyMode} icon={<ArrowDownAZ size={14} />} onClick={() => onSortChange("az")}>
           A–Z
         </ModeButton>
-        <ModeButton
-          active={isNearbyMode}
-          icon={<LocateFixed size={13} />}
-          onClick={() => onSortChange("entfernung")}
-        >
-          Entfernung
+        <ModeButton active={isNearbyMode} icon={<LocateFixed size={14} />} onClick={() => onSortChange("entfernung")}>
+          In der Nähe
         </ModeButton>
       </div>
 
-      {/* ── A–Z mode: text search ── */}
+      {/* ── A-Z: Textsuche ── */}
       {!isNearbyMode && (
         <div className="relative">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none" />
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchInput(e.target.value)}
-            placeholder="Spielername eingeben…"
-            className="w-full h-11 pl-9 pr-9 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:border-amber-400 transition-all min-w-0"
+            placeholder="Spielername suchen…"
+            autoComplete="off"
+            className="w-full h-11 pl-10 pr-10 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all min-w-0"
           />
           {searchQuery.length > 0 && (
             <button
@@ -565,35 +741,32 @@ function SucheTab({
         </div>
       )}
 
-      {/* ── Entfernung mode: radius chips + optional local filter ── */}
+      {/* ── Entfernung: Radius + Filter ── */}
       {isNearbyMode && (
         <>
-          {/* Radius chips */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground font-medium mr-0.5">Umkreis:</span>
-            {RADIUS_OPTIONS.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => {
-                  onNearbyRadiusChange(r);
-                  onNearbySearch(r);
-                }}
-                className={cn(
-                  "px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
-                  nearbyRadius === r && (nearbyDone || isLoading)
-                    ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                    : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-amber-700"
-                )}
-              >
-                {r} km
-              </button>
-            ))}
-            {/* Refresh button */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium shrink-0">Umkreis</span>
+            <div className="flex gap-1.5 flex-1">
+              {RADIUS_OPTIONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => { onNearbyRadiusChange(r); onNearbySearch(r); }}
+                  className={cn(
+                    "flex-1 py-1.5 rounded-full text-xs font-semibold border transition-all",
+                    nearbyRadius === r && (nearbyDone || isLoading)
+                      ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                      : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-amber-700"
+                  )}
+                >
+                  {r} km
+                </button>
+              ))}
+            </div>
             {nearbyDone && (
               <button
                 onClick={() => onNearbySearch(nearbyRadius)}
-                className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card shrink-0"
                 aria-label="Aktualisieren"
               >
                 <LocateFixed size={11} />
@@ -602,23 +775,18 @@ function SucheTab({
             )}
           </div>
 
-          {/* Local filter — only shown when results exist */}
           {nearbyDone && rawResults.length > 0 && (
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
               <input
                 type="text"
                 value={localFilter}
                 onChange={(e) => setLocalFilter(e.target.value)}
                 placeholder="Ergebnisse filtern…"
-                className="w-full h-9 pl-8 pr-8 rounded-xl border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all min-w-0"
+                className="w-full h-9 pl-8 pr-8 rounded-xl border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all min-w-0"
               />
               {localFilter.length > 0 && (
-                <button
-                  onClick={() => setLocalFilter("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-muted text-muted-foreground"
-                  aria-label="Filter löschen"
-                >
+                <button onClick={() => setLocalFilter("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-muted text-muted-foreground" aria-label="Filter löschen">
                   <X size={10} />
                 </button>
               )}
@@ -629,47 +797,52 @@ function SucheTab({
 
       {/* ── Loading ── */}
       {isLoading && (
-        <div className="flex items-center gap-2 py-1 px-0.5">
-          <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
+        <div className="flex items-center gap-2.5 py-2 px-1">
+          <span className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
           <p className="text-xs text-muted-foreground">
-            {nearbyStatus === "locating"
-              ? "Standort wird ermittelt…"
-              : nearbyStatus === "loading"
-              ? "Spieler werden gesucht…"
+            {nearbyStatus === "locating" ? "Standort wird ermittelt…"
+              : nearbyStatus === "loading" ? "Spieler in der Nähe werden gesucht…"
               : "Suche…"}
           </p>
         </div>
       )}
 
-      {/* ── Error / denied ── */}
+      {/* ── Errors ── */}
       {nearbyStatus === "denied" && (
-        <div className="py-6 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
-          <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
-          <p className="text-sm font-medium text-foreground">Standortzugriff verweigert</p>
+        <div className="py-8 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+          <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm font-semibold text-foreground">Standortzugriff verweigert</p>
           <p className="text-xs text-muted-foreground mt-1">Bitte in den Browser-Einstellungen erlauben.</p>
         </div>
       )}
       {nearbyStatus === "error" && (
-        <p className="text-sm text-red-600 px-0.5">Standort konnte nicht ermittelt werden.</p>
+        <p className="text-sm text-red-600 px-1">Standort konnte nicht ermittelt werden.</p>
       )}
 
-      {/* ── Empty state (Entfernung mode only) ── */}
+      {/* ── Empty: Entfernung ── */}
       {showEmpty && (
-        <div className="py-10 text-center">
-          <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
-          <p className="text-sm font-medium text-foreground mb-1">Keine Spieler in der Nähe</p>
-          <p className="text-xs text-muted-foreground">
-            Im Umkreis von {nearbyRadius} km noch niemand gefunden.
-          </p>
-        </div>
+        <EmptyState
+          icon={<MapPin size={24} className="text-muted-foreground" />}
+          title="Keine Spieler in der Nähe"
+          subtitle={`Im Umkreis von ${nearbyRadius} km noch niemand gefunden. Versuch einen größeren Radius.`}
+        />
+      )}
+
+      {/* ── Empty: A-Z Suche ── */}
+      {!isNearbyMode && !isLoading && searchQuery.length >= 2 && searchResults !== null && searchResults.length === 0 && (
+        <EmptyState
+          icon={<Search size={22} className="text-muted-foreground" />}
+          title="Kein Spieler gefunden"
+          subtitle="Versuch einen anderen Nutzernamen."
+        />
       )}
 
       {/* ── Results ── */}
       {sortedResults.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-muted-foreground/70 px-0.5">
+          <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 px-0.5 mb-1">
             {sortedResults.length} {sortedResults.length === 1 ? "Spieler" : "Spieler"}
-            {isNearbyMode && ` im Umkreis von ${nearbyRadius} km`}
+            {isNearbyMode && ` · ${nearbyRadius} km`}
           </p>
           {sortedResults.map((player) => (
             <SearchResultCard
@@ -682,39 +855,21 @@ function SucheTab({
           ))}
         </div>
       )}
-
-      {/* ── Empty (A-Z mode, search returned nothing) ── */}
-      {!isNearbyMode && !isLoading && searchQuery.length >= 2 && searchResults !== null && searchResults.length === 0 && (
-        <div className="py-10 text-center">
-          <p className="text-sm font-medium text-foreground mb-1">Kein Spieler gefunden</p>
-          <p className="text-xs text-muted-foreground">Versuche einen anderen Nutzernamen.</p>
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Mode Button (A-Z / Entfernung switcher) ────────────────────────────────────
+// ── Mode Button ────────────────────────────────────────────────────────────────
 
-function ModeButton({
-  active,
-  onClick,
-  icon,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  children: React.ReactNode;
+function ModeButton({ active, onClick, icon, children }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
         "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
+        active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}
@@ -723,24 +878,9 @@ function ModeButton({
   );
 }
 
-// ── Section Label ──────────────────────────────────────────────────────────────
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-xs font-semibold text-muted-foreground mb-2 px-0.5">
-      {children}
-    </p>
-  );
-}
-
 // ── Search Result Card ─────────────────────────────────────────────────────────
 
-function SearchResultCard({
-  player,
-  onSendRequest,
-  onCancelRequest,
-  showDistance,
-}: {
+function SearchResultCard({ player, onSendRequest, onCancelRequest, showDistance }: {
   player: SearchPlayer;
   onSendRequest: (p: SearchPlayer) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
@@ -748,6 +888,7 @@ function SearchResultCard({
 }) {
   const [loading, setLoading] = useState(false);
   const f = player.friendship;
+  const displayName = player.display_name ?? player.username;
 
   async function handleAdd() {
     setLoading(true);
@@ -763,49 +904,63 @@ function SearchResultCard({
   }
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
+    <div className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-border shadow-sm">
       <PlayerAvatar name={player.username} avatarUrl={player.avatar_url} size="md" />
+
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-foreground truncate">{player.username}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
           {showDistance && player.distance_km !== undefined && (
-            <span className="flex-shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
+            <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
               <MapPin size={9} />
-              {player.distance_km < 1 ? `< 1 km` : `${Math.round(player.distance_km)} km`}
+              {player.distance_km < 1 ? "< 1 km" : `${Math.round(player.distance_km)} km`}
             </span>
           )}
         </div>
+        {player.display_name && player.display_name !== player.username && (
+          <p className="text-xs text-muted-foreground truncate">@{player.username}</p>
+        )}
         {player.location && (
-          <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{player.location}</p>
+          <p className="text-xs text-muted-foreground/60 truncate flex items-center gap-1 mt-0.5">
+            <MapPin size={9} />
+            {player.location}
+          </p>
         )}
       </div>
 
+      {/* Action */}
       {f?.status === "accepted" ? (
         <Link
           href={`/players/${player.id}`}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-50 text-green-700 text-xs font-medium border border-green-200"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-semibold border border-green-200"
         >
-          <UserCheck size={13} />
-          Befreundet
+          <UserCheck size={12} />
+          Freund
         </Link>
       ) : f?.status === "pending" && f.is_requester ? (
         <button
           onClick={handleCancel}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
         >
-          <Clock size={13} />
+          {loading
+            ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <Clock size={12} />}
           {loading ? "…" : "Gesendet"}
         </button>
       ) : f?.status === "pending" && !f.is_requester ? (
-        <span className="text-xs text-amber-600 font-medium px-2">Anfrage erhalten</span>
+        <span className="shrink-0 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-full">
+          Anfrage ↓
+        </span>
       ) : (
         <button
           onClick={handleAdd}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold disabled:opacity-50 active:bg-amber-600 transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 transition-colors shadow-sm"
         >
-          <UserPlus size={13} />
+          {loading
+            ? <span className="w-3 h-3 border-2 border-white/60 border-t-white rounded-full animate-spin" />
+            : <UserPlus size={12} />}
           {loading ? "…" : "Hinzufügen"}
         </button>
       )}
@@ -813,219 +968,35 @@ function SearchResultCard({
   );
 }
 
-// ── Pending Request Card ───────────────────────────────────────────────────────
-
-function PendingRequestCard({
-  fp,
-  onRespond,
-}: {
-  fp: FriendProfile;
-  onRespond: (fId: string, action: "accept" | "decline") => Promise<void>;
-}) {
-  const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
-  const p = fp.profile;
-
-  async function handle(action: "accept" | "decline") {
-    setLoading(action);
-    await onRespond(fp.friendship_id, action);
-    setLoading(null);
-  }
-
-  return (
-    <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
-      <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
-        {p.location && (
-          <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{p.location}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <button
-          onClick={() => handle("decline")}
-          disabled={!!loading}
-          className="w-9 h-9 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground active:bg-muted transition-colors disabled:opacity-50"
-          aria-label="Ablehnen"
-        >
-          <UserX size={15} />
-        </button>
-        <button
-          onClick={() => handle("accept")}
-          disabled={!!loading}
-          className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-amber-500 text-white text-xs font-semibold active:bg-amber-600 transition-colors disabled:opacity-50"
-        >
-          <UserCheck size={14} />
-          {loading === "accept" ? "…" : "Annehmen"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Friend Card ────────────────────────────────────────────────────────────────
-
-function FriendCard({
-  fp,
-  onRemove,
-}: {
-  fp: FriendProfile;
-  onRemove: (fId: string) => Promise<void>;
-}) {
-  const [showActions, setShowActions] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const p = fp.profile;
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showActions) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowActions(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showActions]);
-
-  async function handleRemove() {
-    setRemoving(true);
-    await onRemove(fp.friendship_id);
-    setRemoving(false);
-    setShowActions(false);
-  }
-
-  return (
-    <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
-      <Link href={`/players/${p.id}`} className="flex-shrink-0">
-        <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
-      </Link>
-
-      <Link href={`/players/${p.id}`} className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
-        {p.location && (
-          <p className="text-xs text-muted-foreground/60 truncate mt-0.5">{p.location}</p>
-        )}
-      </Link>
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <Link
-          href={`/players/messages/${p.id}`}
-          className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-muted/70 active:bg-muted/70 transition-colors"
-          aria-label="Nachricht senden"
-        >
-          <MessageSquare size={15} />
-        </Link>
-
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setShowActions((v) => !v)}
-            className={cn(
-              "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-              showActions
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            aria-label="Optionen"
-            aria-expanded={showActions}
-            aria-haspopup="menu"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-
-          {showActions && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1.5 z-30 bg-card border border-border rounded-xl shadow-lg overflow-hidden min-w-[168px]"
-            >
-              <button
-                role="menuitem"
-                onClick={handleRemove}
-                disabled={removing}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-red-600 text-sm font-medium hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
-              >
-                <UserX size={14} />
-                {removing ? "Wird entfernt…" : "Freund entfernen"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Pending Sent Card ──────────────────────────────────────────────────────────
-
-function PendingSentCard({
-  fp,
-  onCancel,
-}: {
-  fp: FriendProfile;
-  onCancel: (fId: string, pId: string) => Promise<void>;
-}) {
-  const [cancelling, setCancelling] = useState(false);
-  const p = fp.profile;
-
-  async function handle() {
-    setCancelling(true);
-    await onCancel(fp.friendship_id, p.id);
-    setCancelling(false);
-  }
-
-  return (
-    <div className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border opacity-60">
-      <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{p.username}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Anfrage ausstehend</p>
-      </div>
-      <button
-        onClick={handle}
-        disabled={cancelling}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50 active:bg-muted/70 transition-colors"
-      >
-        <X size={11} />
-        {cancelling ? "…" : "Widerrufen"}
-      </button>
-    </div>
-  );
-}
-
 // ── Player Avatar ──────────────────────────────────────────────────────────────
 
 export function PlayerAvatar({
-  name,
-  avatarUrl,
-  size = "md",
-  className,
+  name, avatarUrl, size = "md", ring = false, className,
 }: {
   name: string;
   avatarUrl: string | null;
   size?: "sm" | "md" | "lg";
+  ring?: boolean;
   className?: string;
 }) {
   const hue = name.charCodeAt(0) % 360;
   const initial = name[0]?.toUpperCase() ?? "?";
-  const sizeClasses = {
-    sm: "w-8 h-8 text-xs",
-    md: "w-10 h-10 text-sm",
-    lg: "w-14 h-14 text-lg",
-  };
+  const sizeClasses = { sm: "w-8 h-8 text-xs", md: "w-10 h-10 text-sm", lg: "w-14 h-14 text-lg" };
+  const px = size === "lg" ? 56 : size === "md" ? 40 : 32;
 
   return (
-    <div className={cn("rounded-full overflow-hidden flex-shrink-0", sizeClasses[size], className)}>
+    <div className={cn(
+      "rounded-full overflow-hidden flex-shrink-0",
+      sizeClasses[size],
+      ring && "ring-2 ring-amber-200 ring-offset-1",
+      className
+    )}>
       {avatarUrl ? (
-        <Image
-          src={avatarUrl}
-          alt={name}
-          width={size === "lg" ? 56 : size === "md" ? 40 : 32}
-          height={size === "lg" ? 56 : size === "md" ? 40 : 32}
-          className="object-cover w-full h-full"
-        />
+        <Image src={avatarUrl} alt={name} width={px} height={px} className="object-cover w-full h-full" />
       ) : (
         <div
-          className="w-full h-full flex items-center justify-center font-semibold text-white"
-          style={{ background: `hsl(${hue} 45% 50%)` }}
+          className="w-full h-full flex items-center justify-center font-bold text-white"
+          style={{ background: `hsl(${hue} 50% 48%)` }}
         >
           {initial}
         </div>
