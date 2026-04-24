@@ -338,6 +338,130 @@ const SOUND_ICON_MAP: Record<string, LucideIcon> = {
 
 const SOUND_ICON_KEYS = Object.keys(SOUND_ICON_MAP);
 
+// ── Deutsche Keyword-Map ──────────────────────────────────────────────────────
+// Mappt deutsche Suchbegriffe auf Lucide-Icon-Namen (englisch).
+// Ermöglicht: "regen" → CloudRain, "tor" → Door/DoorOpen, etc.
+const GERMAN_KEYWORDS: Record<string, string[]> = {
+  // Wetter & Natur
+  regen:      ["CloudRain", "CloudDrizzle", "Cloud"],
+  gewitter:   ["CloudLightning", "Zap", "CloudRain"],
+  donner:     ["CloudLightning", "Zap"],
+  blitz:      ["Zap", "CloudLightning"],
+  sturm:      ["Wind", "CloudRain", "Zap"],
+  wind:       ["Wind"],
+  wellen:     ["Waves"],
+  welle:      ["Waves"],
+  wasser:     ["Waves", "Droplets", "Droplet"],
+  meer:       ["Waves", "Ship", "Anchor"],
+  ozean:      ["Waves", "Ship"],
+  see:        ["Waves", "Anchor"],
+  fluss:      ["Waves"],
+  feuer:      ["Flame"],
+  flamme:     ["Flame"],
+  rauch:      ["Wind", "Cloud"],
+  eis:        ["Snowflake"],
+  schnee:     ["Snowflake"],
+  frost:      ["Snowflake"],
+  sonne:      ["Sun"],
+  mond:       ["Moon"],
+  nacht:      ["Moon", "Stars"],
+  sterne:     ["Star", "Stars", "Sparkles"],
+  stern:      ["Star", "Stars"],
+  wolke:      ["Cloud", "CloudRain"],
+  // Tiere
+  vogel:      ["Bird"],
+  kraehe:     ["Bird"],
+  adler:      ["Bird"],
+  eule:       ["Bird"],
+  hund:       ["Dog"],
+  katze:      ["Cat"],
+  wolf:       ["Dog"],
+  biene:      ["Bug"],
+  insekt:     ["Bug"],
+  kaefer:     ["Bug"],
+  fisch:      ["Fish"],
+  hai:        ["Fish"],
+  // Musik & Audio
+  musik:      ["Music", "Music2", "Radio"],
+  lied:       ["Music", "Music2"],
+  ton:        ["Volume2", "Music"],
+  klang:      ["Volume2", "Speaker"],
+  geraeusch:  ["Volume2"],
+  laut:       ["Volume2", "Speaker"],
+  lautsprecher: ["Speaker"],
+  mikrofon:   ["Mic"],
+  stimme:     ["Mic"],
+  aufnahme:   ["Mic"],
+  radio:      ["Radio"],
+  glocke:     ["Bell"],
+  alarm:      ["Bell", "AlarmClock"],
+  gitarre:    ["Guitar"],
+  klavier:    ["Piano"],
+  trommel:    ["Drum"],
+  trompete:   ["Megaphone"],
+  // Kampf & Abenteuer
+  schwert:    ["Sword", "Swords"],
+  klinge:     ["Sword"],
+  kampf:      ["Sword", "Swords", "Shield"],
+  ritter:     ["Sword", "Shield"],
+  schild:     ["Shield"],
+  pfeil:      ["Crosshair", "Target"],
+  bogen:      ["Crosshair"],
+  magie:      ["Wand2", "Sparkles", "Zap"],
+  zauber:     ["Wand2", "Sparkles"],
+  drache:     ["Flame", "Zap"],
+  monster:    ["Skull", "Ghost"],
+  skelett:    ["Skull"],
+  geist:      ["Ghost"],
+  // Orte & Gebäude
+  tor:        ["DoorOpen", "Door"],
+  tuer:       ["DoorOpen", "Door", "DoorClosed"],
+  burg:       ["Castle"],
+  schloss:    ["Castle", "Lock"],
+  turm:       ["Tower", "Castle"],
+  taverne:    ["Wine", "Coffee", "Home"],
+  dorf:       ["Home", "MapPin"],
+  kirche:     ["Church"],
+  gefaengnis: ["Lock"],
+  wald:       ["TreePine", "Trees", "Leaf"],
+  baum:       ["TreePine", "Tree", "Trees"],
+  hoehle:     ["Mountain"],
+  berg:       ["Mountain"],
+  // Fahrzeuge & Transport
+  schiff:     ["Ship", "Anchor", "Sailboat"],
+  boot:       ["Sailboat", "Ship"],
+  flugzeug:   ["Plane"],
+  rakete:     ["Rocket"],
+  kutsche:    ["Car"],
+  pferd:      ["Horse"],
+  // Zeit & Sonstiges
+  uhr:        ["Clock", "Timer", "AlarmClock"],
+  zeit:       ["Clock", "Timer"],
+  koenig:     ["Crown"],
+  krone:      ["Crown"],
+  explosion:  ["Flame", "Zap", "Bomb"],
+  bombe:      ["Bomb"],
+  schritte:   ["Footprints"],
+  jubel:      ["Trophy", "PartyPopper"],
+  erfolg:     ["Trophy", "Award"],
+  herzschlag: ["HeartPulse", "Activity"],
+};
+
+// Sucht in der deutschen Keyword-Map und gibt passende Icon-Namen zurück
+function searchGerman(query: string): string[] {
+  const q = query.toLowerCase().trim();
+  // Exakter Match
+  if (GERMAN_KEYWORDS[q]) return GERMAN_KEYWORDS[q];
+  // Teilstring-Match (z.B. "Regenwald" → "regen" + "wald")
+  const results: string[] = [];
+  for (const [key, icons] of Object.entries(GERMAN_KEYWORDS)) {
+    if (key.includes(q) || q.includes(key)) {
+      for (const icon of icons) if (!results.includes(icon)) results.push(icon);
+    }
+  }
+  return results;
+}
+
 // ── Dynamisches Icon-Loading ──────────────────────────────────────────────────
 // Curated MAP ist sofort verfügbar; alle anderen Lucide-Icons werden beim ersten
 // Öffnen des Pickers als einzelnes Code-Split-Chunk lazy geladen und gecacht.
@@ -667,34 +791,41 @@ function SoundBoard() {
               <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
                 {(() => {
                   const q = iconSearch.trim().toLowerCase();
-                  // Mit Suchbegriff: alle Lucide-Icons durchsuchen (oder Fallback auf kuratierte Liste solange lädt)
-                  const pool = q ? (allIconNames ?? SOUND_ICON_KEYS) : SOUND_ICON_KEYS;
-                  const visible = q ? pool.filter((k) => k.toLowerCase().includes(q)) : pool;
 
-                  if (q && allIconNames === null) {
-                    return (
-                      <p className="col-span-8 py-3 text-center text-xs text-muted-foreground animate-pulse">
-                        Icons werden geladen…
-                      </p>
-                    );
+                  // Kein Suchbegriff → kuratierte Icons sofort (kein Laden nötig)
+                  if (!q) {
+                    return SOUND_ICON_KEYS.map((name) => (
+                      <button key={name} type="button" title={name}
+                        onClick={() => { setFormIcon(name); setShowIconPicker(false); setIconSearch(""); }}
+                        className={cn("w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors", formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600")}
+                      >
+                        <SoundIcon name={name} size={18} />
+                      </button>
+                    ));
                   }
+
+                  // Mit Suchbegriff: noch am Laden?
+                  if (allIconNames === null) {
+                    return <p className="col-span-8 py-3 text-center text-xs text-muted-foreground animate-pulse">Icons werden geladen…</p>;
+                  }
+
+                  // Deutsche Keywords zuerst, dann englischer Substring-Match
+                  const germanHits = searchGerman(q).filter((n) => allIconNames.includes(n));
+                  const englishHits = allIconNames.filter((k) => k.toLowerCase().includes(q));
+                  const seen = new Set<string>();
+                  const visible: string[] = [];
+                  for (const n of [...germanHits, ...englishHits]) {
+                    if (!seen.has(n)) { seen.add(n); visible.push(n); }
+                  }
+
                   if (visible.length === 0) {
-                    return (
-                      <p className="col-span-8 py-3 text-center text-xs text-muted-foreground">
-                        Kein Icon gefunden für &bdquo;{iconSearch}&ldquo;
-                      </p>
-                    );
+                    return <p className="col-span-8 py-3 text-center text-xs text-muted-foreground">Kein Icon gefunden</p>;
                   }
+
                   return visible.map((name) => (
-                    <button
-                      key={name}
-                      type="button"
-                      title={name}
+                    <button key={name} type="button" title={name}
                       onClick={() => { setFormIcon(name); setShowIconPicker(false); setIconSearch(""); }}
-                      className={cn(
-                        "w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors",
-                        formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600"
-                      )}
+                      className={cn("w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors", formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600")}
                     >
                       <SoundIcon name={name} size={18} />
                     </button>
