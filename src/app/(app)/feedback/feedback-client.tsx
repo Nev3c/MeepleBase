@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, Plus, Bug, Lightbulb, MessageSquare,
-  CheckCircle2, Clock, Circle, ChevronDown, X, ShieldCheck,
+  CheckCircle2, Clock, Circle, ChevronDown, X, ShieldCheck, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Feedback, FeedbackStatus, FeedbackType } from "@/types";
@@ -56,6 +56,10 @@ export function FeedbackClient({ userId, initialFeedback, isAdmin }: FeedbackCli
   const [adminEditId, setAdminEditId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState("");
   const [adminSaving, setAdminSaving] = useState(false);
+
+  // Delete state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Sorted: own first, then by status priority (open > in_progress > done), then date
   const statusOrder: Record<FeedbackStatus, number> = { open: 0, in_progress: 1, done: 2 };
@@ -134,6 +138,23 @@ export function FeedbackClient({ userId, initialFeedback, isAdmin }: FeedbackCli
       /* keep panel open on error */
     } finally {
       setAdminSaving(false);
+    }
+  }
+
+  // ── Delete ───────────────────────────────────────────────────────────────────
+
+  async function handleDelete(id: string) {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/feedback/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setFeedback((prev) => prev.filter((f) => f.id !== id));
+      setExpandedId(null);
+      setDeleteConfirmId(null);
+    } catch {
+      /* keep state on error */
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -241,20 +262,20 @@ export function FeedbackClient({ userId, initialFeedback, isAdmin }: FeedbackCli
           </div>
         )}
 
-        {/* ── Filter chips ─────────────────────────────────────────────────── */}
-        <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none -mx-4 px-4">
+        {/* ── Filter chips — wrapping so nothing gets cut off ──────────────── */}
+        <div className="flex flex-wrap gap-2">
           {([
-            ["all",     "Alle",            counts.all],
-            ["bug",     "Bugs",            counts.bug],
-            ["feature", "Features",        counts.feature],
-            ["other",   "Sonstiges",       counts.other],
-            ["mine",    "Meine",           counts.mine],
+            ["all",     "Alle",       counts.all],
+            ["bug",     "Bugs",       counts.bug],
+            ["feature", "Features",   counts.feature],
+            ["other",   "Sonstiges",  counts.other],
+            ["mine",    "Meine",      counts.mine],
           ] as [Filter, string, number][]).map(([f, label, count]) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                "flex-shrink-0 flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-semibold transition-colors touch-manipulation",
+                "flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-semibold transition-colors touch-manipulation",
                 filter === f
                   ? "bg-[#1E2A3A] text-white"
                   : "bg-muted text-muted-foreground hover:text-foreground"
@@ -355,6 +376,38 @@ export function FeedbackClient({ userId, initialFeedback, isAdmin }: FeedbackCli
                               <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Status-Update</p>
                               <p className="text-xs text-amber-900 leading-relaxed">{item.admin_note}</p>
                             </div>
+                          </div>
+                        )}
+
+                        {/* Delete — nur für eigene Einträge oder Admin */}
+                        {(isOwn || isAdmin) && (
+                          <div className="flex justify-end border-t border-border/50 pt-3">
+                            {deleteConfirmId === item.id ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">Wirklich löschen?</span>
+                                <button
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  className="px-3 h-8 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
+                                >
+                                  Nein
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(item.id)}
+                                  disabled={deleting}
+                                  className="px-3 h-8 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-50 touch-manipulation"
+                                >
+                                  {deleting ? "…" : "Ja, löschen"}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirmId(item.id)}
+                                className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-red-50 transition-colors touch-manipulation"
+                              >
+                                <Trash2 size={12} />
+                                Löschen
+                              </button>
+                            )}
                           </div>
                         )}
 
