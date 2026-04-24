@@ -80,7 +80,7 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
 
   const favoriteSub = favoriteGame ? `${favoriteGame.count}×` : undefined;
 
-  const friendUrl = `${appUrl}/profile/${profile?.username ?? user.id}`;
+  const friendUrl = `${appUrl}/players/${user.id}`;
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
@@ -183,16 +183,19 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
             <QrCode size={12} className="text-muted-foreground" />
           </button>
 
-          <div className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 shadow-card opacity-40 cursor-not-allowed relative overflow-hidden">
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-              <UserPlus size={18} className="text-muted-foreground" />
+          <button
+            onClick={() => setQrModal("friend")}
+            className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 shadow-card hover:shadow-card-hover active:scale-[0.98] transition-all"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+              <UserPlus size={18} className="text-amber-600" />
             </div>
             <div className="text-center">
               <p className="text-xs font-semibold text-foreground">Kontakt-QR</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Demnächst</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Als Freund adden</p>
             </div>
-            <span className="text-[9px] bg-muted text-muted-foreground font-semibold px-2 py-0.5 rounded-full">Phase 2</span>
-          </div>
+            <QrCode size={12} className="text-muted-foreground" />
+          </button>
         </div>
       </div>
 

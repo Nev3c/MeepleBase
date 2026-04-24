@@ -35,13 +35,13 @@ interface FeedbackClientProps {
   isAdmin: boolean;
 }
 
-export function FeedbackClient({ userId, username, initialFeedback, isAdmin }: FeedbackClientProps) {
+export function FeedbackClient({ userId, initialFeedback, isAdmin }: FeedbackClientProps) {
   const router = useRouter();
   const [feedback, setFeedback] = useState<Feedback[]>(initialFeedback);
   const [filter, setFilter] = useState<Filter>("all");
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   // Form state
   const [formType, setFormType] = useState<FeedbackType>("bug");
