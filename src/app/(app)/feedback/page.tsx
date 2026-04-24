@@ -11,12 +11,6 @@ export default async function FeedbackPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("username")
-    .eq("id", user.id)
-    .single();
-
   const { data: feedback } = await supabase
     .from("feedback")
     .select("*")

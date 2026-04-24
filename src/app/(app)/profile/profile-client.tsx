@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
-import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus, Euro, Tag, Cog, ShieldCheck, MessageSquare, ListChecks } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, X, Share2, UserPlus, ShieldCheck, MessageSquare, ListChecks } from "lucide-react";
 import { CURRENT_VERSION } from "@/data/changelog";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -389,21 +389,6 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// Kleine Stat-Karte
-function StatCard({ icon, value, label, sub }: { icon: React.ReactNode; value: string; label: string; sub?: string }) {
-  const isLong = value.length > 4;
-  return (
-    <div className="bg-card rounded-xl border border-border shadow-card p-3 flex flex-col items-center gap-1">
-      {icon}
-      <span className={`font-display font-semibold text-foreground leading-tight text-center w-full truncate ${isLong ? "text-sm" : "text-xl"}`}>
-        {value}
-      </span>
-      {sub && <span className="text-[10px] text-amber-600 font-medium leading-none">{sub}</span>}
-      <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   );
 }
