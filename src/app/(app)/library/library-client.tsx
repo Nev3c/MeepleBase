@@ -202,9 +202,11 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
 }
 
 // ── Spielen Tab ────────────────────────────────────────────────────────────────
+// TODO: move to Partien page
 
 type SpielSubTab = "ungespielt" | "heute";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SpielenTab({
   userGames,
   playCounts,

@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, Minus, RotateCcw, Dices, ArrowRight,
-  X, Trophy, Undo2, Crown, Hash, Volume2, Pencil, StopCircle,
+  X, Trophy, Undo2, Crown, Hash, Volume2, Pencil, StopCircle, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -828,13 +828,14 @@ function GameTimer() {
 // ── Tools Page ────────────────────────────────────────────────────────────────
 
 export default function ToolsPage() {
-  const [tab, setTab] = useState<"score" | "dice" | "coin" | "sound">("score");
+  const [tab, setTab] = useState<"score" | "dice" | "coin" | "sound" | "timer">("score");
 
   const TAB_ITEMS = [
     { id: "score" as const, label: "Punkte", icon: <Trophy  size={15} /> },
     { id: "dice"  as const, label: "Würfel", icon: <Dices   size={15} /> },
     { id: "coin"  as const, label: "Münze",  icon: <Crown   size={15} /> },
     { id: "sound" as const, label: "Sound",  icon: <Volume2 size={15} /> },
+    { id: "timer" as const, label: "Timer",  icon: <Clock   size={15} /> },
   ];
 
   return (
@@ -862,6 +863,7 @@ export default function ToolsPage() {
         {tab === "dice"  && <DiceRoller />}
         {tab === "coin"  && <CoinFlip />}
         {tab === "sound" && <SoundBoard />}
+        {tab === "timer" && <GameTimer />}
       </div>
     </div>
   );
