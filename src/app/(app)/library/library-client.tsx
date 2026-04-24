@@ -78,6 +78,14 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       });
     }
 
+    if (filter.maxPlaytime) {
+      const t = filter.maxPlaytime;
+      games = games.filter((g) => {
+        const min = g.game?.min_playtime;
+        return min == null || min <= t;
+      });
+    }
+
     if (filter.categories?.length) {
       games = games.filter((g) =>
         filter.categories!.some((c) => g.game?.categories?.includes(c))
@@ -130,10 +138,10 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
     });
 
     return games;
-  }, [initialGames, filter.status, filter.playerCount, filter.categories, filter.mechanics, filter.customized, deferredSearch, sortKey, playCounts]);
+  }, [initialGames, filter.status, filter.playerCount, filter.maxPlaytime, filter.categories, filter.mechanics, filter.customized, deferredSearch, sortKey, playCounts]);
 
   const isEmpty = filteredGames.length === 0;
-  const isFiltered = !!(filter.search || filter.status || filter.playerCount || filter.categories?.length || filter.mechanics?.length || filter.customized);
+  const isFiltered = !!(filter.search || filter.status || filter.playerCount || filter.maxPlaytime || filter.categories?.length || filter.mechanics?.length || filter.customized);
   const tagFilterCount = (filter.categories?.length ?? 0) + (filter.mechanics?.length ?? 0);
   const sortFilterActive = sortKey !== "name_asc" || tagFilterCount > 0 || !!filter.customized;
 
@@ -161,43 +169,88 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           sortFilterCount={tagFilterCount}
         />
 
-        {/* ── Spieleranzahl-Schnellfilter ─────────────────────────────────────
+        {/* ── Schnellfilter: Was spielen? ─────────────────────────────────────
             Im scrollbaren Content — nicht im sticky Header, damit dessen
-            Höhe konstant bleibt und das Bottom-Nav stabil liegt.          */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-background overflow-x-auto scrollbar-hide">
-          <Users size={13} className="text-muted-foreground flex-shrink-0" aria-hidden="true" />
-          <span className="text-[11px] text-muted-foreground font-medium flex-shrink-0 mr-0.5">Spieler:</span>
-          {([1, 2, 3, 4, 5, 6] as const).map((n) => {
-            const active = filter.playerCount === n;
-            return (
+            Höhe konstant bleibt und das Bottom-Nav stabil liegt.
+            Card-Layout → kein overflow, kein Abschneiden.               */}
+        <div className="px-4 pt-3 pb-3 border-b border-border bg-background">
+          <div className="bg-muted/50 rounded-2xl p-3 flex flex-col gap-3">
+
+            {/* Spieleranzahl */}
+            <div>
+              <div className="flex items-center gap-1 mb-2">
+                <Users size={11} className="text-muted-foreground" aria-hidden="true" />
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Spieler</span>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {([1, 2, 3, 4, 5, 6, 7, 8] as const).map((n) => {
+                  const active = filter.playerCount === n;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => handlePlayerCountChange(active ? null : n)}
+                      aria-pressed={active}
+                      className={cn(
+                        "w-8 h-8 rounded-xl text-sm font-semibold transition-all border",
+                        active
+                          ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                          : "bg-background border-border text-muted-foreground hover:border-amber-400 hover:text-foreground"
+                      )}
+                    >
+                      {n === 8 ? "8+" : n}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Max. Spielzeit */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1">
+                  <Clock size={11} className="text-muted-foreground" aria-hidden="true" />
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Max. Zeit</span>
+                </div>
+                <span className="text-xs font-bold text-amber-600">
+                  {filter.maxPlaytime
+                    ? filter.maxPlaytime < 60
+                      ? `${filter.maxPlaytime} Min`
+                      : `${Math.floor(filter.maxPlaytime / 60)}h${filter.maxPlaytime % 60 > 0 ? ` ${filter.maxPlaytime % 60}m` : ""}`
+                    : "Alle"}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={15}
+                max={240}
+                step={15}
+                value={filter.maxPlaytime ?? 240}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setFilter({ ...filter, maxPlaytime: v >= 240 ? undefined : v });
+                }}
+                className="w-full accent-amber-500"
+                aria-label="Maximale Spielzeit"
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                <span>15 Min</span><span>Alle</span>
+              </div>
+            </div>
+
+            {/* Zufälliges Spiel — nur wenn Spielerfilter aktiv */}
+            {filter.playerCount != null && filteredGames.length > 0 && (
               <button
-                key={n}
                 type="button"
-                onClick={() => handlePlayerCountChange(active ? null : n)}
-                aria-pressed={active}
-                className={cn(
-                  "flex-shrink-0 h-7 min-w-[32px] px-2 rounded-full text-xs font-semibold border transition-all",
-                  active
-                    ? "bg-amber-500 border-amber-500 text-white shadow-sm"
-                    : "bg-background border-border text-muted-foreground hover:border-amber-400 hover:text-foreground"
-                )}
+                onClick={handleRandomPick}
+                className="flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-amber-400 text-amber-600 text-xs font-semibold hover:bg-amber-50 active:bg-amber-100 transition-all"
               >
-                {n === 6 ? "6+" : n}
+                <Shuffle size={13} aria-hidden="true" />
+                Zufällig · {filteredGames.length} {filteredGames.length === 1 ? "Spiel" : "Spiele"}
               </button>
-            );
-          })}
-          {filter.playerCount != null && filteredGames.length > 0 && (
-            <button
-              type="button"
-              onClick={handleRandomPick}
-              title="Zufälliges Spiel für diese Spielerzahl"
-              className="flex-shrink-0 ml-1 h-7 px-2.5 rounded-full text-xs font-semibold border border-dashed border-amber-400 text-amber-600 hover:bg-amber-50 active:bg-amber-100 transition-all flex items-center gap-1"
-            >
-              <Shuffle size={11} aria-hidden="true" /> Zufällig
-            </button>
-          )}
-          {/* Trailing spacer — overflow-x-auto ignores padding-right without this */}
-          <span className="flex-shrink-0 w-4" aria-hidden="true" />
+            )}
+
+          </div>
         </div>
 
         {isEmpty ? (

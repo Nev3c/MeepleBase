@@ -5,15 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Minus, RotateCcw, Dices, ArrowRight,
   X, Trophy, Undo2, Crown, Hash, Volume2, Pencil, StopCircle, Clock,
-  // Soundboard icon picker
+  // Soundboard icon picker — nur Dinge mit Klang
   Music, Music2, Radio, Mic, Headphones, Speaker, Bell, Podcast,
-  Waves, Wind, Cloud, CloudRain, Sun, Moon, Flame, Zap, Snowflake,
-  TreePine, Leaf, Flower, Mountain, Bird, Fish, Shell, Bug,
-  Sword, Shield, Skull, Target, Wand2, Gem, Gamepad2,
+  Waves, Wind, Cloud, CloudRain, Flame, Zap, Bird, Bug,
+  Sword, Shield, Swords, Gamepad2,
   Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
-  Dog, Cat, Rabbit, Heart, Star, Sparkles, Ghost,
-  Coffee, Wine, Home, Tent, Anchor, Ship, Plane, Rocket, Compass,
-  Timer, Key, Feather, Drama, Swords, MapPin,
+  Dog, Cat, Ship, Plane, Rocket,
+  Timer,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -320,24 +318,21 @@ function CoinFlip() {
 
 // ── Soundboard ────────────────────────────────────────────────────────────────
 
-// Lucide icon map for the soundboard picker
+// Lucide icon map für den Soundboard-Picker (nur Dinge, die Geräusche machen)
 const SOUND_ICON_MAP: Record<string, LucideIcon> = {
   // Musik & Audio
   Music2, Music, Radio, Mic, Headphones, Speaker, Bell, Podcast, Volume2,
-  // Natur & Wetter
-  Waves, Wind, Cloud, CloudRain, Sun, Moon, Flame, Zap, Snowflake,
-  TreePine, Leaf, Flower, Mountain, Bird, Fish, Shell, Bug,
-  // Fantasy & Abenteuer
-  Sword, Shield, Skull, Crown, Target, Wand2, Gem, Swords, Key, MapPin,
+  // Natur & Wetter (mit Klang)
+  Waves, Wind, Cloud, CloudRain, Flame, Zap, Bird, Bug,
+  // Kampf & Abenteuer
+  Sword, Shield, Swords,
   // Würfel & Spiel
-  Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Trophy, Gamepad2, Dices,
+  Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Gamepad2, Dices,
   // Tiere
-  Dog, Cat, Rabbit,
-  // Stimmung & Atmosphäre
-  Heart, Star, Sparkles, Ghost, Drama, Feather, Coffee, Wine,
-  // Orte & Transport
-  Home, Tent, Anchor, Ship, Plane, Rocket, Compass,
-  // Zeit & Sonstiges
+  Dog, Cat,
+  // Fahrzeuge
+  Ship, Plane, Rocket,
+  // Zeit & Alarm
   Timer, Clock,
 };
 
@@ -395,6 +390,7 @@ function SoundBoard() {
   const [formIcon, setFormIcon] = useState("Music2");
   const [formUrl, setFormUrl] = useState("");
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [iconSearch, setIconSearch] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Load from localStorage client-side only
@@ -424,9 +420,10 @@ function SoundBoard() {
   function openAdd() {
     setFormMode({ type: "add" });
     setFormLabel("");
-    setFormIcon("🎵");
+    setFormIcon("Music2");
     setFormUrl("");
     setShowIconPicker(false);
+    setIconSearch("");
     setEditMode(false);
   }
 
@@ -436,11 +433,13 @@ function SoundBoard() {
     setFormIcon(btn.icon);
     setFormUrl(btn.youtubeUrl);
     setShowIconPicker(false);
+    setIconSearch("");
   }
 
   function cancelForm() {
     setFormMode(null);
     setShowIconPicker(false);
+    setIconSearch("");
   }
 
   function saveForm() {
@@ -601,26 +600,48 @@ function SoundBoard() {
             />
           </div>
 
-          {/* Icon picker grid */}
+          {/* Icon picker mit Suche */}
           {showIconPicker && (
-            <div className="grid grid-cols-8 gap-1 p-2.5 bg-muted/40 rounded-xl max-h-52 overflow-y-auto">
-              {SOUND_ICON_KEYS.map((name) => {
-                const Icon = SOUND_ICON_MAP[name];
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    title={name}
-                    onClick={() => { setFormIcon(name); setShowIconPicker(false); }}
-                    className={cn(
-                      "w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors",
-                      formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600"
-                    )}
-                  >
-                    <Icon size={18} strokeWidth={1.5} />
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-2 p-2.5 bg-muted/40 rounded-xl">
+              <input
+                type="text"
+                value={iconSearch}
+                onChange={(e) => setIconSearch(e.target.value)}
+                placeholder="Suchen (z.B. rain, bell, sword…)"
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+              />
+              <div className="grid grid-cols-8 gap-1 max-h-44 overflow-y-auto">
+                {(() => {
+                  const q = iconSearch.trim().toLowerCase();
+                  const visible = q
+                    ? SOUND_ICON_KEYS.filter((k) => k.toLowerCase().includes(q))
+                    : SOUND_ICON_KEYS;
+                  if (visible.length === 0) {
+                    return (
+                      <p className="col-span-8 py-3 text-center text-xs text-muted-foreground">
+                        Kein Icon gefunden
+                      </p>
+                    );
+                  }
+                  return visible.map((name) => {
+                    const Icon = SOUND_ICON_MAP[name];
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        title={name}
+                        onClick={() => { setFormIcon(name); setShowIconPicker(false); setIconSearch(""); }}
+                        className={cn(
+                          "w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-white hover:text-amber-600 transition-colors",
+                          formIcon === name && "bg-white ring-2 ring-amber-400 text-amber-600"
+                        )}
+                      >
+                        <Icon size={18} strokeWidth={1.5} />
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           )}
 
