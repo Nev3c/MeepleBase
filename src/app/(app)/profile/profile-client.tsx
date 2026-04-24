@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
-import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus, Euro, Tag, Cog, ShieldCheck } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, Dices, Library, Star, QrCode, X, Share2, UserPlus, Euro, Tag, Cog, ShieldCheck, MessageSquare, ListChecks } from "lucide-react";
+import { CURRENT_VERSION } from "@/data/changelog";
 import { QRCodeSVG } from "qrcode.react";
 
 interface ProfileClientProps {
@@ -242,6 +243,23 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
           )}
         </div>
 
+        {/* Community */}
+        <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+          <SectionHeader>Community</SectionHeader>
+          <MenuRow
+            label="Feedback & Bugs"
+            href="/feedback"
+            showChevron
+            icon={<MessageSquare size={14} className="text-muted-foreground" />}
+          />
+          <MenuRow
+            label="Changelog"
+            href="/changelog"
+            showChevron
+            icon={<ListChecks size={14} className="text-muted-foreground" />}
+          />
+        </div>
+
         {/* Abmelden */}
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <button
@@ -305,7 +323,7 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
             <span aria-hidden="true">·</span>
             <a href="/terms" className="hover:text-foreground transition-colors underline underline-offset-2">AGB</a>
           </div>
-          <p className="text-center text-xs text-muted-foreground">MeepleBase · Phase 1 MVP</p>
+          <p className="text-center text-xs text-muted-foreground">MeepleBase · {CURRENT_VERSION}</p>
         </div>
       </div>
 

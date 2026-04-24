@@ -610,7 +610,6 @@ function SoundBoard() {
   const [formUrl, setFormUrl] = useState("");
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState("");
-  const [emojiInput, setEmojiInput] = useState("");
   const [allIconNames, setAllIconNames] = useState<string[] | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -898,29 +897,6 @@ function SoundBoard() {
                     </button>
                   ));
                 })()}
-              </div>
-              {/* Emoji-Direkteingabe — für alles was kein Lucide-Icon hat */}
-              <div className="flex items-center gap-2 pt-0.5 border-t border-border/50 mt-1">
-                <span className="text-xs text-muted-foreground flex-shrink-0 pl-0.5">Emoji:</span>
-                <input
-                  type="text"
-                  value={emojiInput}
-                  onChange={(e) => setEmojiInput(e.target.value)}
-                  placeholder="🍺 🏰 ⚔️ 🪦 🐉 …"
-                  maxLength={8}
-                  className="flex-1 min-w-0 h-8 px-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                />
-                <button
-                  type="button"
-                  disabled={!emojiInput.trim()}
-                  onClick={() => {
-                    const e = emojiInput.trim();
-                    if (e) { setFormIcon(e); setShowIconPicker(false); setIconSearch(""); setEmojiInput(""); }
-                  }}
-                  className="h-8 px-3 rounded-lg bg-amber-500 text-white text-xs font-semibold disabled:opacity-40 hover:bg-amber-600 active:scale-95 transition-all"
-                >
-                  ✓
-                </button>
               </div>
             </div>
           )}

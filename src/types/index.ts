@@ -232,6 +232,26 @@ export interface Message {
   created_at: string;
 }
 
+// ============================================================
+// Feedback types
+// ============================================================
+
+export type FeedbackType = "bug" | "feature" | "other";
+export type FeedbackStatus = "open" | "in_progress" | "done";
+
+export interface Feedback {
+  id: string;
+  user_id: string | null;
+  username: string;
+  type: FeedbackType;
+  title: string;
+  message: string | null;
+  status: FeedbackStatus;
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ConversationSummary {
   other_user_id: string;
   other_username: string;
