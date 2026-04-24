@@ -10,11 +10,14 @@ export default async function ProfilePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [profileResult, libraryResult, playsResult, tagsResult] = await Promise.all([
+  const [profileResult, libraryResult, playsResult, tagsResult, friendsResult] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase.from("user_games").select("id, price_paid", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
-    supabase.from("plays").select("game_id, game:games(name, thumbnail_url)").eq("user_id", user.id),
+    supabase.from("plays").select("id", { count: "exact" }).eq("user_id", user.id),
     supabase.from("user_games").select("game:games(categories, mechanics)").eq("user_id", user.id),
+    supabase.from("friendships").select("id", { count: "exact" })
+      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+      .eq("status", "accepted"),
   ]);
 
   // Compute unique category/mechanic counts across the whole library
@@ -32,16 +35,6 @@ export default async function ProfilePage() {
     return sum + (typeof ug.price_paid === "number" ? ug.price_paid : 0);
   }, 0);
 
-  const playMap: Record<string, { count: number; name: string; thumbnail: string | null }> = {};
-  for (const p of (playsResult.data ?? [])) {
-    const gid = p.game_id;
-    const gameRaw = p.game as { name: string; thumbnail_url: string | null } | { name: string; thumbnail_url: string | null }[] | null;
-    const g = Array.isArray(gameRaw) ? gameRaw[0] ?? null : gameRaw;
-    if (!playMap[gid]) playMap[gid] = { count: 0, name: g?.name ?? "", thumbnail: g?.thumbnail_url ?? null };
-    playMap[gid].count++;
-  }
-  const favoriteGame = Object.values(playMap).sort((a, b) => b.count - a.count)[0] ?? null;
-
   const isAdmin =
     !!process.env.ADMIN_EMAIL &&
     user.email?.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase();
@@ -51,8 +44,8 @@ export default async function ProfilePage() {
       user={user}
       profile={profileResult.data}
       gameCount={libraryResult.count ?? 0}
-      playCount={playsResult.data?.length ?? 0}
-      favoriteGame={favoriteGame ? { name: favoriteGame.name, count: favoriteGame.count, thumbnail: favoriteGame.thumbnail } : null}
+      playCount={playsResult.count ?? 0}
+      friendCount={friendsResult.count ?? 0}
       libraryValue={libraryValue > 0 ? libraryValue : null}
       uniqueCategoryCount={uniqueCats.size}
       uniqueMechanicCount={uniqueMechs.size}

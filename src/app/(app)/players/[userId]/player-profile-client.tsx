@@ -16,6 +16,7 @@ interface FriendGame {
   id: string;
   game_id: string;
   status: string;
+  sale_price?: number | null;
   game: {
     id: string;
     name: string;
@@ -262,7 +263,9 @@ export function PlayerProfileClient({
           ) : (
             <>
               <p className="text-xs text-muted-foreground mb-3 font-medium">
-                {library.length} {library.length === 1 ? "Spiel" : "Spiele"} im Besitz
+                {library.filter((g) => g.status === "owned").length} im Besitz
+                {library.filter((g) => g.status === "wishlist").length > 0 && ` · ${library.filter((g) => g.status === "wishlist").length} Wunschliste`}
+                {library.filter((g) => g.status === "for_sale").length > 0 && ` · ${library.filter((g) => g.status === "for_sale").length} zu verkaufen`}
               </p>
               {/* Library transparency note */}
               <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5 mb-3">
@@ -274,10 +277,15 @@ export function PlayerProfileClient({
                   if (!ug.game) return null;
                   const g = ug.game;
                   const plays = playCountMap[ug.game_id] ?? 0;
+                  const isWishlist = ug.status === "wishlist";
+                  const isForSale = ug.status === "for_sale";
                   return (
                     <div
                       key={ug.id}
-                      className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card"
+                      className={cn(
+                        "flex items-center gap-3 p-3 bg-card rounded-xl border shadow-card",
+                        isForSale ? "border-green-200" : "border-border"
+                      )}
                     >
                       <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                         {g.thumbnail_url ? (
@@ -301,6 +309,19 @@ export function PlayerProfileClient({
                           <p className="text-xs text-amber-600 font-medium">{plays}× gespielt</p>
                         )}
                       </div>
+                      {/* Status badge */}
+                      {isWishlist && (
+                        <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                          Wunschliste
+                        </span>
+                      )}
+                      {isForSale && (
+                        <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                          {ug.sale_price != null
+                            ? `€\u202f${ug.sale_price.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                            : "Zu verk."}
+                        </span>
+                      )}
                     </div>
                   );
                 })}

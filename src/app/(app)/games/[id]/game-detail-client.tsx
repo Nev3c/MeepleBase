@@ -34,12 +34,17 @@ interface PlaySummary {
 }
 
 const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
-  { value: "owned",            label: "Im Besitz" },
-  { value: "wishlist",         label: "Wunschliste" },
-  { value: "want_to_play",     label: "Möchte spielen" },
-  { value: "for_trade",        label: "Zum Tausch" },
-  { value: "previously_owned", label: "Ehemals besessen" },
+  { value: "owned",        label: "Im Besitz" },
+  { value: "wishlist",     label: "Wunschliste" },
+  { value: "want_to_play", label: "Möchte spielen" },
+  { value: "for_sale",     label: "Zum Verkauf" },
 ];
+
+// Legacy labels for statuses no longer in STATUS_OPTIONS
+const STATUS_LEGACY_LABELS: Partial<Record<GameStatus, string>> = {
+  for_trade:        "Zum Tausch (veraltet)",
+  previously_owned: "Ehemalig (veraltet)",
+};
 
 const STATUS_COLORS: Record<GameStatus, string> = {
   owned:            "bg-emerald-100 text-emerald-800",
@@ -47,6 +52,7 @@ const STATUS_COLORS: Record<GameStatus, string> = {
   want_to_play:     "bg-sky-100 text-sky-800",
   for_trade:        "bg-orange-100 text-orange-800",
   previously_owned: "bg-slate-100 text-slate-600",
+  for_sale:         "bg-green-100 text-green-800",
 };
 
 interface GameDetailClientProps {
@@ -88,6 +94,10 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
   const [pricePaid, setPricePaid] = useState<string>(userGame?.price_paid?.toString() ?? "");
   const [savedPrice, setSavedPrice] = useState<string>(userGame?.price_paid?.toString() ?? "");
   const [savingPrice, setSavingPrice] = useState(false);
+  // Sale price (shown when status = for_sale)
+  const [salePrice, setSalePrice] = useState<string>(userGame?.sale_price?.toString() ?? "");
+  const [savedSalePrice, setSavedSalePrice] = useState<string>(userGame?.sale_price?.toString() ?? "");
+  const [savingSalePrice, setSavingSalePrice] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "ok" | "error">("idle");
   const [refreshLabel, setRefreshLabel] = useState("BGG aktualisieren");
@@ -584,7 +594,7 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 {/* Status badge + edit button */}
                 <div className="flex items-center">
                   <span className={cn("px-3 py-1 rounded-full text-sm font-medium", STATUS_COLORS[status])}>
-                    {STATUS_OPTIONS.find((o) => o.value === status)?.label}
+                    {STATUS_OPTIONS.find((o) => o.value === status)?.label ?? STATUS_LEGACY_LABELS[status] ?? status}
                   </span>
                   <button
                     onClick={() => setEditingStatus(true)}
@@ -740,6 +750,74 @@ export function GameDetailClient({ game, userGame, initialNotes = [], initialIma
                 />
               </button>
             </div>
+
+            {/* Sale price — only when status is for_sale */}
+            {status === "for_sale" && (
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-green-50/50">
+                <span className="text-sm font-medium text-green-800">Verkaufspreis</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-green-700">€</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="–"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                        if (!userGame || salePrice === savedSalePrice) return;
+                        setSavingSalePrice(true);
+                        const val = salePrice !== "" ? parseFloat(salePrice) : null;
+                        await fetch(`/api/user-games/${userGame.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ sale_price: val }),
+                        });
+                        setSavedSalePrice(salePrice);
+                        setSavingSalePrice(false);
+                      }
+                    }}
+                    onBlur={async () => {
+                      if (!userGame || salePrice === savedSalePrice) return;
+                      setSavingSalePrice(true);
+                      const val = salePrice !== "" ? parseFloat(salePrice) : null;
+                      await fetch(`/api/user-games/${userGame.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sale_price: val }),
+                      });
+                      setSavedSalePrice(salePrice);
+                      setSavingSalePrice(false);
+                    }}
+                    className="w-20 text-sm text-right bg-transparent border-b border-green-300 focus:border-green-500 focus:outline-none transition-colors py-0.5 tabular-nums text-green-900"
+                  />
+                  {savingSalePrice ? (
+                    <span className="text-[10px] text-green-500 w-6 text-center">…</span>
+                  ) : salePrice !== savedSalePrice ? (
+                    <button
+                      onClick={async () => {
+                        if (!userGame) return;
+                        setSavingSalePrice(true);
+                        const val = salePrice !== "" ? parseFloat(salePrice) : null;
+                        await fetch(`/api/user-games/${userGame.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ sale_price: val }),
+                        });
+                        setSavedSalePrice(salePrice);
+                        setSavingSalePrice(false);
+                      }}
+                      className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0 transition-all"
+                      aria-label="Verkaufspreis speichern"
+                    >
+                      <Check size={12} strokeWidth={2.5} />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
             {/* Purchase price */}
             <div className="flex items-center justify-between px-4 py-3">

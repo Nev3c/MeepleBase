@@ -17,6 +17,7 @@ interface FriendGame {
   id: string;
   game_id: string;
   status: string;
+  sale_price?: number | null;
   game: {
     id: string;
     name: string;
@@ -86,9 +87,9 @@ export default async function PlayerProfilePage({ params }: Props) {
     const [{ data: games }, { data: plays }] = await Promise.all([
       supabase
         .from("user_games")
-        .select("id, game_id, status, game:games(id, name, thumbnail_url)")
+        .select("id, game_id, status, sale_price, game:games(id, name, thumbnail_url)")
         .eq("user_id", userId)
-        .eq("status", "owned")
+        .in("status", ["owned", "wishlist", "for_sale"])
         .order("created_at", { ascending: false }),
       supabase
         .from("plays")

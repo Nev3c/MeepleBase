@@ -2,7 +2,7 @@
 // MeepleBase – Global TypeScript Types
 // ============================================================
 
-export type GameStatus = "owned" | "wishlist" | "previously_owned" | "for_trade" | "want_to_play";
+export type GameStatus = "owned" | "wishlist" | "previously_owned" | "for_trade" | "want_to_play" | "for_sale";
 
 export type NoteType = "general" | "house_rules" | "rules_clarification" | "strategy" | "links" | "components";
 
@@ -87,6 +87,7 @@ export interface UserGame {
   created_at: string;
   updated_at: string;
   custom_fields: CustomFields | null;
+  sale_price?: number | null;
   // Joined
   game?: Game;
 }
@@ -250,6 +251,15 @@ export interface Feedback {
   admin_note: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ForSaleGame {
+  id: string;
+  user_id: string;
+  sale_price: number | null;
+  owner_username: string;
+  owner_display_name: string | null;
+  game: { id: string; name: string; thumbnail_url: string | null } | null;
 }
 
 export interface ConversationSummary {

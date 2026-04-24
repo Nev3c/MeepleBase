@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PlayersClient } from "./players-client";
-import type { FriendProfile } from "@/types";
+import type { FriendProfile, ForSaleGame, LibraryVisibility } from "@/types";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export const metadata: Metadata = { title: "Spieler" };
@@ -49,6 +49,8 @@ export default async function PlayersPage() {
   const pendingReceived: FriendProfile[] = [];
   const pendingSent: FriendProfile[] = [];
 
+  let friendshipProfiles: Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null; location: string | null; library_visibility: string }> = [];
+
   if (friendships?.length) {
     const otherIds = Array.from(new Set(friendships.map((f) =>
       f.requester_id === user.id ? f.addressee_id : f.requester_id
@@ -59,7 +61,8 @@ export default async function PlayersPage() {
       .select("id, username, display_name, avatar_url, location, library_visibility")
       .in("id", otherIds);
 
-    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+    friendshipProfiles = profiles ?? [];
+    const profileMap = new Map(friendshipProfiles.map((p) => [p.id, p]));
 
     for (const f of friendships) {
       const otherId = f.requester_id === user.id ? f.addressee_id : f.requester_id;
@@ -76,7 +79,7 @@ export default async function PlayersPage() {
           display_name: profile.display_name,
           avatar_url: profile.avatar_url,
           location: profile.location,
-          library_visibility: profile.library_visibility ?? "friends",
+          library_visibility: (profile.library_visibility ?? "friends") as LibraryVisibility,
         },
       };
 
@@ -84,6 +87,32 @@ export default async function PlayersPage() {
       else if (f.status === "pending" && f.addressee_id === user.id) pendingReceived.push(entry);
       else if (f.status === "pending" && f.requester_id === user.id) pendingSent.push(entry);
     }
+  }
+
+  // Fetch for_sale games from accepted friends
+  const acceptedFriendIds = friends.map((f) => f.profile.id);
+  let forSaleGames: ForSaleGame[] = [];
+  if (acceptedFriendIds.length > 0) {
+    const { data: fsGames } = await admin
+      .from("user_games")
+      .select("id, user_id, sale_price, game:games(id, name, thumbnail_url)")
+      .in("user_id", acceptedFriendIds)
+      .eq("status", "for_sale");
+
+    const profileLookup = new Map(friendshipProfiles.map((p) => [p.id, p]));
+    type RawFsGame = { id: string; user_id: string; sale_price: number | null; game: { id: string; name: string; thumbnail_url: string | null } | { id: string; name: string; thumbnail_url: string | null }[] | null };
+    forSaleGames = (fsGames ?? []).map((ug: RawFsGame) => {
+      const owner = profileLookup.get(ug.user_id);
+      const game = Array.isArray(ug.game) ? ug.game[0] ?? null : ug.game;
+      return {
+        id: ug.id,
+        user_id: ug.user_id,
+        sale_price: ug.sale_price ?? null,
+        owner_username: owner?.username ?? "?",
+        owner_display_name: owner?.display_name ?? null,
+        game: game as { id: string; name: string; thumbnail_url: string | null } | null,
+      };
+    });
   }
 
   // Build friendship map for the initial player list
@@ -114,6 +143,7 @@ export default async function PlayersPage() {
       pendingSent={pendingSent}
       unreadCount={unreadCount}
       initialSearchResults={initialSearchResults}
+      forSaleGames={forSaleGames}
     />
   );
 }

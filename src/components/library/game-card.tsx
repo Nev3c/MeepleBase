@@ -13,7 +13,17 @@ const STATUS_LABELS: Record<GameStatus, string> = {
   previously_owned: "Ehemalig",
   for_trade: "Zum Tausch",
   want_to_play: "Möchte spielen",
+  for_sale: "Zu verkaufen",
 };
+
+function getStatusBadgeText(userGame: UserGame): string {
+  if (userGame.status === "for_sale") {
+    return userGame.sale_price != null
+      ? `€\u202f${userGame.sale_price.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+      : "Zu verkaufen";
+  }
+  return STATUS_LABELS[userGame.status] ?? userGame.status;
+}
 
 interface GameCardProps {
   userGame: UserGame;
@@ -95,7 +105,7 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
             </span>
           )}
           <Badge variant={userGame.status as keyof typeof STATUS_LABELS}>
-            {STATUS_LABELS[userGame.status]}
+            {getStatusBadgeText(userGame)}
           </Badge>
           {playCount > 0 && (
             <span className="text-[10px] text-muted-foreground font-medium">{playCount}×</span>
@@ -130,10 +140,10 @@ export function GameCard({ userGame, view, playCount = 0 }: GameCardProps) {
         )}
 
         {/* Status badge overlay */}
-        {userGame.status !== "owned" && (
+        {(userGame.status === "wishlist" || userGame.status === "for_sale" || userGame.status === "want_to_play") && (
           <div className="absolute top-2 left-2">
-            <Badge variant={userGame.status as keyof typeof STATUS_LABELS} className="text-[10px] px-2 py-0.5 shadow-sm">
-              {STATUS_LABELS[userGame.status]}
+            <Badge variant={userGame.status} className="text-[10px] px-2 py-0.5 shadow-sm">
+              {getStatusBadgeText(userGame)}
             </Badge>
           </div>
         )}

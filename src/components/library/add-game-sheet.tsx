@@ -31,7 +31,7 @@ const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
   { value: "owned", label: "Im Besitz" },
   { value: "wishlist", label: "Wunschliste" },
   { value: "want_to_play", label: "Möchte spielen" },
-  { value: "for_trade", label: "Zum Tausch" },
+  { value: "for_sale", label: "Zum Verkauf" },
 ];
 
 // ── BGG URL parser ─────────────────────────────────────────────────────────────
@@ -509,10 +509,11 @@ function parseBggCsv(text: string): CsvGame[] {
 
     if (!own && !trade && !wtp && !wl && !prev) continue;
 
+    // previously_owned (prev && !own) → skip, not imported anymore
+    if (prev && !own) continue;
     let status = "owned";
-    if (prev && !own) status = "previously_owned";
-    else if (trade) status = "for_trade";
-    else if (wtp && !own) status = "want_to_play";
+    // for_trade → mapped to owned (we use for_sale instead, set manually)
+    if (wtp && !own) status = "want_to_play";
     else if (wl && !own) status = "wishlist";
 
     const year = yearIdx >= 0 ? Number(cols[yearIdx]) || null : null;

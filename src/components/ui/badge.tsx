@@ -13,8 +13,9 @@ const badgeVariants = cva(
         owned: "bg-amber-100 text-amber-800",
         wishlist: "bg-blue-100 text-blue-800",
         previously_owned: "bg-slate-100 text-slate-600",
-        for_trade: "bg-green-100 text-green-800",
+        for_trade: "bg-orange-100 text-orange-800",
         want_to_play: "bg-purple-100 text-purple-800",
+        for_sale: "bg-green-100 text-green-800",
       },
     },
     defaultVariants: {

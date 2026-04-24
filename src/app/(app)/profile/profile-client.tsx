@@ -14,14 +14,14 @@ interface ProfileClientProps {
   profile: Profile | null;
   gameCount: number;
   playCount: number;
-  favoriteGame: { name: string; count: number; thumbnail: string | null } | null;
+  friendCount: number;
   libraryValue?: number | null;
   uniqueCategoryCount?: number;
   uniqueMechanicCount?: number;
   isAdmin?: boolean;
 }
 
-export function ProfileClient({ user, profile, gameCount, playCount, favoriteGame, libraryValue, uniqueCategoryCount, uniqueMechanicCount, isAdmin }: ProfileClientProps) {
+export function ProfileClient({ user, profile, gameCount, playCount, friendCount, libraryValue, uniqueCategoryCount, uniqueMechanicCount, isAdmin }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -71,14 +71,6 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
     router.push("/login");
     router.refresh();
   }
-
-  const favoriteLabel = favoriteGame
-    ? favoriteGame.name.length > 8
-      ? favoriteGame.name.slice(0, 8) + "…"
-      : favoriteGame.name
-    : "–";
-
-  const favoriteSub = favoriteGame ? `${favoriteGame.count}×` : undefined;
 
   const friendUrl = `${appUrl}/players/${user.id}`;
 
@@ -151,16 +143,13 @@ export function ProfileClient({ user, profile, gameCount, playCount, favoriteGam
               <span className="font-display text-xl font-bold text-foreground leading-tight">{playCount}</span>
               <span className="text-[10px] text-muted-foreground font-medium">Partien</span>
             </div>
-            {favoriteGame && (
-              <>
-                <div className="w-px bg-border my-1" />
-                <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-                  <span className="font-display text-base font-bold text-foreground leading-tight truncate max-w-[72px] text-center">{favoriteLabel}</span>
-                  {favoriteSub && <span className="text-[9px] text-amber-600 font-bold leading-none">{favoriteSub}</span>}
-                  <span className="text-[10px] text-muted-foreground font-medium">Lieblingsspiel</span>
-                </div>
-              </>
-            )}
+            <>
+              <div className="w-px bg-border my-1" />
+              <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+                <span className="font-display text-xl font-bold text-foreground leading-tight">{friendCount}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">Freunde</span>
+              </div>
+            </>
             {libraryValue != null && (
               <>
                 <div className="w-px bg-border my-1" />

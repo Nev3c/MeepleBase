@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
   Users, MessageSquare, Mail, MoreHorizontal,
-  MapPin, LocateFixed, ArrowDownAZ,
+  MapPin, LocateFixed, ArrowDownAZ, Tag,
 } from "lucide-react";
+import type { ForSaleGame } from "@/types";
 import { cn } from "@/lib/utils";
 import type { FriendProfile } from "@/types";
 
@@ -34,6 +36,7 @@ interface Props {
   pendingSent: FriendProfile[];
   unreadCount: number;
   initialSearchResults: SearchPlayer[];
+  forSaleGames: ForSaleGame[];
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -44,6 +47,7 @@ export function PlayersClient({
   pendingSent: initialPendingSent,
   unreadCount,
   initialSearchResults,
+  forSaleGames,
 }: Props) {
   const [activeTab, setActiveTab] = useState<PlayersTab>("freunde");
   const [friends, setFriends] = useState(initialFriends);
@@ -254,6 +258,7 @@ export function PlayersClient({
             friends={friends}
             pendingReceived={pendingReceived}
             pendingSent={pendingSent}
+            forSaleGames={forSaleGames}
             onRespondToRequest={respondToRequest}
             onRemoveFriend={removeFriend}
             onCancelRequest={cancelRequest}
@@ -323,6 +328,7 @@ function FreundeTab({
   friends,
   pendingReceived,
   pendingSent,
+  forSaleGames,
   onRespondToRequest,
   onRemoveFriend,
   onCancelRequest,
@@ -330,6 +336,7 @@ function FreundeTab({
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
+  forSaleGames: ForSaleGame[];
   onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
   onRemoveFriend: (fId: string) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
@@ -375,6 +382,18 @@ function FreundeTab({
         )}
       </section>
 
+      {/* For-sale games from friends */}
+      {forSaleGames.length > 0 && (
+        <section>
+          <SectionLabel>Zu Verkaufen ({forSaleGames.length})</SectionLabel>
+          <div className="flex flex-col gap-2">
+            {forSaleGames.map((item) => (
+              <ForSaleCard key={item.id} item={item} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Sent requests */}
       {pendingSent.length > 0 && (
         <section>
@@ -387,6 +406,54 @@ function FreundeTab({
         </section>
       )}
     </div>
+  );
+}
+
+// ── For Sale Card ─────────────────────────────────────────────────────────────
+
+function ForSaleCard({ item }: { item: ForSaleGame }) {
+  const ownerName = item.owner_display_name ?? item.owner_username;
+  const priceLabel = item.sale_price != null
+    ? `€\u202f${item.sale_price.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+    : "Preis auf Anfrage";
+
+  return (
+    <Link
+      href={`/players/${item.user_id}`}
+      className="flex items-center gap-3 p-3 bg-card rounded-xl border border-green-200 shadow-sm hover:shadow-md transition-all active:scale-[0.99]"
+    >
+      {/* Cover */}
+      <div className="relative flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-muted">
+        {item.game?.thumbnail_url ? (
+          <Image
+            src={item.game.thumbnail_url}
+            alt={item.game.name}
+            fill
+            className="object-cover"
+            sizes="56px"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full bg-green-100 flex items-center justify-center">
+            <Tag size={20} className="text-green-400" />
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-foreground text-sm leading-tight truncate">
+          {item.game?.name ?? "Unbekanntes Spiel"}
+        </h3>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">von {ownerName}</p>
+      </div>
+
+      {/* Price */}
+      <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
+        <span className="text-sm font-bold text-green-700">{priceLabel}</span>
+        <span className="text-[10px] text-muted-foreground">Anfragen →</span>
+      </div>
+    </Link>
   );
 }
 
