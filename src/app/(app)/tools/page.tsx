@@ -681,7 +681,7 @@ function SoundBoard() {
                   if (visible.length === 0) {
                     return (
                       <p className="col-span-8 py-3 text-center text-xs text-muted-foreground">
-                        Kein Icon gefunden für „{iconSearch}"
+                        Kein Icon gefunden für &bdquo;{iconSearch}&ldquo;
                       </p>
                     );
                   }
