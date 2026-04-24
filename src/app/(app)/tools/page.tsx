@@ -368,6 +368,9 @@ const GERMAN_KEYWORDS: Record<string, string[]> = {
   sterne:     ["Star", "Stars", "Sparkles"],
   stern:      ["Star", "Stars"],
   wolke:      ["Cloud", "CloudRain"],
+  blume:      ["Flower", "Flower2"],
+  rose:       ["Flower2"],
+  pilz:       ["Mushroom"],
   // Tiere
   vogel:      ["Bird"],
   kraehe:     ["Bird"],
@@ -381,6 +384,9 @@ const GERMAN_KEYWORDS: Record<string, string[]> = {
   kaefer:     ["Bug"],
   fisch:      ["Fish"],
   hai:        ["Fish"],
+  drache:     ["Flame", "Zap"],
+  schlange:   ["Squiggle", "Activity"],
+  spinne:     ["Bug"],
   // Musik & Audio
   musik:      ["Music", "Music2", "Radio"],
   lied:       ["Music", "Music2"],
@@ -407,44 +413,100 @@ const GERMAN_KEYWORDS: Record<string, string[]> = {
   schild:     ["Shield"],
   pfeil:      ["Crosshair", "Target"],
   bogen:      ["Crosshair"],
+  axt:        ["Axe"],
+  hammer:     ["Hammer"],
+  spitzhacke: ["Pickaxe"],
   magie:      ["Wand2", "Sparkles", "Zap"],
   zauber:     ["Wand2", "Sparkles"],
-  drache:     ["Flame", "Zap"],
+  zauberstab: ["Wand2"],
   monster:    ["Skull", "Ghost"],
   skelett:    ["Skull"],
   geist:      ["Ghost"],
+  zombie:     ["Skull", "Ghost"],
+  // Essen & Trinken
+  bier:       ["Beer", "BeerOff"],
+  wein:       ["Wine"],
+  kaffee:     ["Coffee"],
+  tee:        ["Coffee"],
+  essen:      ["Utensils", "UtensilsCrossed"],
+  gabel:      ["Utensils"],
+  messer:     ["Utensils"],
+  kochen:     ["Flame", "Utensils"],
   // Orte & Gebäude
   tor:        ["DoorOpen", "DoorClosed"],
   tuer:       ["DoorOpen", "DoorClosed"],
   burg:       ["Castle"],
   schloss:    ["Castle", "Lock"],
   turm:       ["Castle", "Mountain"],
-  taverne:    ["Wine", "Coffee", "Home"],
+  taverne:    ["Beer", "Wine", "Coffee"],
+  kneipe:     ["Beer", "Wine"],
   dorf:       ["Home", "MapPin"],
   kirche:     ["Church"],
+  kreuz:      ["Cross", "Church"],
+  friedhof:   ["Cross", "Skull", "Ghost"],
+  grab:       ["Cross", "Skull"],
+  grabstein:  ["Cross", "Skull"],
   gefaengnis: ["Lock"],
+  kerker:     ["Lock"],
   wald:       ["TreePine", "Trees", "Leaf"],
   baum:       ["TreePine", "Trees"],
   hoehle:     ["Mountain"],
   berg:       ["Mountain"],
+  hoehleneingang: ["Mountain", "DoorOpen"],
   // Fahrzeuge & Transport
   schiff:     ["Ship", "Anchor", "Sailboat"],
   boot:       ["Sailboat", "Ship"],
   flugzeug:   ["Plane"],
   rakete:     ["Rocket"],
+  auto:       ["Car"],
+  wagen:      ["Car"],
   kutsche:    ["Car"],
+  karren:     ["Car"],
   pferd:      ["Dices"],
+  // Werkzeug & Gegenstände
+  schluessel: ["Key"],
+  schloss_:   ["Lock"],
+  kette:      ["Link"],
+  buch:       ["Book", "BookOpen"],
+  schrift:    ["ScrollText", "FileText"],
+  karte:      ["Map", "MapPin"],
+  kompass:    ["Compass"],
+  laterne:    ["Lightbulb"],
+  licht:      ["Lightbulb", "Sun"],
+  fackel:     ["Flame", "Lightbulb"],
+  kerze:      ["Flame"],
+  lupe:       ["Search", "ZoomIn"],
+  trank:      ["FlaskConical", "FlaskRound"],
+  flasche:    ["FlaskConical", "Wine"],
+  gift:       ["Skull", "FlaskConical"],
+  pergament:  ["Scroll", "ScrollText"],
+  truhe:      ["Archive", "Package"],
+  schatz:     ["Trophy", "Crown", "Archive"],
+  muenze:     ["CircleDollarSign"],
+  gold:       ["Crown", "Trophy"],
   // Zeit & Sonstiges
   uhr:        ["Clock", "Timer", "AlarmClock"],
   zeit:       ["Clock", "Timer"],
   koenig:     ["Crown"],
   krone:      ["Crown"],
+  herz:       ["Heart"],
+  auge:       ["Eye"],
+  hand:       ["Hand"],
   explosion:  ["Flame", "Zap", "Bomb"],
   bombe:      ["Bomb"],
   schritte:   ["Footprints"],
   jubel:      ["Trophy", "PartyPopper"],
   erfolg:     ["Trophy", "Award"],
   herzschlag: ["HeartPulse", "Activity"],
+  anker:      ["Anchor"],
+  netz:       ["Network", "Globe"],
+  welt:       ["Globe"],
+  kugel:      ["CircleDot"],
+  kristall:   ["Gem"],
+  diamant:    ["Gem"],
+  edelstein:  ["Gem"],
+  pfote:      ["PawPrint"],
+  tier:       ["PawPrint"],
 };
 
 // Sucht in der deutschen Keyword-Map und gibt passende Icon-Namen zurück
@@ -548,6 +610,7 @@ function SoundBoard() {
   const [formUrl, setFormUrl] = useState("");
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconSearch, setIconSearch] = useState("");
+  const [emojiInput, setEmojiInput] = useState("");
   const [allIconNames, setAllIconNames] = useState<string[] | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -784,7 +847,7 @@ function SoundBoard() {
                 type="text"
                 value={iconSearch}
                 onChange={(e) => setIconSearch(e.target.value)}
-                placeholder="Suchen (z.B. fire, dragon, guitar…)"
+                placeholder="Suchen: regen, bier, auto, sword…"
                 className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                 autoFocus
               />
@@ -835,6 +898,29 @@ function SoundBoard() {
                     </button>
                   ));
                 })()}
+              </div>
+              {/* Emoji-Direkteingabe — für alles was kein Lucide-Icon hat */}
+              <div className="flex items-center gap-2 pt-0.5 border-t border-border/50 mt-1">
+                <span className="text-xs text-muted-foreground flex-shrink-0 pl-0.5">Emoji:</span>
+                <input
+                  type="text"
+                  value={emojiInput}
+                  onChange={(e) => setEmojiInput(e.target.value)}
+                  placeholder="🍺 🏰 ⚔️ 🪦 🐉 …"
+                  maxLength={8}
+                  className="flex-1 min-w-0 h-8 px-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  disabled={!emojiInput.trim()}
+                  onClick={() => {
+                    const e = emojiInput.trim();
+                    if (e) { setFormIcon(e); setShowIconPicker(false); setIconSearch(""); setEmojiInput(""); }
+                  }}
+                  className="h-8 px-3 rounded-lg bg-amber-500 text-white text-xs font-semibold disabled:opacity-40 hover:bg-amber-600 active:scale-95 transition-all"
+                >
+                  ✓
+                </button>
               </div>
             </div>
           )}
