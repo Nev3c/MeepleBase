@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import dynamic from "next/dynamic";
-import { Users, Clock, Star, ChevronRight, Dices } from "lucide-react";
+import { Users, Clock, Star, ChevronRight, Dices, Shuffle } from "lucide-react";
 import { LibraryHeader } from "@/components/library/library-header";
 import { LibraryEmptyState } from "@/components/library/library-empty-state";
 import { LibrarySortFilterSheet } from "@/components/library/library-sort-filter-sheet";
@@ -159,10 +159,44 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
           onSortFilter={() => setFilterSheetOpen(true)}
           sortFilterActive={sortFilterActive}
           sortFilterCount={tagFilterCount}
-          playerCountFilter={filter.playerCount ?? null}
-          onPlayerCountChange={handlePlayerCountChange}
-          onRandomPick={handleRandomPick}
         />
+
+        {/* ── Spieleranzahl-Schnellfilter ─────────────────────────────────────
+            Im scrollbaren Content — nicht im sticky Header, damit dessen
+            Höhe konstant bleibt und das Bottom-Nav stabil liegt.          */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-background overflow-x-auto scrollbar-hide">
+          <Users size={13} className="text-muted-foreground flex-shrink-0" aria-hidden="true" />
+          <span className="text-[11px] text-muted-foreground font-medium flex-shrink-0 mr-0.5">Spieler:</span>
+          {([1, 2, 3, 4, 5, 6] as const).map((n) => {
+            const active = filter.playerCount === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => handlePlayerCountChange(active ? null : n)}
+                aria-pressed={active}
+                className={cn(
+                  "flex-shrink-0 h-7 min-w-[32px] px-2 rounded-full text-xs font-semibold border transition-all",
+                  active
+                    ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                    : "bg-background border-border text-muted-foreground hover:border-amber-400 hover:text-foreground"
+                )}
+              >
+                {n === 6 ? "6+" : n}
+              </button>
+            );
+          })}
+          {filter.playerCount != null && filteredGames.length > 0 && (
+            <button
+              type="button"
+              onClick={handleRandomPick}
+              title="Zufälliges Spiel für diese Spielerzahl"
+              className="flex-shrink-0 ml-1 h-7 px-2.5 rounded-full text-xs font-semibold border border-dashed border-amber-400 text-amber-600 hover:bg-amber-50 active:bg-amber-100 transition-all flex items-center gap-1"
+            >
+              <Shuffle size={11} aria-hidden="true" /> Zufällig
+            </button>
+          )}
+        </div>
 
         {isEmpty ? (
           isFiltered ? (
