@@ -22,30 +22,23 @@ Diese Dateien sind die einzige Wahrheitsquelle. Nicht dein Training, nicht Annah
 
 ---
 
-## Kollaborations-Protokoll
+## Arbeitsweise & Deployment
 
-Dieses Projekt wird parallel von **Claude Code (Desktop)** bearbeitet. Um Konflikte zu vermeiden:
-
-- Arbeite IMMER auf einem Feature-Branch — **nie direkt auf `main`**
-- Branch-Namen: `feat/<kurzname>`, `fix/<kurzname>`, `chore/<kurzname>`
-- Starte jeden Task mit:
-  ```bash
-  git fetch origin
-  git checkout -b feat/<name> origin/main
-  ```
-- Öffne am Ende einen PR — **merge nie selbst**
-- PR-Beschreibung auf Deutsch: welche Dateien geändert wurden und warum
+- Pushе direkt auf `main`
+- Vercel deployed automatisch nach jedem Push auf `main`
+- Vor dem Push immer die Pflicht-Checks ausführen (siehe unten)
+- Commit-Message: Conventional Commits auf Englisch (`feat:`, `fix:`, `chore:`)
 
 ---
 
-## Pflicht-Checks vor jedem PR
+## Pflicht-Checks vor jedem Push
 
 ```bash
-npx tsc --noEmit   # muss fehlerfrei sein
-next lint           # muss fehlerfrei sein
+npx tsc --noEmit   # TypeScript — muss fehlerfrei sein
+next lint           # ESLint — muss fehlerfrei sein
 ```
 
-Wenn einer dieser Checks fehlschlägt → erst fixen, dann PR öffnen.
+Wenn einer dieser Checks fehlschlägt → erst fixen, dann pushen.
 
 ---
 
@@ -55,7 +48,9 @@ Wenn einer dieser Checks fehlschlägt → erst fixen, dann PR öffnen.
 - **Sprache**: TypeScript strict — kein `any`, keine ungetypten Funktionen
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Datenbank**: Supabase (PostgreSQL + Auth + Storage)
-- **Deployment**: Vercel (Auto-Deploy bei Merge auf `main`)
+- **Deployment**: Vercel (Auto-Deploy bei jedem Push auf `main`)
+
+---
 
 ## Kritische Regeln
 
@@ -79,7 +74,6 @@ Wenn einer dieser Checks fehlschlägt → erst fixen, dann PR öffnen.
 
 - Dateinamen: kebab-case (`game-card.tsx`)
 - Komponenten: PascalCase (`GameCard`)
-- Commits: Conventional Commits auf Englisch (`feat:`, `fix:`, `chore:`)
 
 ### UI — MeepleBase-spezifisch
 
@@ -101,8 +95,6 @@ Wenn einer dieser Checks fehlschlägt → erst fixen, dann PR öffnen.
 
 ## Wenn du dir unsicher bist
 
-Schreib einen Kommentar im PR statt zu raten:
+Lieber einen Kommentar hinterlassen als raten. Schreib in die Commit-Message oder als Zusammenfassung:
 
-> "Ich bin mir bei X unsicher — bitte vor dem Merge prüfen."
-
-Lieber einen klaren PR mit Fragezeichen als stillen, falschen Code.
+> "Unsicher bei X — bitte prüfen."
