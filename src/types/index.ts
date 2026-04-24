@@ -179,6 +179,7 @@ export type LibraryFilter = {
   maxPlayers?: number;
   search?: string;
   playerCount?: number; // quick filter: show games playable with exactly N players
+  maxPlaytime?: number; // quick filter: show games whose min_playtime <= this value
   categories?: string[]; // English BGG strings matching games.categories
   mechanics?: string[];  // English BGG strings matching games.mechanics
   customized?: boolean;  // only show individualized (painted/upgraded) games
