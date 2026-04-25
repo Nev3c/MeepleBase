@@ -34,6 +34,8 @@ export interface RankingSet {
 interface StatsClientProps {
   totalGames: number;
   totalPlays: number;
+  uniqueCategoryCount: number;
+  uniqueMechanicCount: number;
   playsByMonth: PlayByMonth[];
   totalWins: number;
   totalWithPlayers: number;
@@ -234,6 +236,8 @@ function RankingCard({
 export function StatsClient({
   totalGames,
   totalPlays,
+  uniqueCategoryCount,
+  uniqueMechanicCount,
   playsByMonth,
   totalWins,
   totalWithPlayers,
@@ -294,6 +298,20 @@ export function StatsClient({
               <span className="text-[10px] text-muted-foreground font-medium">Siegquote</span>
             </div>
           </div>
+          {(uniqueCategoryCount > 0 || uniqueMechanicCount > 0) && (
+            <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border/50">
+              {uniqueCategoryCount > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
+                </span>
+              )}
+              {uniqueMechanicCount > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
+                </span>
+              )}
+            </div>
+          )}
         </StatCard>
 
         {/* Partien pro Monat */}

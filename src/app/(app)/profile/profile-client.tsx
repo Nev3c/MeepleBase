@@ -16,12 +16,10 @@ interface ProfileClientProps {
   gameCount: number;
   playCount: number;
   friendCount: number;
-  uniqueCategoryCount?: number;
-  uniqueMechanicCount?: number;
   isAdmin?: boolean;
 }
 
-export function ProfileClient({ user, profile, gameCount, playCount, friendCount, uniqueCategoryCount, uniqueMechanicCount, isAdmin }: ProfileClientProps) {
+export function ProfileClient({ user, profile, gameCount, playCount, friendCount, isAdmin }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -157,21 +155,6 @@ export function ProfileClient({ user, profile, gameCount, playCount, friendCount
                 <span className="text-[10px] text-amber-600 font-semibold">Stats</span>
               </div>
             </div>
-            {/* Sekundäre Statistiken */}
-            {((uniqueCategoryCount ?? 0) > 0 || (uniqueMechanicCount ?? 0) > 0) && (
-              <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-border/50 px-2">
-                {(uniqueCategoryCount ?? 0) > 0 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
-                  </span>
-                )}
-                {(uniqueMechanicCount ?? 0) > 0 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         </Link>
       </div>

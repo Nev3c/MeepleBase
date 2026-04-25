@@ -10,26 +10,14 @@ export default async function ProfilePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [profileResult, libraryResult, playsResult, tagsResult, friendsResult] = await Promise.all([
+  const [profileResult, libraryResult, playsResult, friendsResult] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase.from("user_games").select("id", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
     supabase.from("plays").select("id", { count: "exact" }).eq("user_id", user.id),
-    supabase.from("user_games").select("game:games(categories, mechanics)").eq("user_id", user.id),
     supabase.from("friendships").select("id", { count: "exact" })
       .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
       .eq("status", "accepted"),
   ]);
-
-  // Compute unique category/mechanic counts across the whole library
-  const uniqueCats = new Set<string>();
-  const uniqueMechs = new Set<string>();
-  type GameTags = { categories: string[] | null; mechanics: string[] | null } | null;
-  for (const row of (tagsResult.data ?? [])) {
-    const raw = row.game as unknown;
-    const g: GameTags = Array.isArray(raw) ? (raw[0] ?? null) : (raw as GameTags);
-    for (const c of g?.categories ?? []) uniqueCats.add(c);
-    for (const m of g?.mechanics ?? []) uniqueMechs.add(m);
-  }
 
   const isAdmin =
     !!process.env.ADMIN_EMAIL &&
@@ -42,8 +30,6 @@ export default async function ProfilePage() {
       gameCount={libraryResult.count ?? 0}
       playCount={playsResult.count ?? 0}
       friendCount={friendsResult.count ?? 0}
-      uniqueCategoryCount={uniqueCats.size}
-      uniqueMechanicCount={uniqueMechs.size}
       isAdmin={isAdmin}
     />
   );

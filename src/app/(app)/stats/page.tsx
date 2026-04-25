@@ -118,7 +118,7 @@ export default async function StatsPage() {
   twelveMoAgo.setMonth(twelveMoAgo.getMonth() - 12);
 
   // ── Parallel personal data + friendships ────────────────────────────────
-  const [playsRes, ppRes, gamesRes, friendshipsRes, allPlaysCountRes] = await Promise.all([
+  const [playsRes, ppRes, gamesRes, friendshipsRes, allPlaysCountRes, tagsRes] = await Promise.all([
     supabase
       .from("plays")
       .select("id, played_at, game_id, game:games(name, thumbnail_url)")
@@ -139,12 +139,24 @@ export default async function StatsPage() {
       .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
       .eq("status", "accepted"),
     supabase.from("plays").select("id", { count: "exact" }).eq("user_id", user.id),
+    supabase.from("user_games").select("game:games(categories, mechanics)").eq("user_id", user.id),
   ]);
 
   const myPlays = playsRes.data ?? [];
   const myPP = ppRes.data ?? [];
   const myGames = gamesRes.data ?? [];
   const totalPlaysAllTime = allPlaysCountRes.count ?? 0;
+
+  // Unique categories + mechanics across owned library
+  const uniqueCats = new Set<string>();
+  const uniqueMechs = new Set<string>();
+  type GameTags = { categories: string[] | null; mechanics: string[] | null } | null;
+  for (const row of (tagsRes.data ?? [])) {
+    const raw = row.game as unknown;
+    const g: GameTags = Array.isArray(raw) ? (raw[0] ?? null) : (raw as GameTags);
+    for (const c of g?.categories ?? []) uniqueCats.add(c);
+    for (const m of g?.mechanics ?? []) uniqueMechs.add(m);
+  }
 
   // ── Personal stats ───────────────────────────────────────────────────────
   const playsByMonth = buildPlaysByMonth(myPlays.map(p => ({ played_at: p.played_at })), 6);
@@ -236,6 +248,8 @@ export default async function StatsPage() {
     <StatsClient
       totalGames={totalGames}
       totalPlays={totalPlaysAllTime}
+      uniqueCategoryCount={uniqueCats.size}
+      uniqueMechanicCount={uniqueMechs.size}
       playsByMonth={playsByMonth}
       totalWins={totalWins}
       totalWithPlayers={totalWithPlayers}
