@@ -9,6 +9,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Profil-Galerie: Alle hochgeladenen Partienfotos in einer Bildergalerie sortiert nach Datum (Profil → Galerie), mit Vollbild-Ansicht beim Antippen
 - BGStats-Import: Partien aus der BGStats-App als JSON-Datei importieren (Einstellungen → Bibliothek). Spiel-Matching via BGG-ID oder Name, automatische Duplikat-Erkennung (gleiche Partie am gleichen Tag), Anlegen neuer Spieleinträge bei Bedarf.
 - Spielerabend abschließen: Organisator-Button „Spielabend abschließen" trägt Partien automatisch für alle Teilnehmer mit „Zugesagt"-Status ein (eine Play-Row pro Spiel pro Teilnehmer, inkl. Play-Players). Session verschwindet danach aus der Geplant-Liste.
 - Partie per QR teilen: Share-Button auf jeder Partie-Karte → QR-Code + kopierbarer Link → `/plays/import?from=[id]` → Mitspieler übernimmt Partie mit einem Tap inkl. Duplikat-Erkennung
@@ -27,6 +28,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Onboarding-Banner in der Bibliothek für neue Accounts (< 30 Tage, noch kein Onboarding abgeschlossen)
 
 ### Changed
+- Tools-Tabs: Label unter jedem Icon ist jetzt immer sichtbar (nicht mehr nur beim aktiven Tab)
+- Profil: Profilbild direkt auf dem Profil antippbar zum Hochladen (nicht mehr nur in den Einstellungen)
+- Melodice-Integration: Suche funktioniert jetzt korrekt via Form-Submit statt window.open mit GET-Parameter
 - Sammlungswert aus dem Profil-Stats-Band entfernt — liegt jetzt exklusiv hinter dem Privacy-Toggle auf /stats
 - Auth-Callback: Onboarding-Erkennung von 30 Minuten auf 7 Tage ausgedehnt (deckt E-Mail-Bestätigungs-Delays ab)
 - Kategorien- und Mechanismen-Zähler aus dem Profil entfernt und auf /stats konsolidiert (Schnellübersicht-Karte, Sekundärzeile)

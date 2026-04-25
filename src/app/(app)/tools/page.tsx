@@ -604,17 +604,35 @@ type FormMode = { type: "add" } | { type: "edit"; button: SoundButton } | null;
 
 function MelodiceSearch() {
   const [query, setQuery] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
 
   function openMelodice() {
     const q = query.trim();
-    const url = q
-      ? `https://melodice.org/?q=${encodeURIComponent(q)}`
-      : "https://melodice.org/";
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!q) {
+      window.open("https://melodice.org/", "_blank", "noopener,noreferrer");
+      return;
+    }
+    // melodice.org uses a Django form with POST + CSRF — the reliable approach
+    // is to submit a hidden form targeting a new tab, which works cross-domain.
+    formRef.current?.submit();
   }
 
   return (
     <div className="bg-card rounded-2xl border border-border shadow-card p-3.5 flex flex-col gap-2.5">
+      {/* Hidden form that submits to melodice.org in a new tab */}
+      <form
+        ref={formRef}
+        method="get"
+        action="https://melodice.org/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hidden"
+        aria-hidden="true"
+      >
+        <input name="q" value={query} readOnly />
+        <input name="search" value="Search" readOnly />
+      </form>
+
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
           <Music2 size={14} className="text-white" />
@@ -1225,12 +1243,12 @@ export default function ToolsPage() {
               key={id}
               onClick={() => changeTab(id)}
               className={cn(
-                "flex-1 flex flex-col items-center justify-center py-2 border-b-2 transition-all gap-0.5",
+                "flex-1 flex flex-col items-center justify-center py-2 gap-1 border-b-2 transition-all",
                 tab === id ? "border-amber-500 text-amber-600" : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               {icon}
-              <span className={cn("text-[10px] font-semibold leading-none transition-all", tab === id ? "opacity-100" : "opacity-0 h-0 overflow-hidden")}>{label}</span>
+              <span className="text-[10px] font-semibold leading-none">{label}</span>
             </button>
           ))}
         </div>
