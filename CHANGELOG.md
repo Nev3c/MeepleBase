@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Spielerabend abschließen: Organisator-Button „Spielabend abschließen" trägt Partien automatisch für alle Teilnehmer mit „Zugesagt"-Status ein (eine Play-Row pro Spiel pro Teilnehmer, inkl. Play-Players). Session verschwindet danach aus der Geplant-Liste.
+- Partie per QR teilen: Share-Button auf jeder Partie-Karte → QR-Code + kopierbarer Link → `/plays/import?from=[id]` → Mitspieler übernimmt Partie mit einem Tap inkl. Duplikat-Erkennung
 - Spieler-Seite: Geplante Partien — Spieleabend mit mehreren Spielen planen, Freunde einladen
 - Spieler-Seite: Vergangene Partien — mehrere Spiele pro Session auswählbar
 - Spieler-Seite: Einladungen-Tab im Spieler-Menü für ausstehende Spieleabend-Einladungen

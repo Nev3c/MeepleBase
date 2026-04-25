@@ -7,8 +7,9 @@ import Link from "next/link";
 import {
   Plus, X, Check, Trash2, Users, Clock, MapPin,
   Edit2, SlidersHorizontal, Camera, Calendar, Gamepad2,
-  UserPlus, CheckCircle2, XCircle, ChevronDown,
+  UserPlus, CheckCircle2, XCircle, ChevronDown, Share2, Copy, CheckCheck,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import type { PlannedSession } from "@/types";
 
@@ -164,6 +165,11 @@ export function PlaysClient({
     setPlannedSheetOpen(false);
   }
 
+  function handleSessionCompleted(sessionId: string) {
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    router.refresh(); // reload plays list to show the newly created plays
+  }
+
   const pendingInviteCount = sessions.filter(
     (s) => !s.is_organizer && s.my_invite_status === "invited"
   ).length;
@@ -286,7 +292,7 @@ export function PlaysClient({
             ) : (
               <div className="flex flex-col gap-3">
                 {sessions.map((session) => (
-                  <SessionCard key={session.id} session={session} />
+                  <SessionCard key={session.id} session={session} onCompleted={handleSessionCompleted} />
                 ))}
               </div>
             )
@@ -337,6 +343,19 @@ function PlayCard({
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
 }) {
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/plays/import?from=${play.id}`
+    : `/plays/import?from=${play.id}`;
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const date = new Date(play.played_at);
   const dateStr = date.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
   const winner = play.players?.find((p) => p.winner);
@@ -413,6 +432,13 @@ function PlayCard({
             <Edit2 size={14} />
           </button>
           <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShareOpen(true); }}
+            className="text-muted-foreground hover:text-amber-500 transition-colors"
+            aria-label="Teilen"
+          >
+            <Share2 size={14} />
+          </button>
+          <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
             className="text-muted-foreground hover:text-red-400 transition-colors"
             aria-label="Löschen"
@@ -421,6 +447,44 @@ function PlayCard({
           </button>
         </div>
       </Link>
+
+      {/* Share modal */}
+      {shareOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-6"
+          onClick={() => setShareOpen(false)}
+        >
+          <div
+            className="bg-card rounded-3xl p-5 w-full max-w-xs shadow-xl flex flex-col items-center gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between w-full">
+              <div>
+                <p className="font-display text-base font-semibold text-foreground">Partie teilen</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Mitspieler können sie übernehmen</p>
+              </div>
+              <button
+                onClick={() => setShareOpen(false)}
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl p-3 shadow-inner">
+              <QRCodeSVG value={shareUrl} size={180} fgColor="#1E2A3A" bgColor="#FFFFFF" level="M" />
+            </div>
+
+            <button
+              onClick={handleCopy}
+              className="w-full flex items-center justify-center gap-2 h-10 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              {copied ? <CheckCheck size={14} className="text-green-500" /> : <Copy size={14} />}
+              {copied ? "Kopiert!" : "Link kopieren"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {play.image_url && (
         <Link href={`/plays/${play.id}`} className="block">
@@ -445,7 +509,7 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session }: { session: PlannedSession }) {
+function SessionCard({ session, onCompleted }: { session: PlannedSession; onCompleted: (id: string) => void }) {
   const date = new Date(session.session_date);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
   const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
@@ -456,6 +520,8 @@ function SessionCard({ session }: { session: PlannedSession }) {
   const isPending = !session.is_organizer && session.my_invite_status === "invited";
   const [responding, setResponding] = useState(false);
   const [myStatus, setMyStatus] = useState(session.my_invite_status);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   async function respond(status: "accepted" | "declined") {
     setResponding(true);
@@ -468,6 +534,19 @@ function SessionCard({ session }: { session: PlannedSession }) {
       setMyStatus(status);
     } finally {
       setResponding(false);
+    }
+  }
+
+  async function handleComplete() {
+    setCompleting(true);
+    try {
+      const res = await fetch(`/api/play-sessions/${session.id}/complete`, { method: "POST" });
+      if (res.ok) {
+        onCompleted(session.id);
+      }
+    } finally {
+      setCompleting(false);
+      setConfirmComplete(false);
     }
   }
 
@@ -597,6 +676,42 @@ function SessionCard({ session }: { session: PlannedSession }) {
             >
               <Check size={14} /> Zusagen
             </button>
+          </div>
+        )}
+
+        {/* Abschließen — organizer only */}
+        {session.is_organizer && !confirmComplete && (
+          <button
+            onClick={() => setConfirmComplete(true)}
+            className="mt-3 w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-semibold hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <CheckCircle2 size={14} /> Spielabend abschließen
+          </button>
+        )}
+
+        {session.is_organizer && confirmComplete && (
+          <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
+            <p className="text-xs text-green-800 font-medium leading-snug">
+              Partie für alle {accepted + 1} Teilnehmer eintragen
+              {session.games.length > 1 ? ` (${session.games.length} Spiele)` : ""}?
+              Scores können danach bearbeitet werden.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmComplete(false)}
+                disabled={completing}
+                className="flex-1 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground disabled:opacity-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleComplete}
+                disabled={completing}
+                className="flex-1 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {completing ? "Wird eingetragen…" : <><CheckCircle2 size={12} /> Eintragen</>}
+              </button>
+            </div>
           </div>
         )}
       </div>
