@@ -4,14 +4,29 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Plus, X, Check, Trash2, Users, Clock, MapPin, ChevronDown, Edit2, SlidersHorizontal, Camera } from "lucide-react";
+import {
+  Plus, X, Check, Trash2, Users, Clock, MapPin,
+  Edit2, SlidersHorizontal, Camera, Calendar, Gamepad2,
+  UserPlus, CheckCircle2, XCircle, ChevronDown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PlannedSession } from "@/types";
+
+// ── Local types ───────────────────────────────────────────────────────────────
 
 interface LibraryGame {
   id: string;
   name: string;
   thumbnail_url: string | null;
   bgg_id: number;
+}
+
+interface FriendProfile {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  location: string | null;
 }
 
 interface PlayPlayer {
@@ -41,23 +56,46 @@ interface DraftPlayer {
   winner: boolean;
 }
 
+type PlaysTab = "vergangen" | "geplant";
 type PlaySortKey = "date_desc" | "date_asc" | "game_asc";
+
+// ── Main Component ─────────────────────────────────────────────────────────────
 
 export function PlaysClient({
   initialPlays,
   libraryGames,
+  plannedSessions: initialSessions,
+  friends,
 }: {
   initialPlays: Play[];
   libraryGames: LibraryGame[];
+  plannedSessions: PlannedSession[];
+  friends: FriendProfile[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const [activeTab, setActiveTab] = useState<PlaysTab>("vergangen");
   const [plays, setPlays] = useState<Play[]>(initialPlays);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sessions, setSessions] = useState<PlannedSession[]>(initialSessions);
+
+  // Past-play sheet
+  const [pastSheetOpen, setPastSheetOpen] = useState(false);
   const [editPlay, setEditPlay] = useState<Play | null>(null);
   const [prefillPlayers, setPrefillPlayers] = useState<DraftPlayer[] | undefined>(undefined);
 
-  // Auto-open sheet with pre-filled players when navigating from score tracker
+  // Planned-session sheet
+  const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
+
+  // Sorting (past tab)
+  const [sortKey, setSortKey] = useState<PlaySortKey>("date_desc");
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  // Delete confirmation
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Pre-fill players from score-tracker URL param
   useEffect(() => {
     const prefill = searchParams.get("prefill");
     if (!prefill) return;
@@ -75,17 +113,12 @@ export function PlaysClient({
       }
       if (players.length > 0) {
         setPrefillPlayers(players);
-        setSheetOpen(true);
-        // Clean URL
+        setPastSheetOpen(true);
         router.replace("/plays", { scroll: false });
       }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<PlaySortKey>("date_desc");
-  const [sortOpen, setSortOpen] = useState(false);
-  const sortRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
@@ -100,8 +133,8 @@ export function PlaysClient({
   const sortedPlays = [...plays].sort((a, b) => {
     switch (sortKey) {
       case "date_desc": return new Date(b.played_at).getTime() - new Date(a.played_at).getTime();
-      case "date_asc": return new Date(a.played_at).getTime() - new Date(b.played_at).getTime();
-      case "game_asc": return (a.game?.name ?? "").localeCompare(b.game?.name ?? "", "de");
+      case "date_asc":  return new Date(a.played_at).getTime() - new Date(b.played_at).getTime();
+      case "game_asc":  return (a.game?.name ?? "").localeCompare(b.game?.name ?? "", "de");
       default: return 0;
     }
   });
@@ -112,118 +145,187 @@ export function PlaysClient({
     setDeleteId(null);
   }
 
-  function handleCreated(play: Play) {
-    setPlays((prev) => [play, ...prev]);
-    setSheetOpen(false);
+  function handlePlayCreated(newPlays: Play[]) {
+    setPlays((prev) => [...newPlays, ...prev]);
+    setPastSheetOpen(false);
     router.refresh();
   }
 
-  function handleUpdated(play: Play) {
+  function handlePlayUpdated(play: Play) {
     setPlays((prev) => prev.map((p) => (p.id === play.id ? play : p)));
     setEditPlay(null);
     router.refresh();
   }
 
-  const totalPlays = plays.length;
-  const uniqueGames = new Set(plays.map((p) => p.game_id)).size;
+  function handleSessionCreated(session: PlannedSession) {
+    setSessions((prev) => [session, ...prev].sort(
+      (a, b) => new Date(a.session_date).getTime() - new Date(b.session_date).getTime()
+    ));
+    setPlannedSheetOpen(false);
+  }
+
+  const pendingInviteCount = sessions.filter(
+    (s) => !s.is_organizer && s.my_invite_status === "invited"
+  ).length;
 
   return (
     <>
       <div className="flex flex-col min-h-[calc(100dvh-72px)]">
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border px-4 pt-4 pb-3">
-          <div className="flex items-center justify-between max-w-2xl mx-auto">
+          <div className="flex items-center justify-between max-w-2xl mx-auto mb-3">
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">Partien</h1>
-              {totalPlays > 0 && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {totalPlays} {totalPlays === 1 ? "Partie" : "Partien"} · {uniqueGames} {uniqueGames === 1 ? "Spiel" : "Spiele"}
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {plays.length} gespielt · {sessions.length} geplant
+              </p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative" ref={sortRef}>
-                <button
-                  type="button"
-                  onClick={() => setSortOpen((o) => !o)}
-                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <SlidersHorizontal size={14} />
-                </button>
-                {sortOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-44 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl overflow-hidden z-50">
-                    {[
-                      { key: "date_desc" as PlaySortKey, label: "Neueste zuerst" },
-                      { key: "date_asc" as PlaySortKey, label: "Älteste zuerst" },
-                      { key: "game_asc" as PlaySortKey, label: "Spiel A → Z" },
-                    ].map((opt) => (
-                      <button
-                        type="button"
-                        key={opt.key}
-                        onClick={() => { setSortKey(opt.key); setSortOpen(false); }}
-                        className={cn(
-                          "w-full px-3 py-2.5 text-sm text-left transition-colors",
-                          sortKey === opt.key ? "bg-amber-50 text-amber-700 font-medium" : "hover:bg-muted text-foreground"
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {activeTab === "vergangen" && (
+                <div className="relative" ref={sortRef}>
+                  <button
+                    onClick={() => setSortOpen((o) => !o)}
+                    className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Sortieren"
+                  >
+                    <SlidersHorizontal size={14} />
+                  </button>
+                  {sortOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-44 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl overflow-hidden z-50">
+                      {([
+                        { key: "date_desc", label: "Neueste zuerst" },
+                        { key: "date_asc",  label: "Älteste zuerst" },
+                        { key: "game_asc",  label: "Spiel A → Z" },
+                      ] as { key: PlaySortKey; label: string }[]).map((opt) => (
+                        <button
+                          key={opt.key}
+                          onClick={() => { setSortKey(opt.key); setSortOpen(false); }}
+                          className={cn(
+                            "w-full px-3 py-2.5 text-sm text-left transition-colors",
+                            sortKey === opt.key
+                              ? "bg-amber-50 text-amber-700 font-medium"
+                              : "hover:bg-muted text-foreground"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <button
-                type="button"
-                onClick={() => setSheetOpen(true)}
+                onClick={() => activeTab === "vergangen" ? setPastSheetOpen(true) : setPlannedSheetOpen(true)}
                 className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-colors"
-                aria-label="Partie erfassen"
+                aria-label={activeTab === "vergangen" ? "Partie erfassen" : "Spieleabend planen"}
               >
                 <Plus size={18} strokeWidth={2.5} />
               </button>
             </div>
           </div>
+
+          {/* ── Tab toggle ─────────────────────────────────────────────────── */}
+          <div className="max-w-2xl mx-auto">
+            <div className="flex bg-muted rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setActiveTab("vergangen")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  activeTab === "vergangen"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Clock size={14} />
+                Vergangen
+              </button>
+              <button
+                onClick={() => setActiveTab("geplant")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                  activeTab === "geplant"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Calendar size={14} />
+                Geplant
+                {pendingInviteCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                    {pendingInviteCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
 
+        {/* ── Tab content ────────────────────────────────────────────────────── */}
         <div className="px-4 py-4 max-w-2xl mx-auto w-full">
-          {plays.length === 0 ? (
-            <EmptyState onAdd={() => setSheetOpen(true)} />
+          {activeTab === "vergangen" ? (
+            sortedPlays.length === 0 ? (
+              <EmptyStatePast onAdd={() => setPastSheetOpen(true)} />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {sortedPlays.map((play) => (
+                  <PlayCard
+                    key={play.id}
+                    play={play}
+                    onEdit={() => setEditPlay(play)}
+                    onDelete={() => setDeleteId(play.id)}
+                    showDeleteConfirm={deleteId === play.id}
+                    onConfirmDelete={() => handleDelete(play.id)}
+                    onCancelDelete={() => setDeleteId(null)}
+                  />
+                ))}
+              </div>
+            )
           ) : (
-            <div className="flex flex-col gap-2">
-              {sortedPlays.map((play) => (
-                <PlayCard
-                  key={play.id}
-                  play={play}
-                  onEdit={() => setEditPlay(play)}
-                  onDelete={() => setDeleteId(play.id)}
-                  showDeleteConfirm={deleteId === play.id}
-                  onConfirmDelete={() => handleDelete(play.id)}
-                  onCancelDelete={() => setDeleteId(null)}
-                />
-              ))}
-            </div>
+            sessions.length === 0 ? (
+              <EmptyStateGeplant onAdd={() => setPlannedSheetOpen(true)} />
+            ) : (
+              <div className="flex flex-col gap-3">
+                {sessions.map((session) => (
+                  <SessionCard key={session.id} session={session} />
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
 
-      {sheetOpen && (
-        <PlaySheet
+      {/* ── Past play sheet ─────────────────────────────────────────────────── */}
+      {pastSheetOpen && (
+        <PastPlaySheet
           libraryGames={libraryGames}
           prefillPlayers={prefillPlayers}
-          onClose={() => { setSheetOpen(false); setPrefillPlayers(undefined); }}
-          onSaved={handleCreated}
+          onClose={() => { setPastSheetOpen(false); setPrefillPlayers(undefined); }}
+          onSaved={handlePlayCreated}
         />
       )}
-
       {editPlay && (
-        <PlaySheet
+        <PastPlaySheet
           libraryGames={libraryGames}
           editPlay={editPlay}
           onClose={() => setEditPlay(null)}
-          onSaved={handleUpdated}
+          onSavedSingle={handlePlayUpdated}
+        />
+      )}
+
+      {/* ── Planned session sheet ───────────────────────────────────────────── */}
+      {plannedSheetOpen && (
+        <PlannedSessionSheet
+          libraryGames={libraryGames}
+          friends={friends}
+          onClose={() => setPlannedSheetOpen(false)}
+          onSaved={handleSessionCreated}
         />
       )}
     </>
   );
 }
+
+// ── Play Card ─────────────────────────────────────────────────────────────────
 
 function PlayCard({
   play, onEdit, onDelete, showDeleteConfirm, onConfirmDelete, onCancelDelete,
@@ -268,14 +370,12 @@ function PlayCard({
             )}
             {play.duration_minutes && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Clock size={11} />
-                {play.duration_minutes} Min
+                <Clock size={11} />{play.duration_minutes} Min
               </span>
             )}
             {play.location && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MapPin size={11} />
-                {play.location}
+                <MapPin size={11} />{play.location}
               </span>
             )}
           </div>
@@ -304,7 +404,6 @@ function PlayCard({
           )}
         </div>
 
-        {/* Action buttons — stop propagation so they don't trigger navigation */}
         <div className="flex flex-col gap-1.5 flex-shrink-0 mt-0.5">
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(); }}
@@ -344,25 +443,370 @@ function PlayCard({
   );
 }
 
-function PlaySheet({
-  libraryGames, editPlay, prefillPlayers, onClose, onSaved,
+// ── Session Card (planned) ────────────────────────────────────────────────────
+
+function SessionCard({ session }: { session: PlannedSession }) {
+  const date = new Date(session.session_date);
+  const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
+  const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+  const accepted = session.invitees.filter((i) => i.status === "accepted").length;
+  const pending  = session.invitees.filter((i) => i.status === "invited").length;
+
+  const isPending = !session.is_organizer && session.my_invite_status === "invited";
+  const [responding, setResponding] = useState(false);
+  const [myStatus, setMyStatus] = useState(session.my_invite_status);
+
+  async function respond(status: "accepted" | "declined") {
+    setResponding(true);
+    try {
+      await fetch(`/api/play-sessions/${session.id}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      setMyStatus(status);
+    } finally {
+      setResponding(false);
+    }
+  }
+
+  return (
+    <div className={cn(
+      "bg-card border rounded-2xl overflow-hidden",
+      isPending && myStatus === "invited" ? "border-amber-300 shadow-[0_0_0_3px_rgba(251,191,36,0.15)]" : "border-border shadow-card"
+    )}>
+      {/* Game thumbnails row */}
+      {session.games.length > 0 && (
+        <div className="flex gap-0 h-16 overflow-hidden relative">
+          {session.games.slice(0, 4).map((game, i) => (
+            <div
+              key={game.id}
+              className="relative flex-1 min-w-0 overflow-hidden"
+              style={{ zIndex: session.games.length - i }}
+            >
+              {game.thumbnail_url ? (
+                <Image src={game.thumbnail_url} alt={game.name} fill className="object-cover" sizes="120px" />
+              ) : (
+                <div className="w-full h-full bg-amber-100 flex items-center justify-center">
+                  <Gamepad2 size={20} className="text-amber-400" />
+                </div>
+              )}
+            </div>
+          ))}
+          {session.games.length > 4 && (
+            <div className="absolute right-0 top-0 bottom-0 w-10 bg-black/60 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">+{session.games.length - 4}</span>
+            </div>
+          )}
+          {/* Gradient overlay for text legibility */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40" />
+        </div>
+      )}
+
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm text-foreground leading-tight">
+              {session.title ?? `Spieleabend`}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {dateStr} · {timeStr} Uhr
+            </p>
+          </div>
+
+          {/* Status badge */}
+          {session.is_organizer ? (
+            <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              Organisator
+            </span>
+          ) : myStatus === "accepted" ? (
+            <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+              <CheckCircle2 size={10} /> Zugesagt
+            </span>
+          ) : myStatus === "declined" ? (
+            <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+              <XCircle size={10} /> Abgelehnt
+            </span>
+          ) : null}
+        </div>
+
+        {/* Games list (text) */}
+        {session.games.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">
+            <Gamepad2 size={10} className="inline mr-1 -mt-0.5" />
+            {session.games.map((g) => g.name).join(", ")}
+          </p>
+        )}
+
+        {/* Location + invitee count */}
+        <div className="flex flex-wrap items-center gap-x-3 mt-1.5">
+          {session.location && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin size={10} />{session.location}
+            </span>
+          )}
+          {session.invitees.length > 0 && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Users size={10} />
+              {accepted > 0 && `${accepted} Zusage${accepted !== 1 ? "n" : ""}`}
+              {accepted > 0 && pending > 0 && " · "}
+              {pending > 0 && `${pending} offen`}
+            </span>
+          )}
+        </div>
+
+        {/* Invitee avatars */}
+        {session.invitees.length > 0 && (
+          <div className="flex -space-x-2 mt-2">
+            {session.invitees.slice(0, 6).map((inv) => (
+              <div
+                key={inv.user_id}
+                title={inv.display_name ?? inv.username}
+                className={cn(
+                  "w-7 h-7 rounded-full border-2 border-background overflow-hidden flex-shrink-0",
+                  inv.status === "accepted" ? "ring-1 ring-green-400" : inv.status === "declined" ? "opacity-40" : ""
+                )}
+              >
+                {inv.avatar_url ? (
+                  <Image src={inv.avatar_url} alt={inv.username} width={28} height={28} className="object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-amber-200 flex items-center justify-center">
+                    <span className="text-amber-700 font-bold text-[10px]">{inv.username[0].toUpperCase()}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Respond buttons (for invitees with pending status) */}
+        {isPending && myStatus === "invited" && (
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => respond("declined")}
+              disabled={responding}
+              className="flex-1 py-2 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              Ablehnen
+            </button>
+            <button
+              onClick={() => respond("accepted")}
+              disabled={responding}
+              className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              <Check size={14} /> Zusagen
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Multi-Game Picker ─────────────────────────────────────────────────────────
+
+interface SelectedGame {
+  id?: string;       // set if from library
+  bgg_id?: number;   // set if from BGG global search
+  name: string;
+  thumbnail_url: string | null;
+}
+
+function MultiGamePicker({
+  libraryGames,
+  selectedGames,
+  onAdd,
+  onRemove,
+}: {
+  libraryGames: LibraryGame[];
+  selectedGames: SelectedGame[];
+  onAdd: (game: SelectedGame) => void;
+  onRemove: (name: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [globalResults, setGlobalResults] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>([]);
+  const [globalSearching, setGlobalSearching] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const selectedNames = new Set(selectedGames.map((g) => g.name));
+  const filteredLibrary = libraryGames.filter(
+    (g) => !selectedNames.has(g.name) &&
+    (!search || g.name.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed.length < 2) { setGlobalResults([]); setGlobalSearching(false); return; }
+    if (filteredLibrary.length > 0) { setGlobalResults([]); return; }
+
+    setGlobalSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/games/search?q=${encodeURIComponent(trimmed)}`);
+        if (res.ok) {
+          const data = await res.json() as { results: { bgg_id: number; name: string; thumbnail_url: string | null }[] };
+          setGlobalResults((data.results ?? []).filter((g) => !selectedNames.has(g.name)));
+        }
+      } finally { setGlobalSearching(false); }
+    }, 500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  function selectLibraryGame(g: LibraryGame) {
+    onAdd({ id: g.id, name: g.name, thumbnail_url: g.thumbnail_url });
+    setSearch("");
+    setOpen(false);
+  }
+
+  function selectGlobalGame(g: { bgg_id: number; name: string; thumbnail_url: string | null }) {
+    onAdd({ bgg_id: g.bgg_id, name: g.name, thumbnail_url: g.thumbnail_url });
+    setSearch("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Selected game chips */}
+      {selectedGames.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selectedGames.map((g) => (
+            <div key={g.name} className="flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">
+              {g.thumbnail_url && (
+                <Image src={g.thumbnail_url} alt={g.name} width={20} height={20} className="rounded-full object-cover flex-shrink-0" />
+              )}
+              <span className="max-w-[120px] truncate">{g.name}</span>
+              <button
+                onClick={() => onRemove(g.name)}
+                className="text-amber-600 hover:text-amber-900 flex-shrink-0 ml-0.5"
+                aria-label={`${g.name} entfernen`}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Search trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background text-left text-sm text-muted-foreground hover:border-amber-400 transition-colors"
+      >
+        <Plus size={14} className="text-amber-500 flex-shrink-0" />
+        Spiel hinzufügen…
+        <ChevronDown size={14} className={cn("ml-auto transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-20 overflow-hidden max-h-72">
+          <div className="p-2 border-b border-border">
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Name suchen…"
+              className="w-full text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
+            />
+          </div>
+          <div className="overflow-y-auto max-h-56">
+            {filteredLibrary.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => selectLibraryGame(g)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors"
+              >
+                {g.thumbnail_url && <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />}
+                <span className="truncate">{g.name}</span>
+              </button>
+            ))}
+
+            {filteredLibrary.length > 0 && globalResults.length > 0 && (
+              <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/40 border-t border-border">
+                Alle Spiele (BGG)
+              </div>
+            )}
+
+            {globalSearching && (
+              <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">Suche…</div>
+            )}
+
+            {!globalSearching && globalResults.map((g) => (
+              <button
+                key={g.bgg_id}
+                onClick={() => selectGlobalGame(g)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors"
+              >
+                {g.thumbnail_url && <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />}
+                <span className="truncate">{g.name}</span>
+                <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0 bg-muted px-1.5 py-0.5 rounded">BGG</span>
+              </button>
+            ))}
+
+            {!globalSearching && search.length >= 2 && filteredLibrary.length === 0 && globalResults.length === 0 && (
+              <div className="flex flex-col items-center py-4 text-xs text-muted-foreground gap-1">
+                <span>Nichts gefunden</span>
+                <span className="text-[10px] opacity-70">Tipp: BGG-ID oder Link einfügen</span>
+              </div>
+            )}
+
+            {!search && filteredLibrary.length === 0 && (
+              <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+                Tippe um zu suchen
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Past Play Sheet ───────────────────────────────────────────────────────────
+// Creates one play per selected game (with same date/players/duration/etc.)
+
+function PastPlaySheet({
+  libraryGames,
+  editPlay,
+  prefillPlayers,
+  onClose,
+  onSaved,
+  onSavedSingle,
 }: {
   libraryGames: LibraryGame[];
   editPlay?: Play | null;
   prefillPlayers?: DraftPlayer[];
   onClose: () => void;
-  onSaved: (play: Play) => void;
+  onSaved?: (plays: Play[]) => void;
+  onSavedSingle?: (play: Play) => void;
 }) {
   const isEdit = !!editPlay;
   const today = new Date().toISOString().slice(0, 10);
 
-  const [gameId, setGameId] = useState<string>(editPlay?.game_id ?? "");
-  const [gameSearch, setGameSearch] = useState("");
-  const [gameDropdownOpen, setGameDropdownOpen] = useState(false);
-  // Global search (games not in library)
-  const [globalResults, setGlobalResults] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>([]);
-  const [globalSearching, setGlobalSearching] = useState(false);
-  const [globalSelected, setGlobalSelected] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null } | null>(null);
+  // For edit mode: single game
+  const [editGameId, setEditGameId] = useState(editPlay?.game_id ?? "");
+  const [editGameSearch, setEditGameSearch] = useState("");
+  const [editGameOpen, setEditGameOpen] = useState(false);
+  const [editGlobalResults, setEditGlobalResults] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>([]);
+  const [editGlobalSearching, setEditGlobalSearching] = useState(false);
+  const [editGlobalSelected, setEditGlobalSelected] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null } | null>(null);
+
+  // For create mode: multi-game
+  const [selectedGames, setSelectedGames] = useState<SelectedGame[]>([]);
+
   const [playedAt, setPlayedAt] = useState(editPlay?.played_at?.slice(0, 10) ?? today);
   const [duration, setDuration] = useState(editPlay?.duration_minutes?.toString() ?? "");
   const [location, setLocation] = useState(editPlay?.location ?? "");
@@ -382,91 +826,44 @@ function PlaySheet({
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(editPlay?.image_url ?? null);
 
-  // Detect BGG ID / URL pasted into search
-  function extractBggId(input: string): number | null {
-    const urlMatch = input.match(/boardgamegeek\.com\/boardgame\/(\d+)/i);
-    if (urlMatch) return Number(urlMatch[1]);
-    const numMatch = input.trim().match(/^\d{4,7}$/); // 4-7 digit numbers = BGG IDs
-    if (numMatch) return Number(numMatch[0]);
-    return null;
-  }
-
-  const selectedGame = libraryGames.find((g) => g.id === gameId);
-  const filteredGames = gameSearch
-    ? libraryGames.filter((g) => g.name.toLowerCase().includes(gameSearch.toLowerCase()))
-    : libraryGames;
-
-  function addPlayer() {
-    setPlayers((prev) => [...prev, { display_name: "", score: "", winner: false }]);
-  }
-
-  function removePlayer(i: number) {
-    setPlayers((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  function updatePlayer(i: number, field: keyof DraftPlayer, value: string | boolean) {
-    setPlayers((prev) => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
-  }
-
-  function toggleWinner(i: number) {
-    setPlayers((prev) => prev.map((p, idx) => ({
-      ...p,
-      winner: idx === i ? !p.winner : false,
-    })));
-  }
-
-  // Seamless global search: BGG ID detection + Wikidata fallback
+  // Edit-mode: game search effect
   useEffect(() => {
-    const trimmed = gameSearch.trim();
-    if (trimmed.length < 2) { setGlobalResults([]); setGlobalSearching(false); return; }
-
-    // BGG ID or URL → immediate direct lookup, no debounce
-    const bggId = extractBggId(trimmed);
-    if (bggId) {
-      setGlobalSearching(true);
-      setGlobalResults([]);
-      fetch(`/api/bgg/lookup?id=${bggId}`)
-        .then((r) => r.json())
-        .then((data: { bgg_id?: number; name?: string; thumbnail_url?: string }) => {
-          if (data.bgg_id) {
-            setGlobalResults([{ bgg_id: data.bgg_id, name: data.name ?? "", thumbnail_url: data.thumbnail_url ?? null }]);
-          }
-        })
-        .catch(() => {})
-        .finally(() => setGlobalSearching(false));
-      return;
-    }
-
-    // Text search → debounced Wikidata only when no library matches found
-    if (filteredGames.length > 0) { setGlobalResults([]); return; }
-
-    setGlobalSearching(true);
+    if (!isEdit) return;
+    const trimmed = editGameSearch.trim();
+    if (trimmed.length < 2) { setEditGlobalResults([]); setEditGlobalSearching(false); return; }
+    const libMatches = libraryGames.filter((g) => g.name.toLowerCase().includes(trimmed.toLowerCase()));
+    if (libMatches.length > 0) { setEditGlobalResults([]); return; }
+    setEditGlobalSearching(true);
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/games/search?q=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
           const data = await res.json() as { results: { bgg_id: number; name: string; thumbnail_url: string | null }[] };
-          setGlobalResults(data.results ?? []);
+          setEditGlobalResults(data.results ?? []);
         }
-      } finally {
-        setGlobalSearching(false);
-      }
+      } finally { setEditGlobalSearching(false); }
     }, 500);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameSearch]);
+  }, [editGameSearch]);
 
-  // Compress image to max 1200px / JPEG 82% before upload (~200-600 KB result)
+  function addPlayer() { setPlayers((prev) => [...prev, { display_name: "", score: "", winner: false }]); }
+  function removePlayer(i: number) { setPlayers((prev) => prev.filter((_, idx) => idx !== i)); }
+  function updatePlayer(i: number, field: keyof DraftPlayer, value: string | boolean) {
+    setPlayers((prev) => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+  }
+  function toggleWinner(i: number) {
+    setPlayers((prev) => prev.map((p, idx) => ({ ...p, winner: idx === i ? !p.winner : false })));
+  }
+
   function compressImage(file: File): Promise<File> {
-    const MAX_DIM = 1200;
-    const QUALITY = 0.82;
     return new Promise((resolve) => {
       const url = URL.createObjectURL(file);
       const img = document.createElement("img");
       img.onload = () => {
         URL.revokeObjectURL(url);
         const { naturalWidth: w, naturalHeight: h } = img;
-        const scale = Math.min(1, MAX_DIM / Math.max(w, h));
+        const scale = Math.min(1, 1200 / Math.max(w, h));
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(w * scale);
         canvas.height = Math.round(h * scale);
@@ -475,8 +872,7 @@ function PlaySheet({
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         canvas.toBlob(
           (blob) => resolve(blob ? new File([blob], "photo.jpg", { type: "image/jpeg" }) : file),
-          "image/jpeg",
-          QUALITY
+          "image/jpeg", 0.82
         );
       };
       img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
@@ -492,31 +888,22 @@ function PlaySheet({
     setImagePreview(URL.createObjectURL(compressed));
   }
 
+  async function ensureGame(game: SelectedGame): Promise<string | null> {
+    if (game.id) return game.id;
+    if (!game.bgg_id) return null;
+    const res = await fetch("/api/games/ensure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bgg_id: game.bgg_id, name: game.name, thumbnail_url: game.thumbnail_url }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { game_id: string };
+    return data.game_id;
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
-
-    // If a global (non-library) game is selected, ensure it exists in the DB first
-    let resolvedGameId = gameId;
-    if (!resolvedGameId && globalSelected) {
-      const ensureRes = await fetch("/api/games/ensure", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bgg_id: globalSelected.bgg_id,
-          name: globalSelected.name,
-          thumbnail_url: globalSelected.thumbnail_url,
-        }),
-      });
-      if (!ensureRes.ok) {
-        setError("Spiel konnte nicht geladen werden. Bitte nochmal versuchen.");
-        setSaving(false);
-        return;
-      }
-      const ensureData = await ensureRes.json() as { game_id: string };
-      resolvedGameId = ensureData.game_id;
-    }
-    if (!resolvedGameId) { setError("Bitte ein Spiel auswählen"); setSaving(false); return; }
 
     const validPlayers = players
       .filter((p) => p.display_name.trim())
@@ -526,55 +913,88 @@ function PlaySheet({
         winner: p.winner,
       }));
 
-    const payload = {
-      game_id: resolvedGameId,
-      played_at: playedAt,
-      duration_minutes: duration ? Number(duration) : null,
-      location: location.trim() || null,
-      notes: notes.trim() || null,
-      cooperative,
-      players: validPlayers,
-    };
+    // ── Edit mode ────────────────────────────────────────────────────────────
+    if (isEdit) {
+      let resolvedGameId = editGameId;
+      if (!resolvedGameId && editGlobalSelected) {
+        const res = await fetch("/api/games/ensure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bgg_id: editGlobalSelected.bgg_id,
+            name: editGlobalSelected.name,
+            thumbnail_url: editGlobalSelected.thumbnail_url,
+          }),
+        });
+        if (!res.ok) { setError("Spiel konnte nicht geladen werden."); setSaving(false); return; }
+        const d = await res.json() as { game_id: string };
+        resolvedGameId = d.game_id;
+      }
+      if (!resolvedGameId) { setError("Bitte ein Spiel auswählen"); setSaving(false); return; }
 
-    let image_url: string | null = editPlay?.image_url ?? null;
+      let image_url: string | null = editPlay?.image_url ?? null;
+      if (imageFile) {
+        const form = new FormData();
+        form.append("file", imageFile, `${Date.now()}.jpg`);
+        const uploadRes = await fetch("/api/play-images", { method: "POST", body: form });
+        if (uploadRes.ok) {
+          const ud = await uploadRes.json() as { url: string };
+          image_url = ud.url;
+        } else {
+          setError("Foto-Upload fehlgeschlagen.");
+          setSaving(false);
+          return;
+        }
+      }
+
+      const res = await fetch(`/api/plays/${editPlay!.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ game_id: resolvedGameId, played_at: playedAt, duration_minutes: duration ? Number(duration) : null, location: location.trim() || null, notes: notes.trim() || null, cooperative, players: validPlayers, image_url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Fehler"); setSaving(false); return; }
+      onSavedSingle?.(data as Play);
+      return;
+    }
+
+    // ── Create mode: one play per game ────────────────────────────────────────
+    if (selectedGames.length === 0) { setError("Bitte mindestens ein Spiel auswählen"); setSaving(false); return; }
+
+    let image_url: string | null = null;
     if (imageFile) {
       const form = new FormData();
       form.append("file", imageFile, `${Date.now()}.jpg`);
       const uploadRes = await fetch("/api/play-images", { method: "POST", body: form });
       if (uploadRes.ok) {
-        const uploadData = await uploadRes.json() as { url: string };
-        image_url = uploadData.url;
-      } else {
-        const errData = await uploadRes.json().catch(() => ({})) as { error?: string };
-        const msg = errData.error ?? "";
-        const isSize = /payload|size|too large|limit|groß/i.test(msg);
-        setError(isSize
-          ? "Foto zu groß (max. 5 MB). Wähle ein kleineres Bild."
-          : `Foto-Upload fehlgeschlagen: ${msg || "Unbekannter Fehler"}`
-        );
-        setSaving(false);
-        return;
+        const ud = await uploadRes.json() as { url: string };
+        image_url = ud.url;
       }
     }
 
-    const finalPayload = { ...payload, image_url };
+    const createdPlays: Play[] = [];
+    for (const game of selectedGames) {
+      const game_id = await ensureGame(game);
+      if (!game_id) { setError(`Spiel "${game.name}" konnte nicht gespeichert werden.`); setSaving(false); return; }
 
-    const res = isEdit
-      ? await fetch(`/api/plays/${editPlay!.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(finalPayload),
-        })
-      : await fetch("/api/plays", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(finalPayload),
-        });
+      const res = await fetch("/api/plays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ game_id, played_at: playedAt, duration_minutes: duration ? Number(duration) : null, location: location.trim() || null, notes: notes.trim() || null, cooperative, players: validPlayers, image_url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Fehler"); setSaving(false); return; }
+      createdPlays.push(data as Play);
+    }
 
-    const data = await res.json();
-    if (!res.ok) { setError(data.error ?? "Fehler"); setSaving(false); return; }
-    onSaved(data as Play);
+    onSaved?.(createdPlays);
   }
+
+  // Edit mode: selected game from library
+  const editSelectedGame = libraryGames.find((g) => g.id === editGameId);
+  const editFilteredGames = editGameSearch
+    ? libraryGames.filter((g) => g.name.toLowerCase().includes(editGameSearch.toLowerCase()))
+    : libraryGames;
 
   return (
     <>
@@ -584,165 +1004,113 @@ function PlaySheet({
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
-          <h2 className="font-display text-lg font-semibold">{isEdit ? "Partie bearbeiten" : "Partie erfassen"}</h2>
+          <h2 className="font-display text-lg font-semibold">
+            {isEdit ? "Partie bearbeiten" : "Partie(n) erfassen"}
+          </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-          {/* Game selector */}
+          {/* Game(s) selector */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Spiel *</label>
-            <div className="relative">
-              <button
-                onClick={() => setGameDropdownOpen((o) => !o)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors",
-                  (gameId || globalSelected) ? "border-amber-400 bg-amber-50" : "border-border bg-background"
-                )}
-              >
-                {(selectedGame?.thumbnail_url ?? globalSelected?.thumbnail_url) && (
-                  <Image src={(selectedGame?.thumbnail_url ?? globalSelected?.thumbnail_url)!} alt="" width={32} height={32} className="rounded-md object-cover flex-shrink-0" />
-                )}
-                <span className={cn("flex-1 text-sm truncate", !(gameId || globalSelected) && "text-muted-foreground")}>
-                  {selectedGame?.name ?? globalSelected?.name ?? "Spiel auswählen…"}
-                </span>
-                <ChevronDown size={16} className={cn("text-muted-foreground transition-transform", gameDropdownOpen && "rotate-180")} />
-              </button>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              {isEdit ? "Spiel *" : "Spiele *"}
+            </label>
 
-              {gameDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-64">
-                  <div className="p-2 border-b border-border">
-                    <input
-                      value={gameSearch}
-                      onChange={(e) => setGameSearch(e.target.value)}
-                      placeholder="Name, BGG-ID oder Link…"
-                      className="w-full text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none"
-                    />
+            {isEdit ? (
+              /* Single game picker (edit mode) */
+              <div className="relative">
+                <button
+                  onClick={() => setEditGameOpen((o) => !o)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors",
+                    (editGameId || editGlobalSelected) ? "border-amber-400 bg-amber-50" : "border-border bg-background"
+                  )}
+                >
+                  {(editSelectedGame?.thumbnail_url ?? editGlobalSelected?.thumbnail_url) && (
+                    <Image src={(editSelectedGame?.thumbnail_url ?? editGlobalSelected?.thumbnail_url)!} alt="" width={32} height={32} className="rounded-md object-cover flex-shrink-0" />
+                  )}
+                  <span className={cn("flex-1 text-sm truncate", !(editGameId || editGlobalSelected) && "text-muted-foreground")}>
+                    {editSelectedGame?.name ?? editGlobalSelected?.name ?? "Spiel auswählen…"}
+                  </span>
+                  <ChevronDown size={16} className={cn("text-muted-foreground transition-transform", editGameOpen && "rotate-180")} />
+                </button>
+
+                {editGameOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-2xl shadow-xl z-10 overflow-hidden max-h-64">
+                    <div className="p-2 border-b border-border">
+                      <input value={editGameSearch} onChange={(e) => setEditGameSearch(e.target.value)} placeholder="Name suchen…" className="w-full text-sm px-3 py-1.5 rounded-lg bg-muted focus:outline-none" />
+                    </div>
+                    <div className="overflow-y-auto max-h-48">
+                      {editFilteredGames.map((g) => (
+                        <button key={g.id} onClick={() => { setEditGameId(g.id); setEditGlobalSelected(null); setEditGameOpen(false); setEditGameSearch(""); }}
+                          className={cn("w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors", editGameId === g.id && "bg-amber-50 text-amber-700 font-medium")}>
+                          {g.thumbnail_url && <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />}
+                          <span className="truncate">{g.name}</span>
+                        </button>
+                      ))}
+                      {editGlobalSearching && <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">Suche…</div>}
+                      {!editGlobalSearching && editGlobalResults.map((g) => (
+                        <button key={g.bgg_id} onClick={() => { setEditGlobalSelected(g); setEditGameId(""); setEditGameOpen(false); setEditGameSearch(""); }}
+                          className={cn("w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors", editGlobalSelected?.bgg_id === g.bgg_id && "bg-amber-50 text-amber-700 font-medium")}>
+                          {g.thumbnail_url && <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />}
+                          <span className="truncate">{g.name}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">BGG</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-
-                  <div className="overflow-y-auto max-h-48">
-                    {/* Library results */}
-                    {filteredGames.map((g) => (
-                      <button
-                        key={g.id}
-                        onClick={() => { setGameId(g.id); setGlobalSelected(null); setGameDropdownOpen(false); setGameSearch(""); }}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
-                          gameId === g.id && "bg-amber-50 text-amber-700 font-medium"
-                        )}
-                      >
-                        {g.thumbnail_url && (
-                          <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />
-                        )}
-                        <span className="truncate">{g.name}</span>
-                      </button>
-                    ))}
-
-                    {/* Separator when showing global results */}
-                    {filteredGames.length > 0 && globalResults.length > 0 && (
-                      <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/40 border-t border-border">
-                        Alle Spiele (BGG)
-                      </div>
-                    )}
-
-                    {/* Loading */}
-                    {globalSearching && (
-                      <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
-                        Suche…
-                      </div>
-                    )}
-
-                    {/* Global results */}
-                    {!globalSearching && globalResults.map((g) => (
-                      <button
-                        key={g.bgg_id}
-                        onClick={() => { setGlobalSelected(g); setGameId(""); setGameDropdownOpen(false); setGameSearch(""); }}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-muted transition-colors",
-                          globalSelected?.bgg_id === g.bgg_id && "bg-amber-50 text-amber-700 font-medium"
-                        )}
-                      >
-                        {g.thumbnail_url && (
-                          <Image src={g.thumbnail_url} alt="" width={28} height={28} className="rounded object-cover flex-shrink-0" />
-                        )}
-                        <span className="truncate">{g.name}</span>
-                        <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0 bg-muted px-1.5 py-0.5 rounded">BGG</span>
-                      </button>
-                    ))}
-
-                    {/* Empty state — only when explicitly searched */}
-                    {!globalSearching && gameSearch.length >= 2 && filteredGames.length === 0 && globalResults.length === 0 && (
-                      <div className="flex flex-col items-center py-4 text-xs text-muted-foreground gap-1">
-                        <span>Nichts gefunden</span>
-                        <span className="text-[10px] opacity-70">Tipp: BGG-ID oder Link einfügen</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              /* Multi-game picker (create mode) */
+              <MultiGamePicker
+                libraryGames={libraryGames}
+                selectedGames={selectedGames}
+                onAdd={(g) => setSelectedGames((prev) => [...prev, g])}
+                onRemove={(name) => setSelectedGames((prev) => prev.filter((g) => g.name !== name))}
+              />
+            )}
           </div>
 
+          {/* Date + Duration */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Datum</label>
-              <input
-                type="date"
-                value={playedAt}
-                onChange={(e) => setPlayedAt(e.target.value)}
-                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
+              <input type="date" value={playedAt} onChange={(e) => setPlayedAt(e.target.value)}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Dauer (Min)</label>
-              <input
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                placeholder="z.B. 90"
-                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
+              <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="z.B. 90"
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
           </div>
 
+          {/* Location */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
               <MapPin size={11} className="inline mr-1" />Ort (optional)
             </label>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="z.B. Zuhause, Spieleabend bei Marc…"
-              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="z.B. Zuhause, Spieleabend bei Marc…"
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
           </div>
 
+          {/* Cooperative toggle */}
           <div className="flex items-center justify-between px-3 py-2.5 bg-muted/40 rounded-xl">
             <span className="text-sm font-medium">Kooperativ gespielt</span>
-            <button
-              type="button"
-              onClick={() => {
-                setCooperative((c) => {
-                  const next = !c;
-                  if (next) setPlayers((prev) => prev.map((p) => ({ ...p, winner: false })));
-                  return next;
-                });
-              }}
+            <button type="button"
+              onClick={() => { setCooperative((c) => { const next = !c; if (next) setPlayers((prev) => prev.map((p) => ({ ...p, winner: false }))); return next; }); }}
               className={cn("rounded-full transition-colors relative flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400", cooperative ? "bg-amber-500" : "bg-border")}
-              style={{ width: 44, height: 26 }}
-              aria-checked={cooperative}
-              role="switch"
-            >
-              {/* Use style.left instead of translate — more reliable inside <button> across browsers */}
-              <span
-                className="absolute rounded-full bg-white shadow pointer-events-none"
-                style={{ width: 20, height: 20, top: 3, left: cooperative ? 21 : 3, transition: "left 0.15s ease" }}
-              />
+              style={{ width: 44, height: 26 }} aria-checked={cooperative} role="switch">
+              <span className="absolute rounded-full bg-white shadow pointer-events-none"
+                style={{ width: 20, height: 20, top: 3, left: cooperative ? 21 : 3, transition: "left 0.15s ease" }} />
             </button>
           </div>
 
+          {/* Players */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -755,30 +1123,17 @@ function PlaySheet({
             <div className="flex flex-col gap-2">
               {players.map((p, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <input
-                    value={p.display_name}
-                    onChange={(e) => updatePlayer(i, "display_name", e.target.value)}
+                  <input value={p.display_name} onChange={(e) => updatePlayer(i, "display_name", e.target.value)}
                     placeholder={`Spieler ${i + 1}`}
-                    className="flex-1 text-sm px-3 py-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-                  <input
-                    value={p.score}
-                    onChange={(e) => updatePlayer(i, "score", e.target.value)}
-                    placeholder="Pkt"
-                    type="number"
-                    className="w-16 text-sm px-2 py-2 rounded-xl border border-border bg-background text-center focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
+                    className="flex-1 min-w-0 text-sm px-3 py-2 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <input value={p.score} onChange={(e) => updatePlayer(i, "score", e.target.value)}
+                    placeholder="Pkt" type="number"
+                    className="w-16 text-sm px-2 py-2 rounded-xl border border-border bg-background text-center focus:outline-none focus:ring-2 focus:ring-amber-400" />
                   {!cooperative && (
-                    <button
-                      onClick={() => toggleWinner(i)}
-                      className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0",
-                        p.winner ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:bg-amber-100"
-                      )}
-                      title="Gewinner"
-                    >
-                      🏆
-                    </button>
+                    <button onClick={() => toggleWinner(i)}
+                      className={cn("w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0",
+                        p.winner ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground hover:bg-amber-100")}
+                      title="Gewinner">🏆</button>
                   )}
                   {players.length > 1 && (
                     <button onClick={() => removePlayer(i)} className="text-muted-foreground hover:text-red-400 flex-shrink-0">
@@ -792,61 +1147,44 @@ function PlaySheet({
 
           {/* Photo */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
-              Foto (optional)
-            </label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Foto (optional)</label>
             {imagePreview ? (
               <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-muted">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={imagePreview} alt="Vorschau" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => { setImageFile(null); setImagePreview(null); }}
-                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center"
-                >
+                <button type="button" onClick={() => { setImageFile(null); setImagePreview(null); }}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center">
                   <X size={13} />
                 </button>
               </div>
             ) : (
               <>
                 <input ref={photoRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                <button
-                  type="button"
-                  onClick={() => photoRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-border hover:border-amber-400 hover:bg-amber-50 transition-all text-sm text-muted-foreground hover:text-amber-700 self-start"
-                >
+                <button type="button" onClick={() => photoRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-border hover:border-amber-400 hover:bg-amber-50 transition-all text-sm text-muted-foreground hover:text-amber-700">
                   <Camera size={14} /> Foto hinzufügen
                 </button>
               </>
             )}
           </div>
 
+          {/* Notes */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notizen (optional)</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Highlights, besondere Momente…"
-              rows={3}
-              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-            />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Highlights, besondere Momente…"
+              rows={3} className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
           </div>
 
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
         <div className="px-4 py-4 border-t border-border flex-shrink-0">
-          <button
-            onClick={handleSave}
-            disabled={saving || (!gameId && !globalSelected)}
-            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
-          >
+          <button onClick={handleSave} disabled={saving || (!isEdit && selectedGames.length === 0) || (isEdit && !editGameId && !editGlobalSelected)}
+            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
             {saving ? (
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-            ) : (
-              <Check size={16} />
-            )}
-            {isEdit ? "Änderungen speichern" : "Partie speichern"}
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            ) : <Check size={16} />}
+            {isEdit ? "Änderungen speichern" : selectedGames.length > 1 ? `${selectedGames.length} Partien speichern` : "Partie speichern"}
           </button>
         </div>
       </div>
@@ -854,22 +1192,284 @@ function PlaySheet({
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+// ── Planned Session Sheet ─────────────────────────────────────────────────────
+
+function PlannedSessionSheet({
+  libraryGames,
+  friends,
+  onClose,
+  onSaved,
+}: {
+  libraryGames: LibraryGame[];
+  friends: FriendProfile[];
+  onClose: () => void;
+  onSaved: (session: PlannedSession) => void;
+}) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const defaultDate = tomorrow.toISOString().slice(0, 10);
+
+  const [title, setTitle] = useState("");
+  const [sessionDate, setSessionDate] = useState(defaultDate);
+  const [sessionTime, setSessionTime] = useState("19:00");
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+  const [selectedGames, setSelectedGames] = useState<SelectedGame[]>([]);
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggleInvite(userId: string) {
+    setInvitedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  async function ensureGame(game: SelectedGame): Promise<string | null> {
+    if (game.id) return game.id;
+    if (!game.bgg_id) return null;
+    const res = await fetch("/api/games/ensure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bgg_id: game.bgg_id, name: game.name, thumbnail_url: game.thumbnail_url }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { game_id: string };
+    return data.game_id;
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+
+    // Ensure all selected games exist in DB
+    const game_ids: string[] = [];
+    for (const game of selectedGames) {
+      const id = await ensureGame(game);
+      if (!id) { setError(`Spiel "${game.name}" konnte nicht gespeichert werden.`); setSaving(false); return; }
+      game_ids.push(id);
+    }
+
+    const session_date = `${sessionDate}T${sessionTime}:00`;
+
+    const res = await fetch("/api/play-sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: title.trim() || null,
+        session_date,
+        location: location.trim() || null,
+        notes: notes.trim() || null,
+        game_ids,
+        invited_user_ids: Array.from(invitedIds),
+      }),
+    });
+
+    const data = await res.json() as { session_id?: string; error?: string };
+    if (!res.ok) { setError(data.error ?? "Fehler beim Speichern"); setSaving(false); return; }
+
+    // Build optimistic session object for immediate UI update
+    const newSession: PlannedSession = {
+      id: data.session_id!,
+      title: title.trim() || null,
+      session_date,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
+      status: "planned",
+      created_by: "", // will be set by server
+      is_organizer: true,
+      my_invite_status: null,
+      games: selectedGames.map((g) => ({ id: g.id ?? "", name: g.name, thumbnail_url: g.thumbnail_url })),
+      invitees: friends
+        .filter((f) => invitedIds.has(f.id))
+        .map((f) => ({
+          user_id: f.id,
+          username: f.username,
+          display_name: f.display_name,
+          avatar_url: f.avatar_url,
+          status: "invited" as const,
+        })),
+    };
+
+    onSaved(newSession);
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col" style={{ maxHeight: "92dvh" }}>
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-border" />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Spieleabend planen</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Lade Freunde ein und schlage Spiele vor</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+          {/* Title */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Name (optional)</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="z.B. Spieleabend bei Dennis"
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </div>
+
+          {/* Date + Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Datum *</label>
+              <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Uhrzeit</label>
+              <input type="time" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </div>
+          </div>
+
+          {/* Location */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              <MapPin size={11} className="inline mr-1" />Ort (optional)
+            </label>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="z.B. Bei mir zuhause, Spielcafé…"
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </div>
+
+          {/* Games */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              <Gamepad2 size={11} className="inline mr-1" />Spielvorschläge
+            </label>
+            <MultiGamePicker
+              libraryGames={libraryGames}
+              selectedGames={selectedGames}
+              onAdd={(g) => setSelectedGames((prev) => [...prev, g])}
+              onRemove={(name) => setSelectedGames((prev) => prev.filter((g) => g.name !== name))}
+            />
+          </div>
+
+          {/* Friends to invite */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
+              <UserPlus size={11} className="inline mr-1" />Freunde einladen
+              {invitedIds.size > 0 && (
+                <span className="ml-2 text-amber-600 normal-case font-medium">{invitedIds.size} ausgewählt</span>
+              )}
+            </label>
+
+            {friends.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4 bg-muted/40 rounded-xl">
+                Noch keine Freunde in MeepleBase — füge sie im Spieler-Menü hinzu.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {friends.map((friend) => {
+                  const selected = invitedIds.has(friend.id);
+                  return (
+                    <button
+                      key={friend.id}
+                      type="button"
+                      onClick={() => toggleInvite(friend.id)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all",
+                        selected ? "border-amber-400 bg-amber-50" : "border-border hover:bg-muted/50"
+                      )}
+                    >
+                      <div className="relative w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-amber-100">
+                        {friend.avatar_url ? (
+                          <Image src={friend.avatar_url} alt={friend.username} fill className="object-cover" sizes="36px" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-amber-600 font-bold text-sm">{friend.username[0].toUpperCase()}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {friend.display_name ?? friend.username}
+                        </p>
+                        <p className="text-xs text-muted-foreground">@{friend.username}</p>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        selected ? "border-amber-500 bg-amber-500" : "border-border"
+                      )}>
+                        {selected && <Check size={11} className="text-white" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notizen (optional)</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Hinweise für Gäste, Snacks mitbringen…"
+              rows={2} className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+          </div>
+
+          {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+        </div>
+
+        <div className="px-4 py-4 border-t border-border flex-shrink-0">
+          <button onClick={handleSave} disabled={saving || !sessionDate}
+            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+            {saving ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            ) : <Calendar size={15} />}
+            {invitedIds.size > 0 ? `Einladungen senden (${invitedIds.size})` : "Spieleabend speichern"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Empty States ──────────────────────────────────────────────────────────────
+
+function EmptyStatePast({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
       <div className="w-20 h-20 rounded-3xl bg-amber-50 flex items-center justify-center mb-4">
-        <span className="text-4xl">🎲</span>
+        <Clock size={36} className="text-amber-400" />
       </div>
       <h3 className="font-display text-xl font-semibold text-foreground mb-2">Noch keine Partien</h3>
       <p className="text-muted-foreground text-sm mb-6 max-w-xs">
         Erfasse deine erste Partie und behalte den Überblick über deine Spielsessions.
       </p>
-      <button
-        onClick={onAdd}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 text-white font-semibold text-sm"
-      >
-        <Plus size={16} />
-        Erste Partie erfassen
+      <button onClick={onAdd}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 text-white font-semibold text-sm">
+        <Plus size={16} /> Erste Partie erfassen
+      </button>
+    </div>
+  );
+}
+
+function EmptyStateGeplant({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+      <div className="w-20 h-20 rounded-3xl bg-amber-50 flex items-center justify-center mb-4">
+        <Calendar size={36} className="text-amber-400" />
+      </div>
+      <h3 className="font-display text-xl font-semibold text-foreground mb-2">Kein Spieleabend geplant</h3>
+      <p className="text-muted-foreground text-sm mb-6 max-w-xs">
+        Plane deinen nächsten Spieleabend, schlage Spiele vor und lade Freunde ein.
+      </p>
+      <button onClick={onAdd}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-amber-500 text-white font-semibold text-sm">
+        <Plus size={16} /> Spieleabend planen
       </button>
     </div>
   );

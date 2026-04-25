@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PlayersClient } from "./players-client";
-import type { FriendProfile, ForSaleGame, LibraryVisibility, ConversationSummary } from "@/types";
+import type { FriendProfile, ForSaleGame, LibraryVisibility, ConversationSummary, SessionInviteForPlayer } from "@/types";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export const metadata: Metadata = { title: "Spieler" };
@@ -164,7 +164,65 @@ export default async function PlayersPage() {
     };
   });
 
-  // ── 9. Build search result list with friendship status ───────────────────────
+  // ── 9. Fetch pending session invites ─────────────────────────────────────────
+  type RawSessForInvite = {
+    id: string; title: string | null; session_date: string; location: string | null; created_by: string;
+    session_games: { game: { id: string; name: string; thumbnail_url: string | null } }[];
+  };
+  type RawInviteRow = { id: string; session_id: string; status: string; session: RawSessForInvite | null };
+
+  const { data: rawInvites } = await supabase
+    .from("play_session_invites")
+    .select(`
+      id, session_id, status,
+      session:play_sessions(
+        id, title, session_date, location, created_by,
+        session_games:play_session_games(game:games(id, name, thumbnail_url))
+      )
+    `)
+    .eq("invited_user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  const rawInviteRows = (rawInvites ?? []) as unknown as RawInviteRow[];
+
+  // Fetch organizer profiles for sessions I'm invited to
+  const organizerIds = Array.from(new Set(
+    rawInviteRows
+      .map((i) => i.session?.created_by)
+      .filter((id): id is string => !!id && id !== user.id)
+  ));
+  type OrgProfile = { id: string; username: string; display_name: string | null; avatar_url: string | null };
+  const organizerProfileMap = new Map<string, OrgProfile>();
+  if (organizerIds.length > 0) {
+    const { data: orgProfiles } = await admin
+      .from("profiles")
+      .select("id, username, display_name, avatar_url")
+      .in("id", organizerIds);
+    for (const p of (orgProfiles ?? []) as OrgProfile[]) {
+      organizerProfileMap.set(p.id, p);
+    }
+  }
+
+  const pendingInvites: SessionInviteForPlayer[] = rawInviteRows.map((inv) => {
+    const sess = inv.session;
+    const org = sess ? organizerProfileMap.get(sess.created_by) : null;
+    const games = (sess?.session_games ?? []).map((sg) => sg.game);
+    return {
+      invite_id: inv.id,
+      session_id: inv.session_id,
+      status: inv.status as "invited" | "accepted" | "declined",
+      session_date: sess?.session_date ?? "",
+      title: sess?.title ?? null,
+      location: sess?.location ?? null,
+      organizer_id: sess?.created_by ?? "",
+      organizer_username: org?.username ?? "?",
+      organizer_display_name: org?.display_name ?? null,
+      organizer_avatar_url: org?.avatar_url ?? null,
+      games,
+    };
+  });
+
+  // ── 10. Build search result list with friendship status ──────────────────────
   const friendshipMap = new Map<string, { id: string; status: string; is_requester: boolean }>();
   for (const f of (friendships ?? [])) {
     const otherId = f.requester_id === user.id ? f.addressee_id : f.requester_id;
@@ -191,6 +249,7 @@ export default async function PlayersPage() {
       totalUnread={totalUnread}
       initialSearchResults={initialSearchResults}
       forSaleGames={forSaleGames}
+      pendingInvites={pendingInvites}
     />
   );
 }

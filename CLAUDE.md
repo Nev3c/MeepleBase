@@ -399,6 +399,34 @@ Vor dem Schreiben von React-Komponenten immer `vercel-react-best-practices` + `v
 
 ---
 
+## 📋 Changelog-Pflicht (Non-Negotiable)
+
+> Jede Code-Änderung die committed wird MUSS vorher in `CHANGELOG.md` dokumentiert sein.
+> Das ist genauso verbindlich wie die Security-Regeln oben.
+
+**Format:** `CHANGELOG.md` im Projekt-Root folgt [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+**Wann updaten:**
+- Vor jedem `git commit` — niemals danach
+- Neue Features → `### Added` im `[Unreleased]` Abschnitt
+- Bugfixes → `### Fixed`
+- Breaking Changes → `### Changed`
+- Entfernte Features → `### Removed`
+
+**Vor jedem Release (version bump):**
+- `[Unreleased]` → `[x.y.z] — YYYY-MM-DD` umbenennen
+- Neuen leeren `[Unreleased]` Abschnitt oben einfügen
+- `package.json` version entsprechend setzen
+
+**Versionierung (SemVer):**
+- `0.x.0` — neues Feature / Tab / Seite (Minor)
+- `0.x.y` — Bugfix / kleines UI-Update (Patch)
+- `1.0.0` — Produkt-Launch / Public Beta
+
+**Claude-Regel:** Wenn ich Code-Änderungen committe, MUSS ich vorher prüfen ob `CHANGELOG.md` aktuell ist. Wenn nicht, zuerst updaten, dann committen.
+
+---
+
 ## Arbeitsweise & Kommunikation
 
 **Wie der Entwickler kommuniziert:**

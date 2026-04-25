@@ -272,3 +272,54 @@ export interface ConversationSummary {
   unread_count: number;
   is_last_from_me: boolean;
 }
+
+// ============================================================
+// Play sessions (planned game nights + multi-game sessions)
+// ============================================================
+
+export type PlaySessionStatus = "planned" | "confirmed" | "completed" | "cancelled";
+export type InviteStatus = "invited" | "accepted" | "declined";
+
+export interface SessionGame {
+  id: string;
+  name: string;
+  thumbnail_url: string | null;
+}
+
+export interface SessionInvitee {
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  status: InviteStatus;
+}
+
+/** A planned (or confirmed) game session — used in /plays Geplant tab */
+export interface PlannedSession {
+  id: string;
+  title: string | null;
+  session_date: string;
+  location: string | null;
+  notes: string | null;
+  status: PlaySessionStatus;
+  created_by: string;
+  is_organizer: boolean;
+  my_invite_status: InviteStatus | null; // null = I am organizer
+  games: SessionGame[];
+  invitees: SessionInvitee[];
+}
+
+/** An incoming invite — used in /players Einladungen tab */
+export interface SessionInviteForPlayer {
+  invite_id: string;
+  session_id: string;
+  status: InviteStatus;
+  session_date: string;
+  title: string | null;
+  location: string | null;
+  organizer_id: string;
+  organizer_username: string;
+  organizer_display_name: string | null;
+  organizer_avatar_url: string | null;
+  games: SessionGame[];
+}
