@@ -11,7 +11,7 @@ import {
   Sword, Shield, Swords, Gamepad2,
   Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
   Dog, Cat, Ship, Plane, Rocket,
-  Timer, Search, ExternalLink,
+  Timer, Search,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -600,67 +600,168 @@ function saveButtons(buttons: SoundButton[]) {
 
 type FormMode = { type: "add" } | { type: "edit"; button: SoundButton } | null;
 
-// ── Melodice Search ───────────────────────────────────────────────────────────
+// ── YouTube Music Search ──────────────────────────────────────────────────────
+// Sucht direkt via YouTube Data API nach Spielsoundtracks und spielt das
+// Ergebnis inline ab — kein Absprung zu externen Seiten nötig.
 
-function MelodiceSearch() {
+interface YtResult {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+}
+
+function YouTubeMusicSearch() {
   const [query, setQuery] = useState("");
-  const formRef = useRef<HTMLFormElement>(null);
+  const [results, setResults] = useState<YtResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [noApiKey, setNoApiKey] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const musicIframeRef = useRef<HTMLIFrameElement>(null);
 
-  function openMelodice() {
+  async function search() {
     const q = query.trim();
-    if (!q) {
-      window.open("https://melodice.org/", "_blank", "noopener,noreferrer");
-      return;
+    if (!q) return;
+    setLoading(true);
+    setError(null);
+    setNoApiKey(false);
+    setResults([]);
+    setPlayingId(null);
+    if (musicIframeRef.current) musicIframeRef.current.src = "";
+
+    try {
+      const res = await fetch(`/api/youtube-music?q=${encodeURIComponent(q)}`);
+      const data = await res.json() as { results?: YtResult[]; error?: string };
+
+      if (!res.ok) {
+        if (data.error === "NO_API_KEY") { setNoApiKey(true); }
+        else { setError("Suche fehlgeschlagen. Bitte nochmal versuchen."); }
+        return;
+      }
+
+      const found = data.results ?? [];
+      setResults(found);
+      if (found.length > 0) playVideo(found[0].videoId);
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setLoading(false);
     }
-    // melodice.org uses a Django form with POST + CSRF — the reliable approach
-    // is to submit a hidden form targeting a new tab, which works cross-domain.
-    formRef.current?.submit();
+  }
+
+  function playVideo(videoId: string) {
+    setPlayingId(videoId);
+    if (musicIframeRef.current) {
+      musicIframeRef.current.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+    }
+  }
+
+  function stopVideo() {
+    setPlayingId(null);
+    if (musicIframeRef.current) musicIframeRef.current.src = "";
   }
 
   return (
     <div className="bg-card rounded-2xl border border-border shadow-card p-3.5 flex flex-col gap-2.5">
-      {/* Hidden form that submits to melodice.org in a new tab */}
-      <form
-        ref={formRef}
-        method="get"
-        action="https://melodice.org/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="hidden"
-        aria-hidden="true"
-      >
-        <input name="q" value={query} readOnly />
-        <input name="search" value="Search" readOnly />
-      </form>
-
+      {/* Header */}
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
           <Music2 size={14} className="text-white" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-foreground leading-tight">Melodice Playlist</p>
-          <p className="text-[11px] text-muted-foreground leading-tight">Kuratierte Musik für Brettspiele</p>
+          <p className="text-sm font-semibold text-foreground leading-tight">Spielmusik</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">Soundtrack direkt zum Spiel suchen & abspielen</p>
         </div>
       </div>
+
+      {/* Search input */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && openMelodice()}
+            onKeyDown={(e) => e.key === "Enter" && search()}
             placeholder="Spielname eingeben…"
             className="w-full h-10 pl-8 pr-3 rounded-xl border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
           />
         </div>
         <button
-          onClick={openMelodice}
-          className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex-shrink-0"
+          onClick={search}
+          disabled={loading || !query.trim()}
+          className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex-shrink-0 disabled:opacity-50"
         >
-          <ExternalLink size={13} />
-          Öffnen
+          {loading ? (
+            <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <Search size={13} />
+          )}
+          Suchen
         </button>
       </div>
+
+      {/* No API key hint */}
+      {noApiKey && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
+          <p className="font-semibold mb-0.5">YouTube API-Key fehlt</p>
+          <p>Damit die Musiksuche funktioniert, muss <code className="bg-amber-100 px-1 rounded">YOUTUBE_DATA_API_KEY</code> in den Vercel-Umgebungsvariablen eingetragen sein. Der Key ist kostenlos über die Google Cloud Console erhältlich (YouTube Data API v3).</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+
+      {/* Results list */}
+      {results.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {results.map((r) => {
+            const isPlaying = playingId === r.videoId;
+            return (
+              <button
+                key={r.videoId}
+                onClick={() => isPlaying ? stopVideo() : playVideo(r.videoId)}
+                className={cn(
+                  "flex items-center gap-2.5 p-2 rounded-xl text-left transition-all",
+                  isPlaying ? "bg-amber-50 border border-amber-200" : "hover:bg-muted/50 border border-transparent"
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={r.thumbnail} alt="" className="w-14 h-10 rounded-lg object-cover flex-shrink-0 bg-muted" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-foreground line-clamp-1 leading-snug">{r.title}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">{r.channelTitle}</p>
+                </div>
+                {isPlaying ? (
+                  <span className="flex gap-0.5 items-end h-3 flex-shrink-0">
+                    {[0, 100, 200].map((d) => (
+                      <span key={d} className="w-1 bg-amber-500 rounded-full animate-bounce" style={{ height: "100%", animationDelay: `${d}ms` }} />
+                    ))}
+                  </span>
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                    <svg viewBox="0 0 12 12" className="w-3 h-3 text-muted-foreground fill-current ml-0.5">
+                      <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Embedded player (hidden when nothing plays) */}
+      <iframe
+        ref={musicIframeRef}
+        className={cn("w-full aspect-video rounded-xl overflow-hidden", !playingId && "hidden")}
+        allow="autoplay; encrypted-media"
+        allowFullScreen
+        title="Spielmusik Player"
+      />
     </div>
   );
 }
@@ -777,8 +878,8 @@ function SoundBoard() {
 
   return (
     <section className="flex flex-col gap-4">
-      {/* Melodice */}
-      <MelodiceSearch />
+      {/* YouTube Spielmusik */}
+      <YouTubeMusicSearch />
 
       {/* Header */}
       <div className="flex items-center justify-between">

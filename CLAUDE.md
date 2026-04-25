@@ -366,6 +366,11 @@ SUPABASE_SERVICE_ROLE_KEY=
 # BGG (kein Key nötig, aber Rate-Limit-Config)
 BGG_CACHE_TTL_SECONDS=86400
 
+# YouTube Data API v3 (für Spielmusik-Suche im Sound-Tab)
+# Kostenlos: Google Cloud Console → APIs & Services → YouTube Data API v3 aktivieren → API-Key erstellen
+# Quota: 10.000 units/Tag kostenlos; eine Suche kostet 100 units → 100 Suchen/Tag gratis
+YOUTUBE_DATA_API_KEY=
+
 # Optional: KI (Phase 3)
 ANTHROPIC_API_KEY=
 ```

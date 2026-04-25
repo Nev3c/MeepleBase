@@ -207,6 +207,14 @@ export default function PrivacyPage() {
               dennis_rau@outlook.de
             </a>
           </p>
+          <div className="bg-muted/40 rounded-xl p-3 mt-3 text-xs text-muted-foreground leading-relaxed">
+            <p className="font-medium text-foreground mb-1">Datenexport (Art. 20 DSGVO)</p>
+            <p>
+              Du kannst jederzeit unter <em>Einstellungen → Bibliothek → Daten exportieren</em> eine
+              vollständige Kopie deiner gespeicherten Daten herunterladen: Bibliothek, Partien, Notizen
+              und Profil als maschinenlesbare JSON-Datei.
+            </p>
+          </div>
           <p className="text-muted-foreground text-xs mt-2">
             Beschwerderecht bei der zuständigen Aufsichtsbehörde:{" "}
             <a href="https://www.lfd.bw.de" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">

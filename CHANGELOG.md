@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Spielmusik-Suche im Sound-Tab: Spielname eingeben → YouTube-Videos werden direkt gesucht und inline abgespielt (via YouTube Data API, kein Seitenabsprung mehr)
+- Daten-Export (Art. 20 DSGVO): Button unter Einstellungen → Bibliothek lädt JSON-Datei mit Bibliothek, Partien, Notizen und Profil herunter (`/api/export`)
 - Datenschutzerklärung (`/privacy`): vollständige DSGVO-konforme DSE inkl. Abschnitt zu GPS-Koordinaten, Rechtsgrundlagen, Drittanbietern, Betroffenenrechten
 - Impressum (`/impressum`) und Nutzungsbedingungen (`/terms`): erste Versionen (Impressum-Pflichtfelder noch zu ergänzen)
 - Profil-Galerie: Alle hochgeladenen Partienfotos in einer Bildergalerie sortiert nach Datum (Profil → Galerie), mit Vollbild-Ansicht beim Antippen
@@ -32,7 +34,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - Tools-Tabs: Label unter jedem Icon ist jetzt immer sichtbar (nicht mehr nur beim aktiven Tab)
 - Profil: Profilbild direkt auf dem Profil antippbar zum Hochladen (nicht mehr nur in den Einstellungen)
-- Melodice-Integration: Suche funktioniert jetzt korrekt via Form-Submit statt window.open mit GET-Parameter
+- Melodice durch YouTube-Musiksuche ersetzt (vollständig in-app, kein externer Absprung mehr)
+- Galerie: Vollbild-Viewer unterstützt jetzt Vor/Zurück-Navigation zwischen Fotos mit Dot-Indikator
+- Datenschutzerklärung: Datenexport-Hinweis aktualisiert (Self-Service statt E-Mail-Anfrage)
 - Sammlungswert aus dem Profil-Stats-Band entfernt — liegt jetzt exklusiv hinter dem Privacy-Toggle auf /stats
 - Auth-Callback: Onboarding-Erkennung von 30 Minuten auf 7 Tage ausgedehnt (deckt E-Mail-Bestätigungs-Delays ab)
 - Kategorien- und Mechanismen-Zähler aus dem Profil entfernt und auf /stats konsolidiert (Schnellübersicht-Karte, Sekundärzeile)

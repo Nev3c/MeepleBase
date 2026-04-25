@@ -7,7 +7,7 @@ import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
-import { LogOut, ExternalLink, ChevronRight, X, Share2, UserPlus, ShieldCheck, MessageSquare, ListChecks, BarChart2, Camera, Images, ArrowLeft } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, ChevronLeft, X, Share2, UserPlus, ShieldCheck, MessageSquare, ListChecks, BarChart2, Camera, Images, ArrowLeft } from "lucide-react";
 import { CURRENT_VERSION } from "@/data/changelog";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -74,7 +74,8 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryLoaded, setGalleryLoaded] = useState(false);
-  const [fullscreenImg, setFullscreenImg] = useState<GalleryItem | null>(null);
+  const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
+  const fullscreenImg = fullscreenIndex !== null ? galleryItems[fullscreenIndex] : null;
 
   async function openGallery() {
     setShowGallery(true);
@@ -449,10 +450,10 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
 
             {!galleryLoading && galleryItems.length > 0 && (
               <div className="grid grid-cols-2 gap-0.5 p-0.5">
-                {galleryItems.map((item) => (
+                {galleryItems.map((item, idx) => (
                   <button
                     key={item.id}
-                    onClick={() => setFullscreenImg(item)}
+                    onClick={() => setFullscreenIndex(idx)}
                     className="relative aspect-square overflow-hidden bg-muted group"
                   >
                     <Image
@@ -478,25 +479,26 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
       )}
 
       {/* Fullscreen image viewer */}
-      {fullscreenImg && (
-        <div
-          className="fixed inset-0 z-[60] bg-black flex flex-col"
-          onClick={() => setFullscreenImg(null)}
-        >
-          <div className="flex items-center justify-between px-4 pt-12 pb-3" onClick={(e) => e.stopPropagation()}>
-            <div>
-              <p className="font-semibold text-white text-sm leading-tight">{fullscreenImg.game_name}</p>
+      {fullscreenImg && fullscreenIndex !== null && (
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pt-12 pb-3">
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white text-sm leading-tight truncate">{fullscreenImg.game_name}</p>
               <p className="text-white/60 text-xs">
                 {new Date(fullscreenImg.played_at).toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" })}
+                <span className="ml-2 text-white/40">{fullscreenIndex + 1} / {galleryItems.length}</span>
               </p>
             </div>
             <button
-              onClick={() => setFullscreenImg(null)}
-              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center"
+              onClick={() => setFullscreenIndex(null)}
+              className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 ml-3"
             >
               <X size={18} className="text-white" />
             </button>
           </div>
+
+          {/* Image */}
           <div className="flex-1 relative">
             <Image
               src={fullscreenImg.image_url}
@@ -506,6 +508,44 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
               sizes="100vw"
               priority
             />
+          </div>
+
+          {/* Prev / Next navigation */}
+          <div className="flex items-center justify-between px-4 pb-10 pt-3">
+            <button
+              onClick={() => setFullscreenIndex((i) => (i !== null && i > 0 ? i - 1 : i))}
+              disabled={fullscreenIndex === 0}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 text-white disabled:opacity-30 active:bg-white/20 transition-colors"
+            >
+              <ChevronLeft size={18} />
+              <span className="text-sm font-medium">Zurück</span>
+            </button>
+
+            {/* Dot indicator (max 7 visible) */}
+            <div className="flex gap-1.5 items-center">
+              {galleryItems.slice(
+                Math.max(0, fullscreenIndex - 3),
+                Math.min(galleryItems.length, fullscreenIndex + 4)
+              ).map((_, dotOffset) => {
+                const realIdx = Math.max(0, fullscreenIndex - 3) + dotOffset;
+                return (
+                  <button
+                    key={realIdx}
+                    onClick={() => setFullscreenIndex(realIdx)}
+                    className={`rounded-full transition-all ${realIdx === fullscreenIndex ? "w-2.5 h-2.5 bg-white" : "w-1.5 h-1.5 bg-white/40"}`}
+                  />
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setFullscreenIndex((i) => (i !== null && i < galleryItems.length - 1 ? i + 1 : i))}
+              disabled={fullscreenIndex === galleryItems.length - 1}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white/10 text-white disabled:opacity-30 active:bg-white/20 transition-colors"
+            >
+              <span className="text-sm font-medium">Weiter</span>
+              <ChevronRight size={18} />
+            </button>
           </div>
         </div>
       )}

@@ -1044,6 +1044,19 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
           </div>
         </section>
 
+        {/* ── Daten exportieren ─────────────────────────────── */}
+        <section>
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-0.5">Daten exportieren</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Lade eine vollständige Kopie deiner Daten herunter: Bibliothek, Partien, Notizen und Profil als JSON-Datei (Art. 20 DSGVO).
+              </p>
+            </div>
+            <DataExportButton />
+          </div>
+        </section>
+
         {/* ── BGG-Daten aktualisieren ────────────────────────── */}
         <section>
           <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
@@ -1360,5 +1373,57 @@ function XCircleIcon() {
     <svg className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
     </svg>
+  );
+}
+
+type ExportPhase = "idle" | "loading" | "done" | "error";
+
+function DataExportButton() {
+  const [phase, setPhase] = useState<ExportPhase>("idle");
+
+  async function handleExport() {
+    setPhase("loading");
+    try {
+      const res = await fetch("/api/export");
+      if (!res.ok) throw new Error("Export fehlgeschlagen");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const date = new Date().toISOString().split("T")[0];
+      a.href = url;
+      a.download = `meeplebase-export-${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setPhase("done");
+      setTimeout(() => setPhase("idle"), 3000);
+    } catch {
+      setPhase("error");
+      setTimeout(() => setPhase("idle"), 3000);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleExport}
+      disabled={phase === "loading"}
+      className={cn(
+        "flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-semibold transition-all",
+        phase === "done"
+          ? "bg-green-500 text-white"
+          : phase === "error"
+          ? "bg-red-100 text-red-700"
+          : "bg-muted text-foreground hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 border border-border"
+      )}
+    >
+      {phase === "loading" && <SpinnerIcon />}
+      {phase === "done" && <Check size={15} />}
+      {phase === "idle" || phase === "loading"
+        ? phase === "loading" ? "Wird exportiert…" : "JSON herunterladen"
+        : phase === "done"
+        ? "Export erfolgreich!"
+        : "Fehler — nochmal versuchen"}
+    </button>
   );
 }
