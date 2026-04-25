@@ -59,7 +59,7 @@ function formatTime(dateStr: string): string {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function PlayersClient({
-  currentUserId: _currentUserId,
+  // currentUserId available for future use (e.g. composing messages)
   conversations,
   friends: initialFriends,
   pendingReceived: initialPendingReceived,
