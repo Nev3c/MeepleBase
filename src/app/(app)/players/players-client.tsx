@@ -275,7 +275,6 @@ export function PlayersClient({
         {activeTab === "chats" && (
           <ChatsTab
             conversations={localConversations}
-            currentUserId={currentUserId}
             onClearUnread={clearUnreadForUser}
           />
         )}
@@ -358,10 +357,9 @@ function TabButton({
 // ── Chats Tab ─────────────────────────────────────────────────────────────────
 
 function ChatsTab({
-  conversations, currentUserId, onClearUnread,
+  conversations, onClearUnread,
 }: {
   conversations: ConversationSummary[];
-  currentUserId: string;
   onClearUnread: (userId: string) => void;
 }) {
   const { state: pushState, loading: pushLoading, subscribe, unsubscribe } = usePushNotifications();
