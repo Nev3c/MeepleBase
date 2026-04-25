@@ -11,7 +11,7 @@ import {
   Sword, Shield, Swords, Gamepad2,
   Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
   Dog, Cat, Ship, Plane, Rocket,
-  Timer,
+  Timer, Search, ExternalLink,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -600,6 +600,53 @@ function saveButtons(buttons: SoundButton[]) {
 
 type FormMode = { type: "add" } | { type: "edit"; button: SoundButton } | null;
 
+// ── Melodice Search ───────────────────────────────────────────────────────────
+
+function MelodiceSearch() {
+  const [query, setQuery] = useState("");
+
+  function openMelodice() {
+    const q = query.trim();
+    const url = q
+      ? `https://melodice.org/?q=${encodeURIComponent(q)}`
+      : "https://melodice.org/";
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div className="bg-card rounded-2xl border border-border shadow-card p-3.5 flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
+          <Music2 size={14} className="text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-foreground leading-tight">Melodice Playlist</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">Kuratierte Musik für Brettspiele</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && openMelodice()}
+            placeholder="Spielname eingeben…"
+            className="w-full h-10 pl-8 pr-3 rounded-xl border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+          />
+        </div>
+        <button
+          onClick={openMelodice}
+          className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex-shrink-0"
+        >
+          <ExternalLink size={13} />
+          Öffnen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SoundBoard() {
   const [buttons, setButtons] = useState<SoundButton[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -712,6 +759,9 @@ function SoundBoard() {
 
   return (
     <section className="flex flex-col gap-4">
+      {/* Melodice */}
+      <MelodiceSearch />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-[#1E2A3A]">Soundboard</h2>

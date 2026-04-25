@@ -8,6 +8,7 @@ import {
   Plus, X, Check, Trash2, Users, Clock, MapPin,
   Edit2, SlidersHorizontal, Camera, Calendar, Gamepad2,
   UserPlus, CheckCircle2, XCircle, ChevronDown, Share2, Copy, CheckCheck,
+  Dices,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
@@ -356,6 +357,24 @@ function PlayCard({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  // BGStats deep link — opens the BGStats app with this play pre-filled
+  const bgStatsData = encodeURIComponent(JSON.stringify({
+    game: {
+      name: play.game?.name ?? "Unbekannt",
+      ...(play.game?.bgg_id ? { bggId: play.game.bgg_id } : {}),
+    },
+    playDate: play.played_at.replace("T", " ").slice(0, 19),
+    players: (play.players ?? []).map((p) => ({
+      name: p.display_name,
+      ...(p.score !== null ? { score: p.score } : {}),
+      winner: p.winner,
+    })),
+    ...(play.duration_minutes ? { durationMin: play.duration_minutes } : {}),
+    ...(play.location ? { location: play.location } : {}),
+    sourceName: "MeepleBase",
+  }));
+  const bgStatsUrl = `bgstats://app.bgstatsapp.com/createPlay.html?data=${bgStatsData}`;
+
   const date = new Date(play.played_at);
   const dateStr = date.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
   const winner = play.players?.find((p) => p.winner);
@@ -482,6 +501,23 @@ function PlayCard({
               {copied ? <CheckCheck size={14} className="text-green-500" /> : <Copy size={14} />}
               {copied ? "Kopiert!" : "Link kopieren"}
             </button>
+
+            <div className="w-full flex items-center gap-2">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-[10px] text-muted-foreground font-medium">oder</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            <a
+              href={bgStatsUrl}
+              className="w-full flex items-center justify-center gap-2 h-10 rounded-xl bg-[#1E2A3A] hover:bg-[#253347] text-white text-sm font-semibold transition-colors"
+            >
+              <Dices size={14} />
+              In BGStats eintragen
+            </a>
+            <p className="text-[10px] text-muted-foreground text-center -mt-2 leading-snug">
+              Öffnet die BGStats-App auf deinem Gerät
+            </p>
           </div>
         </div>
       )}
