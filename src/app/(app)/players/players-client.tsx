@@ -3,21 +3,23 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
-  Users, MessageSquare, Mail, MoreHorizontal,
-  MapPin, LocateFixed, ArrowDownAZ, Tag, ShoppingBag,
+  Users, MessageSquare, MapPin, LocateFixed, ArrowDownAZ,
+  Tag, ShoppingBag, BookOpen, Dices, ChevronRight, Bell, BellOff,
 } from "lucide-react";
-import type { ForSaleGame } from "@/types";
+import type { ForSaleGame, ConversationSummary } from "@/types";
 import { cn } from "@/lib/utils";
 import type { FriendProfile } from "@/types";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 type NearbyStatus = "idle" | "locating" | "loading" | "done" | "denied" | "error";
 type SortMode = "az" | "entfernung";
-type PlayersTab = "freunde" | "suche";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
+type PlayersTab = "chats" | "freunde" | "suche";
 
 interface SearchPlayer {
   id: string;
@@ -31,6 +33,7 @@ interface SearchPlayer {
 
 interface Props {
   currentUserId: string;
+  conversations: ConversationSummary[];
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
@@ -40,9 +43,24 @@ interface Props {
   forSaleGames: ForSaleGame[];
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 1) return "Gestern";
+  if (diffDays < 7) return date.toLocaleDateString("de-DE", { weekday: "short" });
+  return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function PlayersClient({
+  currentUserId,
+  conversations,
   friends: initialFriends,
   pendingReceived: initialPendingReceived,
   pendingSent: initialPendingSent,
@@ -51,11 +69,59 @@ export function PlayersClient({
   initialSearchResults,
   forSaleGames,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<PlayersTab>("freunde");
+  const router = useRouter();
+
+  // Active tab — default to chats if there are unread messages
+  const [activeTab, setActiveTab] = useState<PlayersTab>(totalUnread > 0 ? "chats" : "freunde");
+
+  // Friend state
   const [friends, setFriends] = useState(initialFriends);
   const [pendingReceived, setPendingReceived] = useState(initialPendingReceived);
   const [pendingSent, setPendingSent] = useState(initialPendingSent);
 
+  // Optimistic unread — cleared immediately when user opens a chat
+  const [localUnreadByUser, setLocalUnreadByUser] = useState(unreadByUser);
+  useEffect(() => { setLocalUnreadByUser(unreadByUser); }, [unreadByUser]);
+  const localTotalUnread = Object.values(localUnreadByUser).reduce((s, c) => s + c, 0);
+
+  // Conversations with local unread applied
+  const localConversations = conversations.map((c) => ({
+    ...c,
+    unread_count: localUnreadByUser[c.other_user_id] ?? 0,
+  }));
+
+  function clearUnreadForUser(userId: string) {
+    setLocalUnreadByUser((prev) => {
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
+  }
+
+  // Refresh data when user comes back from a chat
+  useEffect(() => {
+    function onVisible() {
+      if (!document.hidden) router.refresh();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [router]);
+
+  // Friend bottom sheet
+  const [selectedFriend, setSelectedFriend] = useState<FriendProfile | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  function openSheet(fp: FriendProfile) {
+    setSelectedFriend(fp);
+    setSheetOpen(true);
+  }
+
+  function closeSheet() {
+    setSheetOpen(false);
+    setTimeout(() => setSelectedFriend(null), 260);
+  }
+
+  // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchPlayer[] | null>(initialSearchResults);
   const [searching, setSearching] = useState(false);
@@ -69,21 +135,15 @@ export function PlayersClient({
   function handleSearchInput(val: string) {
     setSearchQuery(val);
     if (searchRef.current) clearTimeout(searchRef.current);
-    if (val.trim().length < 2) {
-      setSearchResults(initialSearchResults);
-      return;
-    }
+    if (val.trim().length < 2) { setSearchResults(initialSearchResults); return; }
     setSearching(true);
     searchRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/players/search?q=${encodeURIComponent(val.trim())}`);
         const data = await res.json() as { players: SearchPlayer[] };
         setSearchResults(data.players ?? []);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
+      } catch { setSearchResults([]); }
+      finally { setSearching(false); }
     }, 400);
   }
 
@@ -112,11 +172,6 @@ export function PlayersClient({
     if (mode === "entfernung" && nearbyStatus === "idle") handleNearbySearch(nearbyRadius);
   }
 
-  function clearSearch() {
-    setSearchQuery("");
-    setSearchResults(initialSearchResults);
-  }
-
   async function sendRequest(player: SearchPlayer) {
     const res = await fetch("/api/friendships", {
       method: "POST",
@@ -129,19 +184,11 @@ export function PlayersClient({
         p.id === player.id ? { ...p, friendship: { id: data.id, status: "pending", is_requester: true } } : p;
       setSearchResults((prev) => prev?.map(updateFn) ?? null);
       setNearbyResults((prev) => prev?.map(updateFn) ?? null);
-      setPendingSent((prev) => [
-        {
-          friendship_id: data.id,
-          friendship_status: "pending",
-          is_requester: true,
-          profile: {
-            id: player.id, username: player.username,
-            display_name: player.display_name, avatar_url: player.avatar_url,
-            location: player.location, library_visibility: "friends",
-          },
-        },
-        ...prev,
-      ]);
+      setPendingSent((prev) => [{
+        friendship_id: data.id, friendship_status: "pending", is_requester: true,
+        profile: { id: player.id, username: player.username, display_name: player.display_name,
+          avatar_url: player.avatar_url, location: player.location, library_visibility: "friends" },
+      }, ...prev]);
     }
   }
 
@@ -174,8 +221,8 @@ export function PlayersClient({
     if (res.ok) {
       setFriends((prev) => prev.filter((f) => f.friendship_id !== friendshipId));
       if (removed) {
-        const userId = removed.profile.id;
-        const clearFn = (p: SearchPlayer) => p.id === userId ? { ...p, friendship: null } : p;
+        const uid = removed.profile.id;
+        const clearFn = (p: SearchPlayer) => p.id === uid ? { ...p, friendship: null } : p;
         setSearchResults((prev) => prev?.map(clearFn) ?? null);
         setNearbyResults((prev) => prev?.map(clearFn) ?? null);
       }
@@ -187,40 +234,23 @@ export function PlayersClient({
   return (
     <div className="flex flex-col min-h-[calc(100dvh-72px)] bg-background">
 
-      {/* ── Sticky header ── */}
+      {/* ── Header ── */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="max-w-2xl mx-auto px-4 pt-4 pb-0">
-
-          {/* Title row */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-baseline gap-2.5">
-              <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">
-                Spieler
-              </h1>
-              {totalPending > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
-                  {totalPending} {totalPending === 1 ? "Anfrage" : "Anfragen"}
-                </span>
-              )}
-            </div>
-
-            <Link
-              href="/players/messages"
-              className="relative flex items-center gap-1.5 h-9 px-3 rounded-full bg-muted hover:bg-muted/80 active:bg-muted/60 transition-colors"
-              aria-label="Alle Nachrichten"
-            >
-              <Mail size={15} className="text-muted-foreground" />
-              <span className="text-xs text-muted-foreground font-medium">Chats</span>
-              {totalUnread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-background">
-                  {totalUnread > 9 ? "9+" : totalUnread}
-                </span>
-              )}
-            </Link>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">Spieler</h1>
           </div>
 
-          {/* Tab bar */}
+          {/* ── 3-Tab Bar ── */}
           <div className="flex gap-0">
+            <TabButton
+              active={activeTab === "chats"}
+              onClick={() => setActiveTab("chats")}
+              badge={localTotalUnread > 0 ? localTotalUnread : undefined}
+              icon={<MessageSquare size={14} />}
+            >
+              Chats
+            </TabButton>
             <TabButton
               active={activeTab === "freunde"}
               onClick={() => setActiveTab("freunde")}
@@ -242,18 +272,26 @@ export function PlayersClient({
 
       {/* ── Content ── */}
       <div className="flex-1 max-w-2xl mx-auto w-full">
-        {activeTab === "freunde" ? (
+        {activeTab === "chats" && (
+          <ChatsTab
+            conversations={localConversations}
+            currentUserId={currentUserId}
+            onClearUnread={clearUnreadForUser}
+          />
+        )}
+        {activeTab === "freunde" && (
           <FreundeTab
             friends={friends}
             pendingReceived={pendingReceived}
             pendingSent={pendingSent}
             forSaleGames={forSaleGames}
-            unreadByUser={unreadByUser}
+            localUnreadByUser={localUnreadByUser}
             onRespondToRequest={respondToRequest}
-            onRemoveFriend={removeFriend}
             onCancelRequest={cancelRequest}
+            onOpenSheet={openSheet}
           />
-        ) : (
+        )}
+        {activeTab === "suche" && (
           <SucheTab
             searchQuery={searchQuery}
             searchResults={searchResults}
@@ -265,13 +303,23 @@ export function PlayersClient({
             onSearchInput={handleSearchInput}
             onNearbySearch={handleNearbySearch}
             onNearbyRadiusChange={setNearbyRadius}
-            onClearSearch={clearSearch}
+            onClearSearch={() => { setSearchQuery(""); setSearchResults(initialSearchResults); }}
             onSortChange={handleSortChange}
             onSendRequest={sendRequest}
             onCancelRequest={cancelRequest}
           />
         )}
       </div>
+
+      {/* ── Friend Sheet (bottom sheet overlay) ── */}
+      <FriendSheet
+        friend={selectedFriend}
+        open={sheetOpen}
+        unreadCount={selectedFriend ? (localUnreadByUser[selectedFriend.profile.id] ?? 0) : 0}
+        onClose={closeSheet}
+        onRemove={removeFriend}
+        onClearUnread={clearUnreadForUser}
+      />
     </div>
   );
 }
@@ -279,17 +327,10 @@ export function PlayersClient({
 // ── Tab Button ────────────────────────────────────────────────────────────────
 
 function TabButton({
-  active,
-  onClick,
-  children,
-  badge,
-  icon,
+  active, onClick, children, badge, icon,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  badge?: number;
-  icon?: React.ReactNode;
+  active: boolean; onClick: () => void; children: React.ReactNode;
+  badge?: number; icon?: React.ReactNode;
 }) {
   return (
     <button
@@ -302,11 +343,10 @@ function TabButton({
       {icon}
       {children}
       {badge !== undefined && (
-        <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
-          {badge}
+        <span className="min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+          {badge > 9 ? "9+" : badge}
         </span>
       )}
-      {/* Active underline indicator */}
       <span className={cn(
         "absolute bottom-0 left-3 right-3 h-0.5 rounded-full transition-all duration-200",
         active ? "bg-amber-500 opacity-100" : "opacity-0"
@@ -315,18 +355,120 @@ function TabButton({
   );
 }
 
-// ── Section Label ──────────────────────────────────────────────────────────────
+// ── Chats Tab ─────────────────────────────────────────────────────────────────
 
-function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
+function ChatsTab({
+  conversations, currentUserId, onClearUnread,
+}: {
+  conversations: ConversationSummary[];
+  currentUserId: string;
+  onClearUnread: (userId: string) => void;
+}) {
+  const { state: pushState, loading: pushLoading, subscribe, unsubscribe } = usePushNotifications();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const showBanner = !bannerDismissed && pushState === "unsubscribed";
+
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/60">
-        {children}
-      </p>
-      {count !== undefined && (
-        <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-          {count}
-        </span>
+    <div className="flex flex-col pb-10">
+
+      {/* Push notification banner */}
+      {showBanner && (
+        <div className="mx-4 mt-3 flex items-center gap-3 px-3.5 py-3 bg-amber-50 border border-amber-200 rounded-2xl">
+          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <Bell size={15} className="text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground leading-tight">Benachrichtigungen</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Erhalte Meldungen bei neuen Nachrichten.</p>
+          </div>
+          <button
+            onClick={subscribe}
+            disabled={pushLoading}
+            className="flex-shrink-0 px-3 py-1.5 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 disabled:opacity-60 transition-colors"
+          >
+            {pushLoading ? "…" : "Aktivieren"}
+          </button>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+            aria-label="Schließen"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Subscribed status */}
+      {pushState === "subscribed" && (
+        <div className="mx-4 mt-3 flex items-center justify-between gap-2 px-3.5 py-2 bg-green-50 border border-green-200 rounded-xl">
+          <div className="flex items-center gap-2">
+            <Bell size={13} className="text-green-600" />
+            <p className="text-xs text-green-700 font-medium">Benachrichtigungen aktiv</p>
+          </div>
+          <button
+            onClick={unsubscribe}
+            disabled={pushLoading}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
+          >
+            <BellOff size={12} />
+            Deaktivieren
+          </button>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {conversations.length === 0 ? (
+        <EmptyState
+          icon={<MessageSquare size={26} className="text-amber-400" />}
+          iconBg="bg-amber-50"
+          title="Noch keine Chats"
+          subtitle="Tippe auf einen Freund und schreib ihm eine Nachricht."
+        />
+      ) : (
+        <div className="flex flex-col mt-2">
+          {conversations.map((conv, i) => {
+            const displayName = conv.other_display_name ?? conv.other_username;
+            const isUnread = conv.unread_count > 0;
+            return (
+              <Link
+                key={conv.other_user_id}
+                href={`/players/messages/${conv.other_user_id}`}
+                onClick={() => onClearUnread(conv.other_user_id)}
+                className={cn(
+                  "flex items-center gap-3.5 px-4 py-3.5 active:bg-muted/40 transition-colors",
+                  i < conversations.length - 1 && "border-b border-border/40",
+                  isUnread && "bg-amber-50/60"
+                )}
+              >
+                {/* Avatar with unread dot */}
+                <div className="relative flex-shrink-0">
+                  <PlayerAvatar name={conv.other_username} avatarUrl={conv.other_avatar_url} size="md" />
+                  {isUnread && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-background leading-none">
+                      {conv.unread_count > 9 ? "9+" : conv.unread_count}
+                    </span>
+                  )}
+                </div>
+
+                {/* Text */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className={cn("text-sm truncate", isUnread ? "font-semibold text-foreground" : "font-medium text-foreground")}>
+                      {displayName}
+                    </p>
+                    <p className={cn("text-[11px] flex-shrink-0 tabular-nums", isUnread ? "text-amber-600 font-medium" : "text-muted-foreground")}>
+                      {formatTime(conv.last_message_at)}
+                    </p>
+                  </div>
+                  <p className={cn("text-xs truncate mt-0.5", isUnread ? "text-foreground/75 font-medium" : "text-muted-foreground")}>
+                    {conv.is_last_from_me && <span className="text-muted-foreground/60 font-normal">Du: </span>}
+                    {conv.last_message}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -335,23 +477,17 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count?: 
 // ── Freunde Tab ───────────────────────────────────────────────────────────────
 
 function FreundeTab({
-  friends,
-  pendingReceived,
-  pendingSent,
-  forSaleGames,
-  unreadByUser,
-  onRespondToRequest,
-  onRemoveFriend,
-  onCancelRequest,
+  friends, pendingReceived, pendingSent, forSaleGames, localUnreadByUser,
+  onRespondToRequest, onCancelRequest, onOpenSheet,
 }: {
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
   forSaleGames: ForSaleGame[];
-  unreadByUser: Record<string, number>;
+  localUnreadByUser: Record<string, number>;
   onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
-  onRemoveFriend: (fId: string) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
+  onOpenSheet: (fp: FriendProfile) => void;
 }) {
   const isEmpty = friends.length === 0 && pendingReceived.length === 0;
 
@@ -373,36 +509,34 @@ function FreundeTab({
       {/* Friends list */}
       <section>
         {!isEmpty && <SectionLabel count={friends.length}>Freunde</SectionLabel>}
-
         {isEmpty ? (
           <EmptyState
             icon={<Users size={26} className="text-amber-400" />}
+            iconBg="bg-amber-50"
             title="Noch keine Freunde"
             subtitle='Wechsle zum Tab "Suche" um andere Spieler zu finden.'
-            iconBg="bg-amber-50"
           />
         ) : (
-          <div className="flex flex-col gap-2">
-            {friends.map((fp) => (
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            {friends.map((fp, i) => (
               <FriendCard
                 key={fp.friendship_id}
                 fp={fp}
-                unreadCount={unreadByUser[fp.profile.id] ?? 0}
-                onRemove={onRemoveFriend}
+                unreadCount={localUnreadByUser[fp.profile.id] ?? 0}
+                isLast={i === friends.length - 1}
+                onClick={() => onOpenSheet(fp)}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* For-sale section */}
+      {/* For-sale games */}
       {forSaleGames.length > 0 && (
         <section>
           <SectionLabel count={forSaleGames.length}>Zu Verkaufen</SectionLabel>
           <div className="flex flex-col gap-2.5">
-            {forSaleGames.map((item) => (
-              <ForSaleCard key={item.id} item={item} />
-            ))}
+            {forSaleGames.map((item) => <ForSaleCard key={item.id} item={item} />)}
           </div>
         </section>
       )}
@@ -422,18 +556,222 @@ function FreundeTab({
   );
 }
 
+// ── Friend Card (tappable row, no inline buttons) ─────────────────────────────
+
+function FriendCard({ fp, unreadCount, isLast, onClick }: {
+  fp: FriendProfile; unreadCount: number; isLast: boolean; onClick: () => void;
+}) {
+  const p = fp.profile;
+  const displayName = p.display_name ?? p.username;
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-muted/40 transition-colors",
+        !isLast && "border-b border-border/40"
+      )}
+    >
+      {/* Avatar with unread dot */}
+      <div className="relative flex-shrink-0">
+        <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-background leading-none">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
+        {p.display_name && p.display_name !== p.username && (
+          <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
+        )}
+        {p.location && (
+          <p className="text-xs text-muted-foreground/50 truncate flex items-center gap-1 mt-0.5">
+            <MapPin size={9} />
+            {p.location}
+          </p>
+        )}
+      </div>
+
+      <ChevronRight size={16} className="text-muted-foreground/30 flex-shrink-0" />
+    </button>
+  );
+}
+
+// ── Friend Bottom Sheet ────────────────────────────────────────────────────────
+
+function FriendSheet({ friend, open, unreadCount, onClose, onRemove, onClearUnread }: {
+  friend: FriendProfile | null;
+  open: boolean;
+  unreadCount: number;
+  onClose: () => void;
+  onRemove: (fId: string) => Promise<void>;
+  onClearUnread: (userId: string) => void;
+}) {
+  const [removing, setRemoving] = useState(false);
+
+  async function handleRemove() {
+    if (!friend) return;
+    setRemoving(true);
+    await onRemove(friend.friendship_id);
+    setRemoving(false);
+    onClose();
+  }
+
+  if (!friend) return null;
+  const p = friend.profile;
+  const displayName = p.display_name ?? p.username;
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex flex-col justify-end transition-all duration-200",
+        open ? "pointer-events-auto" : "pointer-events-none"
+      )}
+    >
+      {/* Backdrop */}
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-200",
+          open ? "opacity-100" : "opacity-0"
+        )}
+        onClick={onClose}
+      />
+
+      {/* Sheet */}
+      <div
+        className={cn(
+          "relative bg-background rounded-t-3xl max-w-2xl w-full mx-auto shadow-2xl",
+          "transition-transform duration-[260ms] ease-out",
+          open ? "translate-y-0" : "translate-y-full"
+        )}
+      >
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-muted-foreground/20 rounded-full" />
+        </div>
+
+        {/* Profile header */}
+        <div className="px-6 pt-3 pb-5 flex items-center gap-4">
+          <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="lg" ring />
+          <div className="flex-1 min-w-0">
+            <p className="font-display text-lg font-semibold text-foreground truncate leading-tight">{displayName}</p>
+            {p.display_name && p.display_name !== p.username && (
+              <p className="text-sm text-muted-foreground">@{p.username}</p>
+            )}
+            {p.location && (
+              <p className="text-xs text-muted-foreground/60 flex items-center gap-1 mt-0.5">
+                <MapPin size={10} />
+                {p.location}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="h-px bg-border/60 mx-4" />
+
+        {/* Actions */}
+        <div className="px-4 py-2">
+          {/* Chat */}
+          <Link
+            href={`/players/messages/${p.id}`}
+            onClick={() => { onClearUnread(p.id); onClose(); }}
+            className="flex items-center gap-4 px-3 py-3.5 rounded-2xl hover:bg-muted/60 active:bg-muted transition-colors"
+          >
+            <div className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+              unreadCount > 0 ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-600"
+            )}>
+              <MessageSquare size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">Nachricht schreiben</p>
+              {unreadCount > 0 && (
+                <p className="text-xs text-amber-600 font-medium">
+                  {unreadCount} ungelesene{unreadCount > 1 ? " Nachrichten" : " Nachricht"}
+                </p>
+              )}
+            </div>
+            {unreadCount > 0 && (
+              <span className="min-w-[20px] h-5 px-1 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Link>
+
+          {/* Library */}
+          <Link
+            href={`/players/${p.id}`}
+            onClick={onClose}
+            className="flex items-center gap-4 px-3 py-3.5 rounded-2xl hover:bg-muted/60 active:bg-muted transition-colors"
+          >
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground flex-shrink-0">
+              <BookOpen size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">Bibliothek ansehen</p>
+              <p className="text-xs text-muted-foreground">Spielesammlung &amp; Partien</p>
+            </div>
+          </Link>
+
+          {/* Record play */}
+          <Link
+            href="/plays/new"
+            onClick={onClose}
+            className="flex items-center gap-4 px-3 py-3.5 rounded-2xl hover:bg-muted/60 active:bg-muted transition-colors"
+          >
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground flex-shrink-0">
+              <Dices size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">Partie aufzeichnen</p>
+              <p className="text-xs text-muted-foreground">Gemeinsame Partie eintragen</p>
+            </div>
+          </Link>
+        </div>
+
+        <div className="h-px bg-border/60 mx-4" />
+
+        {/* Danger */}
+        <div className="px-4 py-2 pb-8">
+          <button
+            onClick={handleRemove}
+            disabled={removing}
+            className="w-full flex items-center gap-4 px-3 py-3.5 rounded-2xl hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
+          >
+            <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+              <UserX size={18} className="text-red-500" />
+            </div>
+            <p className="text-sm font-semibold text-red-600">
+              {removing ? "Wird entfernt…" : "Freund entfernen"}
+            </p>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Section Label ──────────────────────────────────────────────────────────────
+
+function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/60">{children}</p>
+      {count !== undefined && (
+        <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">{count}</span>
+      )}
+    </div>
+  );
+}
+
 // ── Empty State ────────────────────────────────────────────────────────────────
 
-function EmptyState({
-  icon,
-  title,
-  subtitle,
-  iconBg = "bg-muted",
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  iconBg?: string;
+function EmptyState({ icon, title, subtitle, iconBg = "bg-muted" }: {
+  icon: React.ReactNode; title: string; subtitle: string; iconBg?: string;
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center px-4">
@@ -446,111 +784,14 @@ function EmptyState({
   );
 }
 
-// ── Friend Card ────────────────────────────────────────────────────────────────
-
-function FriendCard({ fp, unreadCount, onRemove }: { fp: FriendProfile; unreadCount: number; onRemove: (fId: string) => Promise<void> }) {
-  const [showActions, setShowActions] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const p = fp.profile;
-  const menuRef = useRef<HTMLDivElement>(null);
-  const displayName = p.display_name ?? p.username;
-
-  useEffect(() => {
-    if (!showActions) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowActions(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showActions]);
-
-  async function handleRemove() {
-    setRemoving(true);
-    await onRemove(fp.friendship_id);
-    setRemoving(false);
-    setShowActions(false);
-  }
-
-  return (
-    <div className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow">
-      <Link href={`/players/${p.id}`} className="flex-shrink-0">
-        <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" ring />
-      </Link>
-
-      <Link href={`/players/${p.id}`} className="flex-1 min-w-0 py-0.5">
-        <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
-        {p.display_name && p.display_name !== p.username && (
-          <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
-        )}
-        {p.location && (
-          <p className="text-xs text-muted-foreground/60 truncate flex items-center gap-1 mt-0.5">
-            <MapPin size={9} />
-            {p.location}
-          </p>
-        )}
-      </Link>
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <Link
-          href={`/players/messages/${p.id}`}
-          className={cn(
-            "relative w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-            unreadCount > 0
-              ? "bg-amber-500 text-white shadow-sm hover:bg-amber-600 active:bg-amber-700"
-              : "bg-muted text-muted-foreground hover:bg-amber-50 hover:text-amber-600 active:bg-amber-100"
-          )}
-          aria-label={unreadCount > 0 ? `${unreadCount} neue Nachricht${unreadCount > 1 ? "en" : ""}` : "Nachricht senden"}
-        >
-          <MessageSquare size={15} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 bg-white text-amber-600 text-[9px] font-bold rounded-full flex items-center justify-center border border-amber-200 shadow-sm">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </Link>
-
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setShowActions((v) => !v)}
-            className={cn(
-              "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
-              showActions ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"
-            )}
-            aria-label="Optionen"
-            aria-expanded={showActions}
-            aria-haspopup="menu"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-
-          {showActions && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1.5 z-30 bg-card border border-border rounded-2xl shadow-lg overflow-hidden min-w-[176px]"
-            >
-              <button
-                role="menuitem"
-                onClick={handleRemove}
-                disabled={removing}
-                className="w-full flex items-center gap-2.5 px-4 py-3.5 text-red-600 text-sm font-medium hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50"
-              >
-                <UserX size={14} />
-                {removing ? "Wird entfernt…" : "Freund entfernen"}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Pending Request Card ───────────────────────────────────────────────────────
 
-function PendingRequestCard({ fp, onRespond }: { fp: FriendProfile; onRespond: (fId: string, action: "accept" | "decline") => Promise<void> }) {
+function PendingRequestCard({ fp, onRespond }: {
+  fp: FriendProfile;
+  onRespond: (fId: string, action: "accept" | "decline") => Promise<void>;
+}) {
   const [loading, setLoading] = useState<"accept" | "decline" | null>(null);
   const p = fp.profile;
-  const displayName = p.display_name ?? p.username;
 
   async function handle(action: "accept" | "decline") {
     setLoading(action);
@@ -562,14 +803,13 @@ function PendingRequestCard({ fp, onRespond }: { fp: FriendProfile; onRespond: (
     <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm">
       <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" ring />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
+        <p className="text-sm font-semibold text-foreground truncate leading-tight">{p.display_name ?? p.username}</p>
         {p.display_name && p.display_name !== p.username && (
           <p className="text-xs text-muted-foreground truncate">@{p.username}</p>
         )}
         {p.location && (
           <p className="text-xs text-amber-700/60 truncate flex items-center gap-1 mt-0.5">
-            <MapPin size={9} />
-            {p.location}
+            <MapPin size={9} />{p.location}
           </p>
         )}
       </div>
@@ -580,7 +820,9 @@ function PendingRequestCard({ fp, onRespond }: { fp: FriendProfile; onRespond: (
           className="w-9 h-9 rounded-full bg-white border border-amber-200 flex items-center justify-center text-muted-foreground hover:border-red-200 hover:text-red-500 active:bg-red-50 transition-colors disabled:opacity-50"
           aria-label="Ablehnen"
         >
-          {loading === "decline" ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <X size={14} />}
+          {loading === "decline"
+            ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <X size={14} />}
         </button>
         <button
           onClick={() => handle("accept")}
@@ -599,10 +841,12 @@ function PendingRequestCard({ fp, onRespond }: { fp: FriendProfile; onRespond: (
 
 // ── Pending Sent Card ──────────────────────────────────────────────────────────
 
-function PendingSentCard({ fp, onCancel }: { fp: FriendProfile; onCancel: (fId: string, pId: string) => Promise<void> }) {
+function PendingSentCard({ fp, onCancel }: {
+  fp: FriendProfile;
+  onCancel: (fId: string, pId: string) => Promise<void>;
+}) {
   const [cancelling, setCancelling] = useState(false);
   const p = fp.profile;
-  const displayName = p.display_name ?? p.username;
 
   async function handle() {
     setCancelling(true);
@@ -614,7 +858,7 @@ function PendingSentCard({ fp, onCancel }: { fp: FriendProfile; onCancel: (fId: 
     <div className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-dashed border-border">
       <PlayerAvatar name={p.username} avatarUrl={p.avatar_url} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate leading-tight">{displayName}</p>
+        <p className="text-sm font-medium text-foreground truncate">{p.display_name ?? p.username}</p>
         <div className="flex items-center gap-1 mt-0.5">
           <Clock size={10} className="text-muted-foreground/60" />
           <p className="text-xs text-muted-foreground/60">Anfrage ausstehend</p>
@@ -645,7 +889,6 @@ function ForSaleCard({ item }: { item: ForSaleGame }) {
       href={`/players/${item.user_id}`}
       className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-green-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all active:scale-[0.99]"
     >
-      {/* Cover */}
       <div className="relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-green-50">
         {item.game?.thumbnail_url ? (
           <Image src={item.game.thumbnail_url} alt={item.game.name} fill className="object-cover" sizes="56px" loading="lazy" />
@@ -655,21 +898,14 @@ function ForSaleCard({ item }: { item: ForSaleGame }) {
           </div>
         )}
       </div>
-
-      {/* Info */}
       <div className="flex-1 min-w-0">
-        <h3 className="font-semibold text-foreground text-sm leading-tight truncate">
-          {item.game?.name ?? "Unbekanntes Spiel"}
-        </h3>
+        <h3 className="font-semibold text-foreground text-sm leading-tight truncate">{item.game?.name ?? "Unbekanntes Spiel"}</h3>
         <p className="text-xs text-muted-foreground mt-0.5 truncate">von {ownerName}</p>
       </div>
-
-      {/* Price */}
       <div className="flex-shrink-0 flex flex-col items-end gap-1">
         <span className="text-sm font-bold text-green-700 tabular-nums">{priceLabel}</span>
         <span className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full font-medium">
-          <ShoppingBag size={9} />
-          Anfragen
+          <ShoppingBag size={9} />Anfragen
         </span>
       </div>
     </Link>
@@ -685,88 +921,62 @@ function SucheTab({
   nearbyRadius, sortMode, onSearchInput, onNearbySearch, onNearbyRadiusChange,
   onClearSearch, onSortChange, onSendRequest, onCancelRequest,
 }: {
-  searchQuery: string;
-  searchResults: SearchPlayer[] | null;
-  searching: boolean;
-  nearbyStatus: NearbyStatus;
-  nearbyResults: SearchPlayer[] | null;
-  nearbyRadius: number;
-  sortMode: SortMode;
-  onSearchInput: (v: string) => void;
-  onNearbySearch: (radius?: number) => void;
-  onNearbyRadiusChange: (r: number) => void;
-  onClearSearch: () => void;
-  onSortChange: (mode: SortMode) => void;
-  onSendRequest: (p: SearchPlayer) => Promise<void>;
+  searchQuery: string; searchResults: SearchPlayer[] | null; searching: boolean;
+  nearbyStatus: NearbyStatus; nearbyResults: SearchPlayer[] | null; nearbyRadius: number;
+  sortMode: SortMode; onSearchInput: (v: string) => void; onNearbySearch: (r?: number) => void;
+  onNearbyRadiusChange: (r: number) => void; onClearSearch: () => void;
+  onSortChange: (m: SortMode) => void; onSendRequest: (p: SearchPlayer) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
 }) {
-  const isNearbyMode = sortMode === "entfernung";
+  const isNearby = sortMode === "entfernung";
   const [localFilter, setLocalFilter] = useState("");
-
-  const rawResults: SearchPlayer[] = isNearbyMode ? (nearbyResults ?? []) : (searchResults ?? []);
-
-  const visibleResults = isNearbyMode && localFilter.trim().length > 0
+  const rawResults: SearchPlayer[] = isNearby ? (nearbyResults ?? []) : (searchResults ?? []);
+  const visible = isNearby && localFilter.trim().length > 0
     ? rawResults.filter((p) =>
         p.username.toLowerCase().includes(localFilter.toLowerCase()) ||
-        (p.display_name ?? "").toLowerCase().includes(localFilter.toLowerCase())
-      )
+        (p.display_name ?? "").toLowerCase().includes(localFilter.toLowerCase()))
     : rawResults;
-
-  const sortedResults = isNearbyMode
-    ? [...visibleResults].sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
-    : [...visibleResults].sort((a, b) => a.username.localeCompare(b.username, "de", { sensitivity: "base" }));
+  const sorted = isNearby
+    ? [...visible].sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
+    : [...visible].sort((a, b) => a.username.localeCompare(b.username, "de", { sensitivity: "base" }));
 
   const isLoading = searching || nearbyStatus === "locating" || nearbyStatus === "loading";
   const nearbyDone = nearbyStatus === "done" && nearbyResults !== null;
-  const showEmpty = !isLoading && isNearbyMode && nearbyDone && rawResults.length === 0;
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-10 gap-3">
-
-      {/* ── Mode switcher ── */}
+      {/* Mode switcher */}
       <div className="flex p-1 bg-muted/60 rounded-xl gap-1">
-        <ModeButton active={!isNearbyMode} icon={<ArrowDownAZ size={14} />} onClick={() => onSortChange("az")}>
-          A–Z
-        </ModeButton>
-        <ModeButton active={isNearbyMode} icon={<LocateFixed size={14} />} onClick={() => onSortChange("entfernung")}>
-          In der Nähe
-        </ModeButton>
+        <ModeButton active={!isNearby} icon={<ArrowDownAZ size={14} />} onClick={() => onSortChange("az")}>A–Z</ModeButton>
+        <ModeButton active={isNearby} icon={<LocateFixed size={14} />} onClick={() => onSortChange("entfernung")}>In der Nähe</ModeButton>
       </div>
 
-      {/* ── A-Z: Textsuche ── */}
-      {!isNearbyMode && (
+      {/* A-Z text search */}
+      {!isNearby && (
         <div className="relative">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 pointer-events-none" />
           <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchInput(e.target.value)}
-            placeholder="Spielername suchen…"
-            autoComplete="off"
-            className="w-full h-11 pl-10 pr-10 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all min-w-0"
+            type="text" value={searchQuery} onChange={(e) => onSearchInput(e.target.value)}
+            placeholder="Spielername suchen…" autoComplete="off"
+            className="w-full h-11 pl-10 pr-10 rounded-xl border border-border bg-card text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all min-w-0"
           />
           {searchQuery.length > 0 && (
-            <button
-              onClick={onClearSearch}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
-              aria-label="Suche zurücksetzen"
-            >
+            <button onClick={onClearSearch} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-muted text-muted-foreground" aria-label="Zurücksetzen">
               <X size={12} />
             </button>
           )}
         </div>
       )}
 
-      {/* ── Entfernung: Radius + Filter ── */}
-      {isNearbyMode && (
+      {/* Nearby radius + filter */}
+      {isNearby && (
         <>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground font-medium shrink-0">Umkreis</span>
             <div className="flex gap-1.5 flex-1">
               {RADIUS_OPTIONS.map((r) => (
                 <button
-                  key={r}
-                  type="button"
+                  key={r} type="button"
                   onClick={() => { onNearbyRadiusChange(r); onNearbySearch(r); }}
                   className={cn(
                     "flex-1 py-1.5 rounded-full text-xs font-semibold border transition-all",
@@ -780,26 +990,18 @@ function SucheTab({
               ))}
             </div>
             {nearbyDone && (
-              <button
-                onClick={() => onNearbySearch(nearbyRadius)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card shrink-0"
-                aria-label="Aktualisieren"
-              >
-                <LocateFixed size={11} />
-                Neu
+              <button onClick={() => onNearbySearch(nearbyRadius)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card shrink-0">
+                <LocateFixed size={11} />Neu
               </button>
             )}
           </div>
-
           {nearbyDone && rawResults.length > 0 && (
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 pointer-events-none" />
               <input
-                type="text"
-                value={localFilter}
-                onChange={(e) => setLocalFilter(e.target.value)}
+                type="text" value={localFilter} onChange={(e) => setLocalFilter(e.target.value)}
                 placeholder="Ergebnisse filtern…"
-                className="w-full h-9 pl-8 pr-8 rounded-xl border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all min-w-0"
+                className="w-full h-9 pl-8 pr-8 rounded-xl border border-border bg-muted/40 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all min-w-0"
               />
               {localFilter.length > 0 && (
                 <button onClick={() => setLocalFilter("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-muted text-muted-foreground" aria-label="Filter löschen">
@@ -811,7 +1013,7 @@ function SucheTab({
         </>
       )}
 
-      {/* ── Loading ── */}
+      {/* Loading */}
       {isLoading && (
         <div className="flex items-center gap-2.5 py-2 px-1">
           <span className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin flex-shrink-0" />
@@ -823,7 +1025,7 @@ function SucheTab({
         </div>
       )}
 
-      {/* ── Errors ── */}
+      {/* Errors */}
       {nearbyStatus === "denied" && (
         <div className="py-8 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
           <MapPin size={22} className="text-muted-foreground mx-auto mb-2" />
@@ -831,42 +1033,27 @@ function SucheTab({
           <p className="text-xs text-muted-foreground mt-1">Bitte in den Browser-Einstellungen erlauben.</p>
         </div>
       )}
-      {nearbyStatus === "error" && (
-        <p className="text-sm text-red-600 px-1">Standort konnte nicht ermittelt werden.</p>
+      {nearbyStatus === "error" && <p className="text-sm text-red-600 px-1">Standort konnte nicht ermittelt werden.</p>}
+
+      {/* Empty states */}
+      {!isLoading && isNearby && nearbyDone && rawResults.length === 0 && (
+        <EmptyState icon={<MapPin size={24} className="text-muted-foreground" />} title="Keine Spieler in der Nähe" subtitle={`Im Umkreis von ${nearbyRadius} km noch niemand gefunden.`} />
+      )}
+      {!isNearby && !isLoading && searchQuery.length >= 2 && searchResults?.length === 0 && (
+        <EmptyState icon={<Search size={22} className="text-muted-foreground" />} title="Kein Spieler gefunden" subtitle="Versuch einen anderen Nutzernamen." />
       )}
 
-      {/* ── Empty: Entfernung ── */}
-      {showEmpty && (
-        <EmptyState
-          icon={<MapPin size={24} className="text-muted-foreground" />}
-          title="Keine Spieler in der Nähe"
-          subtitle={`Im Umkreis von ${nearbyRadius} km noch niemand gefunden. Versuch einen größeren Radius.`}
-        />
-      )}
-
-      {/* ── Empty: A-Z Suche ── */}
-      {!isNearbyMode && !isLoading && searchQuery.length >= 2 && searchResults !== null && searchResults.length === 0 && (
-        <EmptyState
-          icon={<Search size={22} className="text-muted-foreground" />}
-          title="Kein Spieler gefunden"
-          subtitle="Versuch einen anderen Nutzernamen."
-        />
-      )}
-
-      {/* ── Results ── */}
-      {sortedResults.length > 0 && (
+      {/* Results */}
+      {sorted.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 px-0.5 mb-1">
-            {sortedResults.length} {sortedResults.length === 1 ? "Spieler" : "Spieler"}
-            {isNearbyMode && ` · ${nearbyRadius} km`}
+            {sorted.length} Spieler{isNearby && ` · ${nearbyRadius} km`}
           </p>
-          {sortedResults.map((player) => (
+          {sorted.map((player) => (
             <SearchResultCard
-              key={player.id}
-              player={player}
-              onSendRequest={onSendRequest}
-              onCancelRequest={onCancelRequest}
-              showDistance={isNearbyMode}
+              key={player.id} player={player}
+              onSendRequest={onSendRequest} onCancelRequest={onCancelRequest}
+              showDistance={isNearby}
             />
           ))}
         </div>
@@ -888,8 +1075,7 @@ function ModeButton({ active, onClick, icon, children }: {
         active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
       )}
     >
-      {icon}
-      {children}
+      {icon}{children}
     </button>
   );
 }
@@ -897,32 +1083,21 @@ function ModeButton({ active, onClick, icon, children }: {
 // ── Search Result Card ─────────────────────────────────────────────────────────
 
 function SearchResultCard({ player, onSendRequest, onCancelRequest, showDistance }: {
-  player: SearchPlayer;
-  onSendRequest: (p: SearchPlayer) => Promise<void>;
-  onCancelRequest: (fId: string, pId: string) => Promise<void>;
-  showDistance?: boolean;
+  player: SearchPlayer; onSendRequest: (p: SearchPlayer) => Promise<void>;
+  onCancelRequest: (fId: string, pId: string) => Promise<void>; showDistance?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const f = player.friendship;
   const displayName = player.display_name ?? player.username;
 
-  async function handleAdd() {
-    setLoading(true);
-    await onSendRequest(player);
-    setLoading(false);
-  }
-
+  async function handleAdd() { setLoading(true); await onSendRequest(player); setLoading(false); }
   async function handleCancel() {
-    if (!f) return;
-    setLoading(true);
-    await onCancelRequest(f.id, player.id);
-    setLoading(false);
+    if (!f) return; setLoading(true); await onCancelRequest(f.id, player.id); setLoading(false);
   }
 
   return (
     <div className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-border shadow-sm">
       <PlayerAvatar name={player.username} avatarUrl={player.avatar_url} size="md" />
-
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-foreground truncate leading-tight">{displayName}</p>
@@ -938,45 +1113,25 @@ function SearchResultCard({ player, onSendRequest, onCancelRequest, showDistance
         )}
         {player.location && (
           <p className="text-xs text-muted-foreground/60 truncate flex items-center gap-1 mt-0.5">
-            <MapPin size={9} />
-            {player.location}
+            <MapPin size={9} />{player.location}
           </p>
         )}
       </div>
 
-      {/* Action */}
       {f?.status === "accepted" ? (
-        <Link
-          href={`/players/${player.id}`}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-semibold border border-green-200"
-        >
-          <UserCheck size={12} />
-          Freund
+        <Link href={`/players/${player.id}`} className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-xs font-semibold border border-green-200">
+          <UserCheck size={12} />Freund
         </Link>
       ) : f?.status === "pending" && f.is_requester ? (
-        <button
-          onClick={handleCancel}
-          disabled={loading}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors"
-        >
-          {loading
-            ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            : <Clock size={12} />}
+        <button onClick={handleCancel} disabled={loading} className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium border border-border disabled:opacity-50 hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors">
+          {loading ? <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Clock size={12} />}
           {loading ? "…" : "Gesendet"}
         </button>
       ) : f?.status === "pending" && !f.is_requester ? (
-        <span className="shrink-0 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-full">
-          Anfrage ↓
-        </span>
+        <span className="shrink-0 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-full">Anfrage ↓</span>
       ) : (
-        <button
-          onClick={handleAdd}
-          disabled={loading}
-          className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 transition-colors shadow-sm"
-        >
-          {loading
-            ? <span className="w-3 h-3 border-2 border-white/60 border-t-white rounded-full animate-spin" />
-            : <UserPlus size={12} />}
+        <button onClick={handleAdd} disabled={loading} className="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 active:bg-amber-700 disabled:opacity-50 transition-colors shadow-sm">
+          {loading ? <span className="w-3 h-3 border-2 border-white/60 border-t-white rounded-full animate-spin" /> : <UserPlus size={12} />}
           {loading ? "…" : "Hinzufügen"}
         </button>
       )}
@@ -989,11 +1144,8 @@ function SearchResultCard({ player, onSendRequest, onCancelRequest, showDistance
 export function PlayerAvatar({
   name, avatarUrl, size = "md", ring = false, className,
 }: {
-  name: string;
-  avatarUrl: string | null;
-  size?: "sm" | "md" | "lg";
-  ring?: boolean;
-  className?: string;
+  name: string; avatarUrl: string | null; size?: "sm" | "md" | "lg";
+  ring?: boolean; className?: string;
 }) {
   const hue = name.charCodeAt(0) % 360;
   const initial = name[0]?.toUpperCase() ?? "?";
@@ -1001,19 +1153,11 @@ export function PlayerAvatar({
   const px = size === "lg" ? 56 : size === "md" ? 40 : 32;
 
   return (
-    <div className={cn(
-      "rounded-full overflow-hidden flex-shrink-0",
-      sizeClasses[size],
-      ring && "ring-2 ring-amber-200 ring-offset-1",
-      className
-    )}>
+    <div className={cn("rounded-full overflow-hidden flex-shrink-0", sizeClasses[size], ring && "ring-2 ring-amber-200 ring-offset-1", className)}>
       {avatarUrl ? (
         <Image src={avatarUrl} alt={name} width={px} height={px} className="object-cover w-full h-full" />
       ) : (
-        <div
-          className="w-full h-full flex items-center justify-center font-bold text-white"
-          style={{ background: `hsl(${hue} 50% 48%)` }}
-        >
+        <div className="w-full h-full flex items-center justify-center font-bold text-white" style={{ background: `hsl(${hue} 50% 48%)` }}>
           {initial}
         </div>
       )}
