@@ -113,7 +113,10 @@ export async function GET() {
 // Creates a planned session with games and invites
 
 export async function POST(req: NextRequest) {
+  // Auth check via user client (validates JWT), writes via admin client (bypasses
+  // circular RLS: play_sessions_select references play_session_invites and vice versa)
   const supabase = makeClient();
+  const admin = makeAdmin();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
@@ -130,8 +133,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "session_date ist erforderlich" }, { status: 400 });
   }
 
-  // Create session
-  const { data: session, error: sessionErr } = await supabase
+  // Create session — admin bypasses RLS so the SELECT-policy (which queries
+  // play_session_invites) doesn't trigger during the INSERT's WITH CHECK evaluation
+  const { data: session, error: sessionErr } = await admin
     .from("play_sessions")
     .insert({
       created_by: user.id,
@@ -150,24 +154,26 @@ export async function POST(req: NextRequest) {
 
   // Insert games
   if (body.game_ids && body.game_ids.length > 0) {
-    await supabase.from("play_session_games").insert(
+    const { error: gamesErr } = await admin.from("play_session_games").insert(
       body.game_ids.map((game_id, i) => ({
         session_id: session.id,
         game_id,
         sort_order: i,
       }))
     );
+    if (gamesErr) console.error("play_session_games insert error:", gamesErr.message);
   }
 
-  // Insert invites
+  // Insert invites — also via admin to avoid the circular RLS with play_sessions
   if (body.invited_user_ids && body.invited_user_ids.length > 0) {
-    await supabase.from("play_session_invites").insert(
+    const { error: invitesErr } = await admin.from("play_session_invites").insert(
       body.invited_user_ids.map((invited_user_id) => ({
         session_id: session.id,
         invited_user_id,
         status: "invited",
       }))
     );
+    if (invitesErr) console.error("play_session_invites insert error:", invitesErr.message);
   }
 
   return NextResponse.json({ session_id: session.id }, { status: 201 });

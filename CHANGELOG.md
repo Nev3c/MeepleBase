@@ -14,6 +14,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spieler-Seite: Einladungen-Tab im Spieler-Menü für ausstehende Spieleabend-Einladungen
 - Vergangen/Geplant-Tab-Toggle auf der Partien-Seite
 
+### Fixed
+- Geplante Partien: Einladungen senden funktioniert nicht — POST /api/play-sessions verwendete den User-Client für alle INSERTs, was eine zirkuläre RLS-Auswertung auslöste (`play_sessions` SELECT-Policy referenziert `play_session_invites`; `play_session_invites` INSERT-Policy referenziert `play_sessions`). Alle Writes jetzt via Admin-Client (Service Role), Auth bleibt via `getUser()` gesichert, Ownership explizit mit `created_by: user.id` gesetzt.
+- Einladung annehmen/ablehnen: Gleiches RLS-Zirkular-Problem in POST /api/play-sessions/[id]/respond behoben — Update jetzt via Admin-Client mit expliziter Ownership-Prüfung (`.eq("invited_user_id", user.id)`)
+
 ---
 
 ## [0.9.0] — 2026-04-25
