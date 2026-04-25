@@ -54,6 +54,17 @@ export default function TermsPage() {
         </section>
 
         <section>
+          <h2 className="font-semibold text-base mb-2">4a. Soundboard — erlaubte Inhalte</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            Im Soundboard dürfen ausschließlich YouTube-Links zu Inhalten verwendet werden,
+            für die der Nutzer die entsprechenden Nutzungsrechte besitzt oder die unter einer
+            freien Lizenz stehen (z.B. Creative Commons, royalty-free). Das Einbetten
+            urheberrechtlich geschützter Musik oder anderer Inhalte ohne Lizenz ist untersagt.
+            Der Nutzer ist für die Einhaltung des Urheberrechts selbst verantwortlich.
+          </p>
+        </section>
+
+        <section>
           <h2 className="font-semibold text-base mb-2">5. Nutzergenerierte Inhalte</h2>
           <p className="text-muted-foreground leading-relaxed">
             Hochgeladene Fotos, Notizen und andere Inhalte verbleiben im Eigentum des Nutzers.

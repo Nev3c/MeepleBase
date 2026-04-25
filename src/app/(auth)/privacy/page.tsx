@@ -52,6 +52,43 @@ export default function PrivacyPage() {
             </div>
 
             <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Standortdaten (optional, GPS)</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> Stadtname/Ortsangabe (manuell oder per GPS) sowie geografische
+                Koordinaten (Breitengrad, Längengrad) bei Nutzung der GPS-Ortungsfunktion<br />
+                <strong>Zweck:</strong> Anzeige des ungefähren Wohnorts im Profil; serverseitige
+                Entfernungsberechnung für die &bdquo;Spieler in meiner Nähe&ldquo;-Suche<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. a DSGVO (Einwilligung) — die
+                GPS-Ortung wird nur nach expliziter Aktivierung durch den Nutzer durchgeführt<br />
+                <strong>Hinweis:</strong> Der Stadtname wird anderen Nutzern angezeigt. Die genauen
+                Koordinaten werden <em>niemals</em> an andere Nutzer weitergegeben und ausschließlich
+                serverseitig zur Entfernungsberechnung verwendet.<br />
+                <strong>Widerruf:</strong> Standortdaten können jederzeit in den Einstellungen
+                (Standort-Feld leeren + Speichern) gelöscht werden.
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Soziale Funktionen (optional)</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> Freundschaftsverbindungen, Direktnachrichten, Spielerabend-Einladungen<br />
+                <strong>Zweck:</strong> Vernetzung mit anderen Brettspiel-Spielern<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung der gewählten Funktion)<br />
+                <strong>Speicherdauer:</strong> Bis zur Kontolöschung
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
+              <p className="font-medium mb-1">Push-Benachrichtigungen (optional)</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                <strong>Daten:</strong> Push-Endpunkt-URL des Browsers/Geräts<br />
+                <strong>Zweck:</strong> Benachrichtigungen über neue Nachrichten und Spielerabend-Einladungen<br />
+                <strong>Rechtsgrundlage:</strong> Art. 6 Abs. 1 lit. a DSGVO (Einwilligung via Browser-Prompt)<br />
+                <strong>Widerruf:</strong> Jederzeit in Einstellungen → Benachrichtigungen deaktivierbar
+              </p>
+            </div>
+
+            <div className="bg-muted/40 rounded-xl p-4">
               <p className="font-medium mb-1">Spielbeschreibungen übersetzen (optional)</p>
               <p className="text-muted-foreground text-xs leading-relaxed">
                 <strong>Daten:</strong> Englische Spielbeschreibungen (kein Personenbezug)<br />
@@ -95,6 +132,26 @@ export default function PrivacyPage() {
               <p className="text-xs">BoardGameGeek, LLC, USA. Es werden ausschließlich öffentliche
               Spieledaten abgerufen. Dabei werden keine personenbezogenen Daten der Nutzer übermittelt.
               &rarr; <a href="https://boardgamegeek.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">boardgamegeek.com/privacy</a></p>
+            </div>
+            <div className="border-l-2 border-amber-200 pl-3">
+              <p className="font-medium text-foreground text-xs">OpenStreetMap / Nominatim (Geocoding)</p>
+              <p className="text-xs">OpenStreetMap Foundation, Cambridge, UK. Wird für die Umwandlung
+              von GPS-Koordinaten in Städtenamen (Reverse Geocoding) genutzt. Dabei werden nur
+              Koordinaten übermittelt — keine Account- oder Profildaten.
+              &rarr; <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">osmfoundation.org/wiki/Privacy_Policy</a></p>
+            </div>
+            <div className="border-l-2 border-amber-200 pl-3">
+              <p className="font-medium text-foreground text-xs">YouTube (optionales Soundboard)</p>
+              <p className="text-xs">Google LLC, Mountain View, CA. Das Soundboard-Feature bettet
+              YouTube-Videos ein. Beim Abspielen werden Daten (inkl. IP-Adresse) an YouTube/Google
+              übermittelt und gelten deren Datenschutzbedingungen. Das Feature ist vollständig optional.
+              &rarr; <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-amber-600 underline">policies.google.com/privacy</a></p>
+            </div>
+            <div className="border-l-2 border-amber-200 pl-3">
+              <p className="font-medium text-foreground text-xs">Melodice.org (optionale Musik-Suche)</p>
+              <p className="text-xs">melodice.org. Beim Öffnen einer Melodice-Playlist wird ein neuer
+              Tab mit der eingegebenen Suchanfrage (Spielname) geöffnet. Es werden keine Accountdaten
+              übermittelt.</p>
             </div>
           </div>
         </section>
