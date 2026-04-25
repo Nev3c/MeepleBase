@@ -25,7 +25,7 @@ export default function TermsPage() {
             <h2 className="font-display text-lg font-semibold text-foreground mb-3">1. Geltungsbereich</h2>
             <p className="leading-relaxed">
               Diese Nutzungsbedingungen gelten für die Nutzung der Web-App MeepleBase
-              (nachfolgend „Dienst"), betrieben von Dennis Rau (siehe{" "}
+              (nachfolgend &bdquo;Dienst&ldquo;), betrieben von Dennis Rau (siehe{" "}
               <Link href="/impressum" className="text-amber-600 underline underline-offset-2">Impressum</Link>
               ). Mit der Registrierung akzeptierst du diese Bedingungen.
             </p>
@@ -83,7 +83,7 @@ export default function TermsPage() {
           <section>
             <h2 className="font-display text-lg font-semibold text-foreground mb-3">7. Kündigung</h2>
             <p className="leading-relaxed">
-              Du kannst deinen Account jederzeit über das Profil → „Account löschen" kündigen.
+              Du kannst deinen Account jederzeit über das Profil → &bdquo;Account löschen&ldquo; kündigen.
               Alle deine Daten werden dann innerhalb von 30 Tagen gelöscht.
               Wir behalten uns vor, Accounts bei Verstößen gegen diese Bedingungen zu sperren.
             </p>
