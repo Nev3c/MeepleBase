@@ -399,6 +399,96 @@ Vor dem Schreiben von React-Komponenten immer `vercel-react-best-practices` + `v
 
 ---
 
+## ⚖️ Rechtlich sicher — Pflichtregeln (Non-Negotiable)
+
+> Gilt unabhängig davon ob Geld verdient wird. Die DSGVO gilt sobald personenbezogene Daten
+> von EU-Bürgern verarbeitet werden. Kleinprojekte haben geringes Enforcement-Risiko,
+> aber die Pflichten bestehen trotzdem.
+
+---
+
+### Regel 1: Neue Datenverarbeitung → Datenschutzerklärung updaten
+
+Jedes Mal wenn ein neues Feature personenbezogene Daten verarbeitet, muss `/app/privacy/page.tsx`
+**vor dem Commit** aktualisiert werden.
+
+**Besonders relevant:**
+- Neue Felder in `profiles` oder anderen Tabellen mit Personenbezug
+- Neue Drittanbieter / APIs die Daten empfangen (auch nur IP-Adresse)
+- Neue Standort-, Kamera- oder Mikrofon-Nutzung
+- Neue Drittanbieter-Embeds (YouTube, Maps, etc.)
+
+---
+
+### Regel 2: Einwilligung vor sensitiven Daten
+
+| Datentyp | Anforderung |
+|---|---|
+| GPS / Standort-Koordinaten | Explizite Einwilligung via Browser-Prompt; in DSE dokumentiert |
+| Push-Benachrichtigungen | Browser-Permission + in DSE dokumentiert |
+| Fotos / Kamera | Browser-Permission; Nutzer lädt aktiv hoch |
+| Gesundheitsdaten, Religionsdaten | Gar nicht erheben (Art. 9 DSGVO – besondere Kategorien) |
+
+---
+
+### Regel 3: Drittanbieter-Checkliste
+
+Vor Integration eines neuen Drittanbieters:
+```
+[ ] Was wird übermittelt? (IP? E-Mail? User-ID?)
+[ ] Ist ein AVV (Auftragsverarbeitungsvertrag) nötig? → Ja wenn Auftragsverarbeiter
+[ ] In Datenschutzerklärung aufgenommen?
+[ ] Nutzer informiert (falls nicht offensichtlich)?
+```
+
+**Aktuelle Drittanbieter mit AVV (bereits erledigt):**
+- Supabase ✅ (Datenbank, EU-Region Frankfurt)
+- Vercel ✅ (Hosting)
+
+**Drittanbieter ohne AVV (keine Auftragsverarbeitung, nur Datenweitergabe):**
+- Google OAuth — Nutzer stimmt bei Login zu
+- OpenStreetMap/Nominatim — nur Koordinaten, kein Personenbezug
+- BGG, Melodice — nur Metadaten/Suchanfragen
+
+---
+
+### Regel 4: Impressum vollständig halten
+
+Das Impressum unter `/impressum` ist **abmahnfähig** wenn unvollständig.
+Pflichtangaben nach § 5 TMG:
+- Vollständige Postanschrift (Straße, PLZ, Ort)
+- Telefonnummer (E-Mail allein reicht nicht)
+- Bei gewerblicher Tätigkeit: Handelsregisternummer
+
+→ **TODO:** Postanschrift und Telefonnummer in `/app/impressum/page.tsx` eintragen.
+
+---
+
+### Regel 5: Urheberrecht bei Drittinhalten
+
+| Inhalt | Status | Hinweis |
+|---|---|---|
+| Spielcover / Thumbnails von BGG | 🟡 Toleriert | Urheberrecht liegt bei Verlagen; BGG duldet es |
+| Spielbeschreibungen von BGG | 🟡 Toleriert | Gleiches gilt |
+| Google Translate gtx-API | 🟡 ToS-Verletzung | Bei Monetarisierung auf offizielle API wechseln |
+| YouTube Soundboard | 🔴 Risiko | AGB schreibt vor: nur lizenzfreie Inhalte |
+| Wikidata SPARQL | ✅ Unbedenklich | CC0-Lizenz |
+| Nutzer-Uploads (Fotos) | ✅ | Nutzer ist verantwortlich (AGB Abschnitt 3) |
+
+---
+
+### Rechtliche Checkliste vor jedem Feature-Merge
+
+```
+[ ] Werden neue personenbezogene Daten verarbeitet? → DSE updaten
+[ ] Neuer Drittanbieter? → AVV prüfen + DSE ergänzen
+[ ] Standort/Kamera/Sensoren? → Einwilligungsflow implementieren
+[ ] Nutzerinhalte? → AGB deckt die Nutzungsrechte ab
+[ ] Urheberrechtlich geschützte Drittinhalte? → Lizenz prüfen
+```
+
+---
+
 ## 📋 Changelog-Pflicht (Non-Negotiable)
 
 > Jede Code-Änderung die committed wird MUSS vorher in `CHANGELOG.md` dokumentiert sein.

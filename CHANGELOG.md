@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Datenschutzerklärung (`/privacy`): vollständige DSGVO-konforme DSE inkl. Abschnitt zu GPS-Koordinaten, Rechtsgrundlagen, Drittanbietern, Betroffenenrechten
+- Impressum (`/impressum`) und Nutzungsbedingungen (`/terms`): erste Versionen (Impressum-Pflichtfelder noch zu ergänzen)
 - Profil-Galerie: Alle hochgeladenen Partienfotos in einer Bildergalerie sortiert nach Datum (Profil → Galerie), mit Vollbild-Ansicht beim Antippen
 - BGStats-Import: Partien aus der BGStats-App als JSON-Datei importieren (Einstellungen → Bibliothek). Spiel-Matching via BGG-ID oder Name, automatische Duplikat-Erkennung (gleiche Partie am gleichen Tag), Anlegen neuer Spieleinträge bei Bedarf.
 - Spielerabend abschließen: Organisator-Button „Spielabend abschließen" trägt Partien automatisch für alle Teilnehmer mit „Zugesagt"-Status ein (eine Play-Row pro Spiel pro Teilnehmer, inkl. Play-Players). Session verschwindet danach aus der Geplant-Liste.
