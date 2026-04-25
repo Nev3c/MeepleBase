@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.created_at) {
         const ageMs = Date.now() - new Date(user.created_at).getTime();
-        const isNewUser = ageMs < 30 * 60 * 1000;
+        const isNewUser = ageMs < 7 * 24 * 60 * 60 * 1000; // 7 days: covers email-confirm delays
 
         if (isNewUser) {
           // Wenn REQUIRE_APPROVAL aktiv: neuen User direkt auf "Wartend" setzen

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
-import { LogOut, ExternalLink, ChevronRight, X, Share2, UserPlus, ShieldCheck, MessageSquare, ListChecks } from "lucide-react";
+import Link from "next/link";
+import { LogOut, ExternalLink, ChevronRight, X, Share2, UserPlus, ShieldCheck, MessageSquare, ListChecks, BarChart2 } from "lucide-react";
 import { CURRENT_VERSION } from "@/data/changelog";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -15,13 +16,12 @@ interface ProfileClientProps {
   gameCount: number;
   playCount: number;
   friendCount: number;
-  libraryValue?: number | null;
   uniqueCategoryCount?: number;
   uniqueMechanicCount?: number;
   isAdmin?: boolean;
 }
 
-export function ProfileClient({ user, profile, gameCount, playCount, friendCount, libraryValue, uniqueCategoryCount, uniqueMechanicCount, isAdmin }: ProfileClientProps) {
+export function ProfileClient({ user, profile, gameCount, playCount, friendCount, uniqueCategoryCount, uniqueMechanicCount, isAdmin }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -128,58 +128,52 @@ export function ProfileClient({ user, profile, gameCount, playCount, friendCount
         )}
       </div>
 
-      {/* Statistiken — kompakte horizontale Band */}
+      {/* Statistiken — klickbare Band → /stats */}
       <div className="px-4 mb-3">
-        <div className="bg-card rounded-2xl border border-border shadow-card px-2 py-3">
-          <div className="flex items-stretch">
-            {/* Spiele */}
-            <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-              <span className="font-display text-xl font-bold text-foreground leading-tight">{gameCount}</span>
-              <span className="text-[10px] text-muted-foreground font-medium">Spiele</span>
-            </div>
-            <div className="w-px bg-border my-1" />
-            {/* Partien */}
-            <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-              <span className="font-display text-xl font-bold text-foreground leading-tight">{playCount}</span>
-              <span className="text-[10px] text-muted-foreground font-medium">Partien</span>
-            </div>
-            <>
+        <Link href="/stats" className="block group">
+          <div className="bg-card rounded-2xl border border-border shadow-card px-2 py-3 group-active:bg-muted/40 transition-colors">
+            <div className="flex items-stretch">
+              {/* Spiele */}
+              <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+                <span className="font-display text-xl font-bold text-foreground leading-tight">{gameCount}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">Spiele</span>
+              </div>
               <div className="w-px bg-border my-1" />
+              {/* Partien */}
+              <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+                <span className="font-display text-xl font-bold text-foreground leading-tight">{playCount}</span>
+                <span className="text-[10px] text-muted-foreground font-medium">Partien</span>
+              </div>
+              <div className="w-px bg-border my-1" />
+              {/* Freunde */}
               <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
                 <span className="font-display text-xl font-bold text-foreground leading-tight">{friendCount}</span>
                 <span className="text-[10px] text-muted-foreground font-medium">Freunde</span>
               </div>
-            </>
-            {libraryValue != null && (
-              <>
-                <div className="w-px bg-border my-1" />
-                <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-                  <span className="font-display text-base font-bold text-foreground leading-tight">
-                    {libraryValue >= 1000
-                      ? (libraryValue / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1 }) + "k"
-                      : libraryValue.toLocaleString("de-DE", { maximumFractionDigits: 0 })}€
+              <div className="w-px bg-border my-1" />
+              {/* Stats-CTA */}
+              <div className="flex flex-col items-center justify-center gap-0.5 flex-1 px-2">
+                <BarChart2 size={16} className="text-amber-500" />
+                <span className="text-[10px] text-amber-600 font-semibold">Stats</span>
+              </div>
+            </div>
+            {/* Sekundäre Statistiken */}
+            {((uniqueCategoryCount ?? 0) > 0 || (uniqueMechanicCount ?? 0) > 0) && (
+              <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-border/50 px-2">
+                {(uniqueCategoryCount ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
                   </span>
-                  <span className="text-[10px] text-muted-foreground font-medium">Sammlungswert</span>
-                </div>
-              </>
+                )}
+                {(uniqueMechanicCount ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
+                  </span>
+                )}
+              </div>
             )}
           </div>
-          {/* Sekundäre Statistiken */}
-          {((uniqueCategoryCount ?? 0) > 0 || (uniqueMechanicCount ?? 0) > 0) && (
-            <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-border/50 px-2">
-              {(uniqueCategoryCount ?? 0) > 0 && (
-                <span className="text-[10px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
-                </span>
-              )}
-              {(uniqueMechanicCount ?? 0) > 0 && (
-                <span className="text-[10px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        </Link>
       </div>
 
       {/* QR-Aktionen — kompakte Button-Zeile */}
@@ -221,6 +215,12 @@ export function ProfileClient({ user, profile, gameCount, playCount, friendCount
         {/* Einstellungen */}
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Einstellungen</SectionHeader>
+          <MenuRow
+            label="Statistiken & Rankings"
+            href="/stats"
+            showChevron
+            icon={<BarChart2 size={14} className="text-amber-500" />}
+          />
           <MenuRow label="Einstellungen & BGG-Sync" href="/settings" showChevron />
           {isAdmin && (
             <MenuRow label="Admin" href="/admin" showChevron icon={<ShieldCheck size={14} className="text-muted-foreground" />} />

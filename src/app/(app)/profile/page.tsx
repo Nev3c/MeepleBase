@@ -12,7 +12,7 @@ export default async function ProfilePage() {
 
   const [profileResult, libraryResult, playsResult, tagsResult, friendsResult] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
-    supabase.from("user_games").select("id, price_paid", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
+    supabase.from("user_games").select("id", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
     supabase.from("plays").select("id", { count: "exact" }).eq("user_id", user.id),
     supabase.from("user_games").select("game:games(categories, mechanics)").eq("user_id", user.id),
     supabase.from("friendships").select("id", { count: "exact" })
@@ -31,10 +31,6 @@ export default async function ProfilePage() {
     for (const m of g?.mechanics ?? []) uniqueMechs.add(m);
   }
 
-  const libraryValue = (libraryResult.data ?? []).reduce((sum, ug) => {
-    return sum + (typeof ug.price_paid === "number" ? ug.price_paid : 0);
-  }, 0);
-
   const isAdmin =
     !!process.env.ADMIN_EMAIL &&
     user.email?.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase();
@@ -46,7 +42,6 @@ export default async function ProfilePage() {
       gameCount={libraryResult.count ?? 0}
       playCount={playsResult.count ?? 0}
       friendCount={friendsResult.count ?? 0}
-      libraryValue={libraryValue > 0 ? libraryValue : null}
       uniqueCategoryCount={uniqueCats.size}
       uniqueMechanicCount={uniqueMechs.size}
       isAdmin={isAdmin}

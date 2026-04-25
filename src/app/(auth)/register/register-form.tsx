@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 
 export function RegisterForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -28,7 +30,7 @@ export function RegisterForm() {
     }
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -54,6 +56,13 @@ export function RegisterForm() {
       return;
     }
 
+    // Auto-confirm ON (Supabase returns session immediately) → go straight to onboarding
+    if (data.session) {
+      router.push("/onboarding");
+      return;
+    }
+
+    // Email confirmation required → show "check your inbox" screen
     setSuccess(true);
     setLoading(false);
   }

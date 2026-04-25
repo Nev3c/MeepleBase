@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { LibraryClient } from "./library-client";
+import { OnboardingBanner } from "./onboarding-banner";
 
 export const metadata: Metadata = {
   title: "Bibliothek",
@@ -39,11 +40,14 @@ export default async function LibraryPage() {
   }
 
   return (
-    <LibraryClient
-      initialGames={userGames ?? []}
-      user={user}
-      profile={profile}
-      playCounts={playCountMap}
-    />
+    <>
+      {user && <OnboardingBanner userCreatedAt={user.created_at} />}
+      <LibraryClient
+        initialGames={userGames ?? []}
+        user={user}
+        profile={profile}
+        playCounts={playCountMap}
+      />
+    </>
   );
 }

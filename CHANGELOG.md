@@ -13,6 +13,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spieler-Seite: Vergangene Partien — mehrere Spiele pro Session auswählbar
 - Spieler-Seite: Einladungen-Tab im Spieler-Menü für ausstehende Spieleabend-Einladungen
 - Vergangen/Geplant-Tab-Toggle auf der Partien-Seite
+- **Statistiken-Seite** (`/stats`): persönliche Stats (Partien/Monat als CSS-Balkendiagramm, Siegquote W/L, Lieblingsspiel) + Freunde-Rankings (Meistgespielt / Siegquote / Meistgekauft) per Monat/Jahr/Gesamt
+- Finanzen-Bereich (Sammlungswert + Ausgaben/Monat) standardmäßig verborgen mit Auge-Toggle für Datenschutz
+- Profil-Stats-Band ist jetzt klickbar (→ /stats) mit BarChart2-Icon als CTA
+- "Statistiken & Rankings" Menüeintrag im Profil
+- Onboarding überarbeitet: neue Slides für Spieler, Spielerabend-Planer, Statistiken/Rankings; Entdecken-Slide entfernt
+- Onboarding erscheint jetzt zuverlässig nach Registrierung: Register-Form erkennt sofortige Session (Auto-Confirm) und leitet direkt zu /onboarding weiter
+- Onboarding-Banner in der Bibliothek für neue Accounts (< 30 Tage, noch kein Onboarding abgeschlossen)
+
+### Changed
+- Sammlungswert aus dem Profil-Stats-Band entfernt — liegt jetzt exklusiv hinter dem Privacy-Toggle auf /stats
+- Auth-Callback: Onboarding-Erkennung von 30 Minuten auf 7 Tage ausgedehnt (deckt E-Mail-Bestätigungs-Delays ab)
 
 ### Fixed
 - Geplante Partien: Einladungen senden funktioniert nicht — POST /api/play-sessions verwendete den User-Client für alle INSERTs, was eine zirkuläre RLS-Auswertung auslöste (`play_sessions` SELECT-Policy referenziert `play_session_invites`; `play_session_invites` INSERT-Policy referenziert `play_sessions`). Alle Writes jetzt via Admin-Client (Service Role), Auth bleibt via `getUser()` gesichert, Ownership explizit mit `created_by: user.id` gesetzt.

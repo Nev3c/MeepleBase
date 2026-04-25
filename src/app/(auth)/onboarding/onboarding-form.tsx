@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import { Library, Dices, Compass, UserCircle, ChevronRight, Wrench } from "lucide-react";
+import { Library, Dices, Users, CalendarDays, BarChart2, ChevronRight, Wrench } from "lucide-react";
 
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
 
@@ -16,27 +16,32 @@ const GUIDE_STEPS = [
   {
     icon: <Library size={48} className="text-amber-500" />,
     title: "Bibliothek",
-    description: "Alle deine Spiele an einem Ort. Status, Bewertungen, eigene Notizen und Bilder — auch ohne Internet.",
+    description: "Alle deine Spiele an einem Ort. Status, Bewertungen, eigene Notizen und Bilder — importierbar direkt von BoardGameGeek.",
   },
   {
     icon: <Dices size={48} className="text-amber-500" />,
     title: "Partien",
-    description: "Halte jede Partie fest: Mitspieler, Punkte, Gewinner, Fotos und Spielzeit. Dein persönliches Spieltagebuch.",
+    description: "Vergangene Partien erfassen: Mitspieler, Punkte, Gewinner, Foto und Dauer. Oder gleich einen Spieleabend für die Zukunft planen.",
+  },
+  {
+    icon: <Users size={48} className="text-amber-500" />,
+    title: "Spieler",
+    description: "Freunde hinzufügen, Nachrichten schreiben, Spielbibliotheken entdecken — und Spieleabende gemeinsam koordinieren.",
+  },
+  {
+    icon: <CalendarDays size={48} className="text-amber-500" />,
+    title: "Spielerabend planen",
+    description: "Erstelle einen Spieleabend, schlage mehrere Spiele vor und lade Freunde ein. Sie sehen die Einladung direkt im Spieler-Menü.",
+  },
+  {
+    icon: <BarChart2 size={48} className="text-amber-500" />,
+    title: "Statistiken",
+    description: "Deine Partien pro Monat, Siegquote und Lieblingsspiel auf einen Blick. Plus: Freunde-Rankings — wer spielt am meisten?",
   },
   {
     icon: <Wrench size={48} className="text-amber-500" />,
     title: "Tools",
-    description: "Punkte-Tracker für bis zu 8 Spieler, Würfelwurf (1–6 Würfel) und Münzwurf — dein digitaler Spielabend-Helfer. Punkte lassen sich direkt als Partie speichern.",
-  },
-  {
-    icon: <Compass size={48} className="text-amber-500" />,
-    title: "Entdecken",
-    description: "Ungespielt: welche Spiele liegen noch unberührt? Was heute spielen? Passende Spiele nach Spieleranzahl & Zeit.",
-  },
-  {
-    icon: <UserCircle size={48} className="text-amber-500" />,
-    title: "Profil",
-    description: "Deine Stats auf einen Blick: Spiele, Partien, Kategorien, Mechanismen. QR-Code zum Teilen der App.",
+    description: "Punkte-Tracker für bis zu 8 Spieler, Würfelwurf und Münzwurf — dein digitaler Spielabend-Helfer am Tisch.",
   },
 ];
 
