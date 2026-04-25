@@ -20,6 +20,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.5.0",
+    date: "2026-04-25",
+    title: "Statistiken & Spielerabend",
+    changes: [
+      { type: "feat", text: "Statistiken-Seite: Partien/Monat als Balkendiagramm, Siegquote, Lieblingsspiel, Sammlungswert (hinter Privacy-Toggle)" },
+      { type: "feat", text: "Freunde-Rankings: Meistgespielt / Siegquote / Meistgekauft — per Monat, Jahr oder gesamt" },
+      { type: "feat", text: "Spielerabend-Planer: mehrere Spiele pro Abend, Freunde einladen, Einladungen annehmen/ablehnen" },
+      { type: "feat", text: "Einladungen-Tab im Spieler-Menü für ausstehende Spieleabend-Einladungen" },
+      { type: "feat", text: "Vergangen/Geplant-Tab-Toggle auf der Partien-Seite" },
+      { type: "improve", text: "Onboarding erscheint jetzt zuverlässig direkt nach Registrierung" },
+      { type: "improve", text: "Alle Statistiken (Kategorien, Mechanismen, Partien, Spiele) auf /stats konsolidiert" },
+      { type: "fix", text: "Einladungen senden: zirkulärer RLS-Fehler behoben — Writes laufen jetzt via Admin-Client" },
+    ],
+  },
+  {
     version: "v0.4.0",
     date: "2026-04-24",
     title: "Feedback & Changelog",

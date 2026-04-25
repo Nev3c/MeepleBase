@@ -13,13 +13,10 @@ import { QRCodeSVG } from "qrcode.react";
 interface ProfileClientProps {
   user: User;
   profile: Profile | null;
-  gameCount: number;
-  playCount: number;
-  friendCount: number;
   isAdmin?: boolean;
 }
 
-export function ProfileClient({ user, profile, gameCount, playCount, friendCount, isAdmin }: ProfileClientProps) {
+export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -126,35 +123,20 @@ export function ProfileClient({ user, profile, gameCount, playCount, friendCount
         )}
       </div>
 
-      {/* Statistiken — klickbare Band → /stats */}
+      {/* Statistiken & Rankings — CTA → /stats */}
       <div className="px-4 mb-3">
         <Link href="/stats" className="block group">
-          <div className="bg-card rounded-2xl border border-border shadow-card px-2 py-3 group-active:bg-muted/40 transition-colors">
-            <div className="flex items-stretch">
-              {/* Spiele */}
-              <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-                <span className="font-display text-xl font-bold text-foreground leading-tight">{gameCount}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">Spiele</span>
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-card px-4 py-3.5 flex items-center justify-between group-active:bg-amber-100 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center flex-shrink-0">
+                <BarChart2 size={16} className="text-white" />
               </div>
-              <div className="w-px bg-border my-1" />
-              {/* Partien */}
-              <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-                <span className="font-display text-xl font-bold text-foreground leading-tight">{playCount}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">Partien</span>
-              </div>
-              <div className="w-px bg-border my-1" />
-              {/* Freunde */}
-              <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
-                <span className="font-display text-xl font-bold text-foreground leading-tight">{friendCount}</span>
-                <span className="text-[10px] text-muted-foreground font-medium">Freunde</span>
-              </div>
-              <div className="w-px bg-border my-1" />
-              {/* Stats-CTA */}
-              <div className="flex flex-col items-center justify-center gap-0.5 flex-1 px-2">
-                <BarChart2 size={16} className="text-amber-500" />
-                <span className="text-[10px] text-amber-600 font-semibold">Stats</span>
+              <div>
+                <p className="text-sm font-semibold text-amber-900 leading-tight">Statistiken & Rankings</p>
+                <p className="text-[11px] text-amber-700/80 leading-tight">Partien, Siege, Sammlung & mehr</p>
               </div>
             </div>
+            <ChevronRight size={16} className="text-amber-500 flex-shrink-0" />
           </div>
         </Link>
       </div>
@@ -198,12 +180,6 @@ export function ProfileClient({ user, profile, gameCount, playCount, friendCount
         {/* Einstellungen */}
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Einstellungen</SectionHeader>
-          <MenuRow
-            label="Statistiken & Rankings"
-            href="/stats"
-            showChevron
-            icon={<BarChart2 size={14} className="text-amber-500" />}
-          />
           <MenuRow label="Einstellungen & BGG-Sync" href="/settings" showChevron />
           {isAdmin && (
             <MenuRow label="Admin" href="/admin" showChevron icon={<ShieldCheck size={14} className="text-muted-foreground" />} />

@@ -34,6 +34,7 @@ export interface RankingSet {
 interface StatsClientProps {
   totalGames: number;
   totalPlays: number;
+  friendCount: number;
   uniqueCategoryCount: number;
   uniqueMechanicCount: number;
   playsByMonth: PlayByMonth[];
@@ -236,6 +237,7 @@ function RankingCard({
 export function StatsClient({
   totalGames,
   totalPlays,
+  friendCount,
   uniqueCategoryCount,
   uniqueMechanicCount,
   playsByMonth,
@@ -298,20 +300,21 @@ export function StatsClient({
               <span className="text-[10px] text-muted-foreground font-medium">Siegquote</span>
             </div>
           </div>
-          {(uniqueCategoryCount > 0 || uniqueMechanicCount > 0) && (
-            <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border/50">
-              {uniqueCategoryCount > 0 && (
-                <span className="text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
-                </span>
-              )}
-              {uniqueMechanicCount > 0 && (
-                <span className="text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
-                </span>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-4 px-4 py-2.5 border-t border-border/50 flex-wrap">
+            <span className="text-[11px] text-muted-foreground">
+              <span className="font-semibold text-foreground">{friendCount}</span> Freunde
+            </span>
+            {uniqueCategoryCount > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">{uniqueCategoryCount}</span> Kategorien
+              </span>
+            )}
+            {uniqueMechanicCount > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">{uniqueMechanicCount}</span> Mechanismen
+              </span>
+            )}
+          </div>
         </StatCard>
 
         {/* Partien pro Monat */}

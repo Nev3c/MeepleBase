@@ -248,6 +248,7 @@ export default async function StatsPage() {
     <StatsClient
       totalGames={totalGames}
       totalPlays={totalPlaysAllTime}
+      friendCount={friendIds.length}
       uniqueCategoryCount={uniqueCats.size}
       uniqueMechanicCount={uniqueMechs.size}
       playsByMonth={playsByMonth}

@@ -10,13 +10,8 @@ export default async function ProfilePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [profileResult, libraryResult, playsResult, friendsResult] = await Promise.all([
+  const [profileResult] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
-    supabase.from("user_games").select("id", { count: "exact" }).eq("user_id", user.id).eq("status", "owned"),
-    supabase.from("plays").select("id", { count: "exact" }).eq("user_id", user.id),
-    supabase.from("friendships").select("id", { count: "exact" })
-      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
-      .eq("status", "accepted"),
   ]);
 
   const isAdmin =
@@ -27,9 +22,6 @@ export default async function ProfilePage() {
     <ProfileClient
       user={user}
       profile={profileResult.data}
-      gameCount={libraryResult.count ?? 0}
-      playCount={playsResult.count ?? 0}
-      friendCount={friendsResult.count ?? 0}
       isAdmin={isAdmin}
     />
   );
