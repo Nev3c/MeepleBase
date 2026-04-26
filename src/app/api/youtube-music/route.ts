@@ -74,9 +74,11 @@ export async function GET(req: Request) {
 
   if (!q) return NextResponse.json({ error: "Missing q" }, { status: 400 });
 
+  // Für Videos: Musik-Kategorie erzwingen (verhindert Tutorials, Let's Plays etc.)
+  // Für Playlisten: kein category-Filter verfügbar, aber bessere Keywords
   const searchQuery = type === "playlist"
-    ? `${q} board game ambient music playlist`
-    : `${q} board game ambient music`;
+    ? `${q} ambient music tabletop`
+    : `${q} ambient music`;
 
   const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
   searchUrl.searchParams.set("part", "snippet");
@@ -84,6 +86,10 @@ export async function GET(req: Request) {
   searchUrl.searchParams.set("type", type);
   searchUrl.searchParams.set("maxResults", "5");
   searchUrl.searchParams.set("key", apiKey);
+  // Nur Videos aus der Musik-Kategorie (ID 10) — eliminiert Tutorials & Gameplays
+  if (type === "video") {
+    searchUrl.searchParams.set("videoCategoryId", "10");
+  }
 
   const res = await fetch(searchUrl.toString());
   const data = await res.json() as {

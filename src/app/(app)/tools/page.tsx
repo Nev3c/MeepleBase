@@ -646,6 +646,15 @@ function NoApiKeyHint() {
   );
 }
 
+// ── Melodice response type ────────────────────────────────────────────────────
+interface MelodiceResult {
+  found: boolean;
+  playlistId?: string;
+  gameTitle?: string;
+  trackCount?: number;
+  sourceUrl?: string;
+}
+
 function YouTubeMusicSearch() {
   const [mode, setMode] = useState<MusicMode>("playlisten");
   const [query, setQuery] = useState("");
@@ -662,53 +671,24 @@ function YouTubeMusicSearch() {
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
 
+  // Melodice state
+  const [melodiceResult, setMelodiceResult] = useState<MelodiceResult | null>(null);
+
+  function resetPlayer() {
+    setPlayingId(null);
+    setTracks([]);
+    setActivePlaylistId(null);
+    setActiveTrackId(null);
+    setMelodiceResult(null);
+    if (musicIframeRef.current) musicIframeRef.current.src = "";
+  }
+
   // Reset results when mode changes
   function switchMode(m: MusicMode) {
     setMode(m);
     setResults([]);
-    setPlayingId(null);
-    setTracks([]);
-    setActivePlaylistId(null);
-    setActiveTrackId(null);
     setError(null);
-    if (musicIframeRef.current) musicIframeRef.current.src = "";
-  }
-
-  async function search() {
-    const q = query.trim();
-    if (!q) return;
-    setLoading(true);
-    setError(null);
-    setNoApiKey(false);
-    setResults([]);
-    setPlayingId(null);
-    setTracks([]);
-    setActivePlaylistId(null);
-    setActiveTrackId(null);
-    if (musicIframeRef.current) musicIframeRef.current.src = "";
-
-    try {
-      const apiType = mode === "playlisten" ? "playlist" : "video";
-      const res = await fetch(
-        `/api/youtube-music?q=${encodeURIComponent(q)}&type=${apiType}`
-      );
-      const data = await res.json() as { results?: YtResult[]; error?: string };
-
-      if (!res.ok) {
-        if (data.error === "NO_API_KEY") setNoApiKey(true);
-        else setError("Suche fehlgeschlagen. Bitte nochmal versuchen.");
-        return;
-      }
-
-      const found = data.results ?? [];
-      setResults(found);
-      // Auto-play first result
-      if (found.length > 0) playItem(found[0]);
-    } catch {
-      setError("Verbindungsfehler.");
-    } finally {
-      setLoading(false);
-    }
+    resetPlayer();
   }
 
   async function fetchTracks(playlistId: string) {
@@ -723,17 +703,79 @@ function YouTubeMusicSearch() {
     }
   }
 
-  function playItem(r: YtResult) {
+  function activatePlaylist(playlistId: string) {
+    setPlayingId(playlistId);
+    setActiveTrackId(null);
+    if (!musicIframeRef.current) return;
+    musicIframeRef.current.src = `https://www.youtube.com/embed/videoseries?list=${playlistId}&autoplay=1`;
+    if (playlistId !== activePlaylistId) {
+      setActivePlaylistId(playlistId);
+      void fetchTracks(playlistId);
+    }
+  }
+
+  async function search() {
+    const q = query.trim();
+    if (!q) return;
+    setLoading(true);
+    setError(null);
+    setNoApiKey(false);
+    setResults([]);
+    resetPlayer();
+
+    try {
+      // ── Schritt 1: Melodice-Lookup (kuratierte Community-Playlisten) ───────
+      const melodiceRes = await fetch(`/api/melodice?q=${encodeURIComponent(q)}`);
+      const melodice = await melodiceRes.json() as MelodiceResult;
+
+      if (melodice.found && melodice.playlistId) {
+        // ✅ Melodice hat das Spiel → sofort abspielen
+        setMelodiceResult(melodice);
+
+        if (mode === "playlisten") {
+          // Gesamte Playlist abspielen
+          activatePlaylist(melodice.playlistId);
+        } else {
+          // Songs-Modus: Einzelne Tracks aus der Melodice-Playlist laden
+          setActivePlaylistId(melodice.playlistId);
+          void fetchTracks(melodice.playlistId);
+          // Kein Auto-Play — Nutzer wählt Track
+        }
+        return;
+      }
+
+      // ── Schritt 2: YouTube-Fallback (wenn Melodice das Spiel nicht kennt) ─
+      setMelodiceResult({ found: false });
+      const apiType = mode === "playlisten" ? "playlist" : "video";
+      const ytRes = await fetch(
+        `/api/youtube-music?q=${encodeURIComponent(q)}&type=${apiType}`
+      );
+      const data = await ytRes.json() as { results?: YtResult[]; error?: string };
+
+      if (!ytRes.ok) {
+        if (data.error === "NO_API_KEY") setNoApiKey(true);
+        else setError("Suche fehlgeschlagen. Bitte nochmal versuchen.");
+        return;
+      }
+
+      const found = data.results ?? [];
+      setResults(found);
+      // Auto-play first result
+      if (found.length > 0) playYtItem(found[0]);
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // YouTube-Fallback: einzelnes Video oder Playlist abspielen
+  function playYtItem(r: YtResult) {
     setPlayingId(r.id);
     setActiveTrackId(null);
     if (!musicIframeRef.current) return;
     if (r.type === "playlist") {
-      musicIframeRef.current.src = `https://www.youtube.com/embed/videoseries?list=${r.id}&autoplay=1`;
-      // Fetch track list for this playlist
-      if (r.id !== activePlaylistId) {
-        setActivePlaylistId(r.id);
-        void fetchTracks(r.id);
-      }
+      activatePlaylist(r.id);
     } else {
       musicIframeRef.current.src = `https://www.youtube.com/embed/${r.id}?autoplay=1`;
       setTracks([]);
@@ -741,17 +783,24 @@ function YouTubeMusicSearch() {
     }
   }
 
-  function playTrack(track: YtTrack, playlistId: string) {
-    setActiveTrackId(track.videoId);
-    if (!musicIframeRef.current) return;
-    musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?list=${playlistId}&autoplay=1`;
-  }
-
-  function stopItem() {
+  function stopYtItem() {
     setPlayingId(null);
     setActiveTrackId(null);
     if (musicIframeRef.current) musicIframeRef.current.src = "";
   }
+
+  function playTrack(track: YtTrack, playlistId: string) {
+    setActiveTrackId(track.videoId);
+    setPlayingId(playlistId); // Playlist als "spielend" markieren
+    if (!musicIframeRef.current) return;
+    musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?list=${playlistId}&autoplay=1`;
+  }
+
+  // Melodice gefunden + Songs-Modus: Track wählen ohne dass Playlist läuft
+  const isMelodiceMode = melodiceResult?.found === true && melodiceResult.playlistId;
+  const isSongsMode = mode === "songs";
+  const showTrackPicker = isMelodiceMode && isSongsMode && activePlaylistId;
+  const showTrackList = activePlaylistId && playingId && mode === "playlisten";
 
   return (
     <div className="flex flex-col gap-3">
@@ -811,63 +860,116 @@ function YouTubeMusicSearch() {
         <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
       )}
 
-      {/* Results */}
-      {results.length > 0 && (
-        <div className="flex flex-col gap-1">
-          {results.map((r) => {
-            const isPlaying = playingId === r.id;
-            return (
-              <button
-                key={r.id}
-                onClick={() => (isPlaying ? stopItem() : playItem(r))}
-                className={cn(
-                  "flex items-center gap-2.5 p-2 rounded-xl text-left transition-all border",
-                  isPlaying
-                    ? "bg-amber-50 border-amber-200"
-                    : "border-transparent hover:bg-muted/50"
-                )}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={r.thumbnail}
-                  alt=""
-                  className="w-14 h-10 rounded-lg object-cover flex-shrink-0 bg-muted"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-foreground line-clamp-1 leading-snug">
-                    {r.title}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground leading-tight">
-                    {r.channelTitle}
-                    {r.type === "playlist" && (
-                      <span className="ml-1.5 text-amber-600 font-medium">· Playlist</span>
-                    )}
-                  </p>
-                </div>
-                {isPlaying ? (
-                  <span className="flex gap-0.5 items-end h-3 flex-shrink-0">
-                    {[0, 100, 200].map((d) => (
-                      <span
-                        key={d}
-                        className="w-1 bg-amber-500 rounded-full animate-bounce"
-                        style={{ height: "100%", animationDelay: `${d}ms` }}
-                      />
-                    ))}
-                  </span>
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                    <svg viewBox="0 0 12 12" className="w-3 h-3 text-muted-foreground fill-current ml-0.5">
-                      <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
-                    </svg>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+      {/* ── Melodice-Ergebnis: Playlisten-Modus ──────────────────────────────── */}
+      {isMelodiceMode && mode === "playlisten" && (
+        <div className={cn(
+          "flex items-center gap-2.5 p-2 rounded-xl border",
+          playingId ? "bg-amber-50 border-amber-200" : "border-border hover:bg-muted/50"
+        )}>
+          <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <ListMusic size={18} className="text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground line-clamp-1 leading-snug">
+              {melodiceResult.gameTitle ?? query}
+            </p>
+            <p className="text-[10px] text-amber-600 font-medium leading-tight flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+              Melodice-kuratiert
+              {melodiceResult.trackCount ? ` · ${melodiceResult.trackCount} Titel` : ""}
+            </p>
+          </div>
+          {playingId ? (
+            <button onClick={stopYtItem} className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] text-amber-700 hover:bg-amber-100 transition-colors font-medium">
+              Stop
+            </button>
+          ) : (
+            <button
+              onClick={() => activatePlaylist(melodiceResult.playlistId!)}
+              className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0 hover:bg-amber-600 transition-colors"
+            >
+              <svg viewBox="0 0 12 12" className="w-3 h-3 text-white fill-current ml-0.5">
+                <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
 
-      {/* Embedded player */}
+      {/* ── Melodice-Ergebnis: Songs-Modus (Track-Picker) ────────────────────── */}
+      {showTrackPicker && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+          <p className="text-[11px] text-amber-700 font-medium flex-1">
+            Melodice-Playlist gefunden – wähle einen Track:
+          </p>
+        </div>
+      )}
+
+      {/* ── YouTube-Fallback: Ergebnisliste ─────────────────────────────────── */}
+      {results.length > 0 && (
+        <>
+          {melodiceResult?.found === false && (
+            <p className="text-[10px] text-muted-foreground px-0.5 -mb-1">
+              Kein Melodice-Eintrag gefunden — YouTube-Ergebnisse:
+            </p>
+          )}
+          <div className="flex flex-col gap-1">
+            {results.map((r) => {
+              const isPlaying = playingId === r.id;
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => (isPlaying ? stopYtItem() : playYtItem(r))}
+                  className={cn(
+                    "flex items-center gap-2.5 p-2 rounded-xl text-left transition-all border",
+                    isPlaying
+                      ? "bg-amber-50 border-amber-200"
+                      : "border-transparent hover:bg-muted/50"
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={r.thumbnail}
+                    alt=""
+                    className="w-14 h-10 rounded-lg object-cover flex-shrink-0 bg-muted"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground line-clamp-1 leading-snug">
+                      {r.title}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      {r.channelTitle}
+                      {r.type === "playlist" && (
+                        <span className="ml-1.5 text-amber-600 font-medium">· Playlist</span>
+                      )}
+                    </p>
+                  </div>
+                  {isPlaying ? (
+                    <span className="flex gap-0.5 items-end h-3 flex-shrink-0">
+                      {[0, 100, 200].map((d) => (
+                        <span
+                          key={d}
+                          className="w-1 bg-amber-500 rounded-full animate-bounce"
+                          style={{ height: "100%", animationDelay: `${d}ms` }}
+                        />
+                      ))}
+                    </span>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                      <svg viewBox="0 0 12 12" className="w-3 h-3 text-muted-foreground fill-current ml-0.5">
+                        <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ── Embedded Player ──────────────────────────────────────────────────── */}
       <iframe
         ref={musicIframeRef}
         className={cn(
@@ -879,19 +981,15 @@ function YouTubeMusicSearch() {
         title="Spielmusik Player"
       />
 
-      {/* Playlist track list */}
-      {playingId && activePlaylistId && (
+      {/* ── Trackliste (Playlisten-Modus: läuft + Melodice oder YT-Playlist) ── */}
+      {(showTrackList || showTrackPicker) && (
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           <div className="px-3 py-2 bg-muted/40 border-b border-border flex items-center gap-2">
             <ListMusic size={12} className="text-muted-foreground" />
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Trackliste
+              {showTrackPicker ? "Titel auswählen" : "Trackliste"}
             </span>
-            {tracksLoading && (
-              <span className="ml-auto">
-                <MusicTabSpinner />
-              </span>
-            )}
+            {tracksLoading && <span className="ml-auto"><MusicTabSpinner /></span>}
             {!tracksLoading && tracks.length > 0 && (
               <span className="ml-auto text-[10px] text-muted-foreground">{tracks.length} Titel</span>
             )}
@@ -904,9 +1002,7 @@ function YouTubeMusicSearch() {
           )}
 
           {!tracksLoading && tracks.length === 0 && (
-            <p className="text-xs text-muted-foreground px-3 py-3">
-              Keine Tracks gefunden.
-            </p>
+            <p className="text-xs text-muted-foreground px-3 py-3">Keine Tracks gefunden.</p>
           )}
 
           {!tracksLoading && tracks.length > 0 && (
@@ -916,12 +1012,10 @@ function YouTubeMusicSearch() {
                 return (
                   <button
                     key={track.videoId}
-                    onClick={() => playTrack(track, activePlaylistId)}
+                    onClick={() => playTrack(track, activePlaylistId!)}
                     className={cn(
                       "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
-                      isActive
-                        ? "bg-amber-50"
-                        : "hover:bg-muted/40"
+                      isActive ? "bg-amber-50" : "hover:bg-muted/40"
                     )}
                   >
                     <span className={cn(
@@ -933,11 +1027,8 @@ function YouTubeMusicSearch() {
                     {isActive ? (
                       <span className="flex gap-0.5 items-end h-3 flex-shrink-0 w-4">
                         {[0, 100, 200].map((d) => (
-                          <span
-                            key={d}
-                            className="w-1 bg-amber-500 rounded-full animate-bounce"
-                            style={{ height: "100%", animationDelay: `${d}ms` }}
-                          />
+                          <span key={d} className="w-1 bg-amber-500 rounded-full animate-bounce"
+                            style={{ height: "100%", animationDelay: `${d}ms` }} />
                         ))}
                       </span>
                     ) : (
