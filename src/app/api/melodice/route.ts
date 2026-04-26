@@ -56,14 +56,6 @@ function findPlaylistId(text: string): string | null {
 // ── Ansatz 1: Melodice JSON-API ───────────────────────────────────────────────
 // Melodice scheint eine interne Django/DRF oder Next.js API zu haben.
 // Typische Muster: /api/boardgames/?search=... oder /api/playlist/{slug}/
-interface MelodiceApiGame {
-  slug?: string;
-  name?: string;
-  youtube_playlist_id?: string;
-  playlistId?: string;
-  playlist_id?: string;
-}
-
 async function tryApi(q: string): Promise<string | null> {
   const endpoints = [
     `https://melodice.org/api/boardgames/?search=${encodeURIComponent(q)}&format=json`,
