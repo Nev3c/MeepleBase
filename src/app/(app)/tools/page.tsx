@@ -614,6 +614,13 @@ interface YtResult {
   type: "video" | "playlist";
 }
 
+interface YtTrack {
+  videoId: string;
+  title: string;
+  position: number;
+  thumbnail: string;
+}
+
 type MusicMode = "songs" | "playlisten";
 
 function MusicTabSpinner() {
@@ -649,11 +656,20 @@ function YouTubeMusicSearch() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const musicIframeRef = useRef<HTMLIFrameElement>(null);
 
+  // Playlist track state
+  const [tracks, setTracks] = useState<YtTrack[]>([]);
+  const [tracksLoading, setTracksLoading] = useState(false);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+
   // Reset results when mode changes
   function switchMode(m: MusicMode) {
     setMode(m);
     setResults([]);
     setPlayingId(null);
+    setTracks([]);
+    setActivePlaylistId(null);
+    setActiveTrackId(null);
     setError(null);
     if (musicIframeRef.current) musicIframeRef.current.src = "";
   }
@@ -666,6 +682,9 @@ function YouTubeMusicSearch() {
     setNoApiKey(false);
     setResults([]);
     setPlayingId(null);
+    setTracks([]);
+    setActivePlaylistId(null);
+    setActiveTrackId(null);
     if (musicIframeRef.current) musicIframeRef.current.src = "";
 
     try {
@@ -692,19 +711,45 @@ function YouTubeMusicSearch() {
     }
   }
 
+  async function fetchTracks(playlistId: string) {
+    setTracksLoading(true);
+    setTracks([]);
+    try {
+      const res = await fetch(`/api/youtube-music?playlistId=${encodeURIComponent(playlistId)}`);
+      const data = await res.json() as { tracks?: YtTrack[]; error?: string };
+      if (res.ok) setTracks(data.tracks ?? []);
+    } catch { /* ignore */ } finally {
+      setTracksLoading(false);
+    }
+  }
+
   function playItem(r: YtResult) {
     setPlayingId(r.id);
+    setActiveTrackId(null);
     if (!musicIframeRef.current) return;
     if (r.type === "playlist") {
-      // Embed full playlist — auto-plays all tracks in order
       musicIframeRef.current.src = `https://www.youtube.com/embed/videoseries?list=${r.id}&autoplay=1`;
+      // Fetch track list for this playlist
+      if (r.id !== activePlaylistId) {
+        setActivePlaylistId(r.id);
+        void fetchTracks(r.id);
+      }
     } else {
       musicIframeRef.current.src = `https://www.youtube.com/embed/${r.id}?autoplay=1`;
+      setTracks([]);
+      setActivePlaylistId(null);
     }
+  }
+
+  function playTrack(track: YtTrack, playlistId: string) {
+    setActiveTrackId(track.videoId);
+    if (!musicIframeRef.current) return;
+    musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?list=${playlistId}&autoplay=1`;
   }
 
   function stopItem() {
     setPlayingId(null);
+    setActiveTrackId(null);
     if (musicIframeRef.current) musicIframeRef.current.src = "";
   }
 
@@ -833,6 +878,86 @@ function YouTubeMusicSearch() {
         allowFullScreen
         title="Spielmusik Player"
       />
+
+      {/* Playlist track list */}
+      {playingId && activePlaylistId && (
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          <div className="px-3 py-2 bg-muted/40 border-b border-border flex items-center gap-2">
+            <ListMusic size={12} className="text-muted-foreground" />
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Trackliste
+            </span>
+            {tracksLoading && (
+              <span className="ml-auto">
+                <MusicTabSpinner />
+              </span>
+            )}
+            {!tracksLoading && tracks.length > 0 && (
+              <span className="ml-auto text-[10px] text-muted-foreground">{tracks.length} Titel</span>
+            )}
+          </div>
+
+          {tracksLoading && (
+            <div className="py-4 flex items-center justify-center">
+              <p className="text-xs text-muted-foreground animate-pulse">Lade Trackliste…</p>
+            </div>
+          )}
+
+          {!tracksLoading && tracks.length === 0 && (
+            <p className="text-xs text-muted-foreground px-3 py-3">
+              Keine Tracks gefunden.
+            </p>
+          )}
+
+          {!tracksLoading && tracks.length > 0 && (
+            <div className="max-h-64 overflow-y-auto divide-y divide-border">
+              {tracks.map((track) => {
+                const isActive = activeTrackId === track.videoId;
+                return (
+                  <button
+                    key={track.videoId}
+                    onClick={() => playTrack(track, activePlaylistId)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                      isActive
+                        ? "bg-amber-50"
+                        : "hover:bg-muted/40"
+                    )}
+                  >
+                    <span className={cn(
+                      "text-[10px] font-bold w-5 text-right flex-shrink-0 tabular-nums",
+                      isActive ? "text-amber-500" : "text-muted-foreground/60"
+                    )}>
+                      {track.position + 1}
+                    </span>
+                    {isActive ? (
+                      <span className="flex gap-0.5 items-end h-3 flex-shrink-0 w-4">
+                        {[0, 100, 200].map((d) => (
+                          <span
+                            key={d}
+                            className="w-1 bg-amber-500 rounded-full animate-bounce"
+                            style={{ height: "100%", animationDelay: `${d}ms` }}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      <svg viewBox="0 0 12 12" className="w-3 h-3 text-muted-foreground/40 fill-current flex-shrink-0 ml-0.5">
+                        <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
+                      </svg>
+                    )}
+                    <span className={cn(
+                      "flex-1 text-xs leading-snug line-clamp-1",
+                      isActive ? "font-semibold text-amber-700" : "font-medium text-foreground"
+                    )}>
+                      {track.title}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -18,21 +18,65 @@ interface YouTubePlaylistItem {
   };
 }
 
+interface YouTubePlaylistTrackItem {
+  snippet: {
+    title: string;
+    resourceId: { videoId: string };
+    thumbnails: { default?: { url: string }; medium?: { url: string } };
+    position: number;
+  };
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
+  const apiKey = process.env.YOUTUBE_DATA_API_KEY;
+
+  if (!apiKey) {
+    return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
+  }
+
+  // ── Playlist items mode ────────────────────────────────────────────────────
+  const playlistId = searchParams.get("playlistId")?.trim();
+  if (playlistId) {
+    const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+    url.searchParams.set("part", "snippet");
+    url.searchParams.set("playlistId", playlistId);
+    url.searchParams.set("maxResults", "30");
+    url.searchParams.set("key", apiKey);
+
+    const res = await fetch(url.toString());
+    const data = await res.json() as {
+      items?: YouTubePlaylistTrackItem[];
+      error?: { message: string };
+    };
+
+    if (!res.ok) {
+      console.error("YouTube API error (playlistItems):", data.error?.message);
+      return NextResponse.json({ error: "YouTube API error" }, { status: 502 });
+    }
+
+    const tracks = (data.items ?? []).map((item) => ({
+      videoId: item.snippet.resourceId.videoId,
+      title: item.snippet.title,
+      position: item.snippet.position,
+      thumbnail:
+        item.snippet.thumbnails.default?.url ??
+        item.snippet.thumbnails.medium?.url ??
+        "",
+    }));
+
+    return NextResponse.json({ tracks });
+  }
+
+  // ── Search mode ────────────────────────────────────────────────────────────
   const q = searchParams.get("q")?.trim();
   const type = searchParams.get("type") === "playlist" ? "playlist" : "video";
 
   if (!q) return NextResponse.json({ error: "Missing q" }, { status: 400 });
 
-  const apiKey = process.env.YOUTUBE_DATA_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "NO_API_KEY" }, { status: 503 });
-  }
-
   const searchQuery = type === "playlist"
-    ? `${q} board game music playlist soundtrack`
-    : `${q} board game soundtrack music`;
+    ? `${q} board game ambient music playlist`
+    : `${q} board game ambient music`;
 
   const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
   searchUrl.searchParams.set("part", "snippet");

@@ -7,7 +7,7 @@ import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
-import { LogOut, ExternalLink, ChevronRight, ChevronLeft, X, Share2, UserPlus, ShieldCheck, MessageSquare, ListChecks, BarChart2, Camera, Images, ArrowLeft } from "lucide-react";
+import { LogOut, ExternalLink, ChevronRight, ChevronLeft, X, Share2, UserPlus, BarChart2, Camera, Images, ArrowLeft } from "lucide-react";
 import { CURRENT_VERSION } from "@/data/changelog";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -297,18 +297,8 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
         {/* Community */}
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Community</SectionHeader>
-          <MenuRow
-            label="Feedback & Bugs"
-            href="/feedback"
-            showChevron
-            icon={<MessageSquare size={14} className="text-muted-foreground" />}
-          />
-          <MenuRow
-            label="Changelog"
-            href="/changelog"
-            showChevron
-            icon={<ListChecks size={14} className="text-muted-foreground" />}
-          />
+          <MenuRow label="Feedback & Bugs" href="/feedback" showChevron />
+          <MenuRow label="Changelog" href="/changelog" showChevron />
           {/* App Tour — highlighted if not yet completed */}
           {tourDone ? (
             <MenuRow label="App Tour" href="/onboarding" showChevron />
@@ -336,12 +326,7 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
         {/* Admin — nur für Admins sichtbar */}
         {isAdmin && (
           <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-            <MenuRow
-              label="Admin"
-              href="/admin"
-              showChevron
-              icon={<ShieldCheck size={14} className="text-muted-foreground" />}
-            />
+            <MenuRow label="Admin" href="/admin" showChevron />
           </div>
         )}
 

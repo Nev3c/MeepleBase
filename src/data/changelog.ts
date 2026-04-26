@@ -20,6 +20,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.6.0",
+    date: "2026-04-26",
+    title: "Audio, Export & Galerie",
+    changes: [
+      { type: "feat", text: "Audio-Tab: Spielmusik direkt in der App suchen und abspielen — als einzelne Songs oder zusammenhängende Playlisten (YouTube Data API)" },
+      { type: "feat", text: "Playlist-Modus: Titel spielen automatisch nacheinander ab, Trackliste mit Sprungfunktion" },
+      { type: "feat", text: "Daten-Export: Bibliothek, Partien, Notizen und Profil als JSON herunterladen (Einstellungen → Bibliothek)" },
+      { type: "feat", text: "Profil-Galerie: Alle Partienfotos in einer Bildergalerie, Vollbild-Ansicht mit Vor/Zurück-Navigation" },
+      { type: "feat", text: "BGStats-Import: Partien aus der BGStats-App als JSON importieren (Einstellungen → Bibliothek)" },
+      { type: "feat", text: "Spielerabend abschließen: Partien werden automatisch für alle Teilnehmer eingetragen" },
+      { type: "feat", text: "Partie per QR-Code teilen: Mitspieler übernehmen Partie mit einem Tap" },
+      { type: "improve", text: "Profilbild direkt auf dem Profil antippbar zum Hochladen" },
+      { type: "improve", text: "Datenschutzerklärung DSGVO-konform erweitert (GPS, Push, Soziale Funktionen, Drittanbieter)" },
+    ],
+  },
+  {
     version: "v0.5.0",
     date: "2026-04-25",
     title: "Statistiken & Spielerabend",
