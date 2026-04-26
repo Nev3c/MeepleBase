@@ -291,10 +291,24 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
         {/* Einstellungen */}
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
           <SectionHeader>Einstellungen</SectionHeader>
-          <MenuRow label="Einstellungen & BGG-Sync" href="/settings" showChevron />
-          {isAdmin && (
-            <MenuRow label="Admin" href="/admin" showChevron icon={<ShieldCheck size={14} className="text-muted-foreground" />} />
-          )}
+          <MenuRow label="Einstellungen" href="/settings" showChevron />
+        </div>
+
+        {/* Community */}
+        <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+          <SectionHeader>Community</SectionHeader>
+          <MenuRow
+            label="Feedback & Bugs"
+            href="/feedback"
+            showChevron
+            icon={<MessageSquare size={14} className="text-muted-foreground" />}
+          />
+          <MenuRow
+            label="Changelog"
+            href="/changelog"
+            showChevron
+            icon={<ListChecks size={14} className="text-muted-foreground" />}
+          />
           {/* App Tour — highlighted if not yet completed */}
           {tourDone ? (
             <MenuRow label="App Tour" href="/onboarding" showChevron />
@@ -319,22 +333,17 @@ export function ProfileClient({ user, profile, isAdmin }: ProfileClientProps) {
           )}
         </div>
 
-        {/* Community */}
-        <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-          <SectionHeader>Community</SectionHeader>
-          <MenuRow
-            label="Feedback & Bugs"
-            href="/feedback"
-            showChevron
-            icon={<MessageSquare size={14} className="text-muted-foreground" />}
-          />
-          <MenuRow
-            label="Changelog"
-            href="/changelog"
-            showChevron
-            icon={<ListChecks size={14} className="text-muted-foreground" />}
-          />
-        </div>
+        {/* Admin — nur für Admins sichtbar */}
+        {isAdmin && (
+          <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+            <MenuRow
+              label="Admin"
+              href="/admin"
+              showChevron
+              icon={<ShieldCheck size={14} className="text-muted-foreground" />}
+            />
+          </div>
+        )}
 
         {/* Abmelden */}
         <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">

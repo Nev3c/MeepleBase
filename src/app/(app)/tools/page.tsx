@@ -11,7 +11,7 @@ import {
   Sword, Shield, Swords, Gamepad2,
   Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
   Dog, Cat, Ship, Plane, Rocket,
-  Timer, Search,
+  Timer, Search, Headphones, ListMusic,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -604,14 +604,43 @@ type FormMode = { type: "add" } | { type: "edit"; button: SoundButton } | null;
 // Sucht direkt via YouTube Data API nach Spielsoundtracks und spielt das
 // Ergebnis inline ab — kein Absprung zu externen Seiten nötig.
 
+// ── Spielmusik (Songs + Playlisten) ──────────────────────────────────────────
+
 interface YtResult {
-  videoId: string;
+  id: string;
   title: string;
   channelTitle: string;
   thumbnail: string;
+  type: "video" | "playlist";
+}
+
+type MusicMode = "songs" | "playlisten";
+
+function MusicTabSpinner() {
+  return (
+    <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
+function NoApiKeyHint() {
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
+      <p className="font-semibold mb-0.5">YouTube API-Key fehlt</p>
+      <p>
+        Damit die Musiksuche funktioniert, muss{" "}
+        <code className="bg-amber-100 px-1 rounded">YOUTUBE_DATA_API_KEY</code>{" "}
+        in den Vercel-Umgebungsvariablen eingetragen sein.
+        Kostenlos via Google Cloud Console → YouTube Data API v3.
+      </p>
+    </div>
+  );
 }
 
 function YouTubeMusicSearch() {
+  const [mode, setMode] = useState<MusicMode>("playlisten");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<YtResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -619,6 +648,15 @@ function YouTubeMusicSearch() {
   const [noApiKey, setNoApiKey] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const musicIframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Reset results when mode changes
+  function switchMode(m: MusicMode) {
+    setMode(m);
+    setResults([]);
+    setPlayingId(null);
+    setError(null);
+    if (musicIframeRef.current) musicIframeRef.current.src = "";
+  }
 
   async function search() {
     const q = query.trim();
@@ -631,18 +669,22 @@ function YouTubeMusicSearch() {
     if (musicIframeRef.current) musicIframeRef.current.src = "";
 
     try {
-      const res = await fetch(`/api/youtube-music?q=${encodeURIComponent(q)}`);
+      const apiType = mode === "playlisten" ? "playlist" : "video";
+      const res = await fetch(
+        `/api/youtube-music?q=${encodeURIComponent(q)}&type=${apiType}`
+      );
       const data = await res.json() as { results?: YtResult[]; error?: string };
 
       if (!res.ok) {
-        if (data.error === "NO_API_KEY") { setNoApiKey(true); }
-        else { setError("Suche fehlgeschlagen. Bitte nochmal versuchen."); }
+        if (data.error === "NO_API_KEY") setNoApiKey(true);
+        else setError("Suche fehlgeschlagen. Bitte nochmal versuchen.");
         return;
       }
 
       const found = data.results ?? [];
       setResults(found);
-      if (found.length > 0) playVideo(found[0].videoId);
+      // Auto-play first result
+      if (found.length > 0) playItem(found[0]);
     } catch {
       setError("Verbindungsfehler.");
     } finally {
@@ -650,30 +692,49 @@ function YouTubeMusicSearch() {
     }
   }
 
-  function playVideo(videoId: string) {
-    setPlayingId(videoId);
-    if (musicIframeRef.current) {
-      musicIframeRef.current.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+  function playItem(r: YtResult) {
+    setPlayingId(r.id);
+    if (!musicIframeRef.current) return;
+    if (r.type === "playlist") {
+      // Embed full playlist — auto-plays all tracks in order
+      musicIframeRef.current.src = `https://www.youtube.com/embed/videoseries?list=${r.id}&autoplay=1`;
+    } else {
+      musicIframeRef.current.src = `https://www.youtube.com/embed/${r.id}?autoplay=1`;
     }
   }
 
-  function stopVideo() {
+  function stopItem() {
     setPlayingId(null);
     if (musicIframeRef.current) musicIframeRef.current.src = "";
   }
 
   return (
-    <div className="bg-card rounded-2xl border border-border shadow-card p-3.5 flex flex-col gap-2.5">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
-          <Music2 size={14} className="text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground leading-tight">Spielmusik</p>
-          <p className="text-[11px] text-muted-foreground leading-tight">Soundtrack direkt zum Spiel suchen & abspielen</p>
-        </div>
+    <div className="flex flex-col gap-3">
+      {/* Songs / Playlisten toggle */}
+      <div className="flex gap-1 bg-muted rounded-xl p-1">
+        {(["playlisten", "songs"] as MusicMode[]).map((m) => (
+          <button
+            key={m}
+            onClick={() => switchMode(m)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+              mode === m
+                ? "bg-white text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {m === "playlisten" ? <ListMusic size={13} /> : <Music2 size={13} />}
+            {m === "playlisten" ? "Playlisten" : "Songs"}
+          </button>
+        ))}
       </div>
+
+      {/* Mode description */}
+      <p className="text-[11px] text-muted-foreground px-0.5 -mt-1">
+        {mode === "playlisten"
+          ? "Komplette Playlisten — Titel spielt automatisch weiter"
+          : "Einzelne Tracks — manuell auswählen"}
+      </p>
 
       {/* Search input */}
       <div className="flex gap-2">
@@ -692,53 +753,60 @@ function YouTubeMusicSearch() {
           disabled={loading || !query.trim()}
           className="flex items-center gap-1.5 px-3 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex-shrink-0 disabled:opacity-50"
         >
-          {loading ? (
-            <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          ) : (
-            <Search size={13} />
-          )}
+          {loading ? <MusicTabSpinner /> : <Search size={13} />}
           Suchen
         </button>
       </div>
 
-      {/* No API key hint */}
-      {noApiKey && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-800 leading-relaxed">
-          <p className="font-semibold mb-0.5">YouTube API-Key fehlt</p>
-          <p>Damit die Musiksuche funktioniert, muss <code className="bg-amber-100 px-1 rounded">YOUTUBE_DATA_API_KEY</code> in den Vercel-Umgebungsvariablen eingetragen sein. Der Key ist kostenlos über die Google Cloud Console erhältlich (YouTube Data API v3).</p>
-        </div>
-      )}
+      {/* No API key */}
+      {noApiKey && <NoApiKeyHint />}
 
       {/* Error */}
-      {error && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
+      )}
 
-      {/* Results list */}
+      {/* Results */}
       {results.length > 0 && (
         <div className="flex flex-col gap-1">
           {results.map((r) => {
-            const isPlaying = playingId === r.videoId;
+            const isPlaying = playingId === r.id;
             return (
               <button
-                key={r.videoId}
-                onClick={() => isPlaying ? stopVideo() : playVideo(r.videoId)}
+                key={r.id}
+                onClick={() => (isPlaying ? stopItem() : playItem(r))}
                 className={cn(
-                  "flex items-center gap-2.5 p-2 rounded-xl text-left transition-all",
-                  isPlaying ? "bg-amber-50 border border-amber-200" : "hover:bg-muted/50 border border-transparent"
+                  "flex items-center gap-2.5 p-2 rounded-xl text-left transition-all border",
+                  isPlaying
+                    ? "bg-amber-50 border-amber-200"
+                    : "border-transparent hover:bg-muted/50"
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={r.thumbnail} alt="" className="w-14 h-10 rounded-lg object-cover flex-shrink-0 bg-muted" />
+                <img
+                  src={r.thumbnail}
+                  alt=""
+                  className="w-14 h-10 rounded-lg object-cover flex-shrink-0 bg-muted"
+                />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-foreground line-clamp-1 leading-snug">{r.title}</p>
-                  <p className="text-[10px] text-muted-foreground leading-tight">{r.channelTitle}</p>
+                  <p className="text-xs font-semibold text-foreground line-clamp-1 leading-snug">
+                    {r.title}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    {r.channelTitle}
+                    {r.type === "playlist" && (
+                      <span className="ml-1.5 text-amber-600 font-medium">· Playlist</span>
+                    )}
+                  </p>
                 </div>
                 {isPlaying ? (
                   <span className="flex gap-0.5 items-end h-3 flex-shrink-0">
                     {[0, 100, 200].map((d) => (
-                      <span key={d} className="w-1 bg-amber-500 rounded-full animate-bounce" style={{ height: "100%", animationDelay: `${d}ms` }} />
+                      <span
+                        key={d}
+                        className="w-1 bg-amber-500 rounded-full animate-bounce"
+                        style={{ height: "100%", animationDelay: `${d}ms` }}
+                      />
                     ))}
                   </span>
                 ) : (
@@ -754,10 +822,13 @@ function YouTubeMusicSearch() {
         </div>
       )}
 
-      {/* Embedded player (hidden when nothing plays) */}
+      {/* Embedded player */}
       <iframe
         ref={musicIframeRef}
-        className={cn("w-full aspect-video rounded-xl overflow-hidden", !playingId && "hidden")}
+        className={cn(
+          "w-full aspect-video rounded-xl overflow-hidden",
+          !playingId && "hidden"
+        )}
         allow="autoplay; encrypted-media"
         allowFullScreen
         title="Spielmusik Player"
@@ -766,7 +837,10 @@ function YouTubeMusicSearch() {
   );
 }
 
+type AudioTab = "sounds" | "musik";
+
 function SoundBoard() {
+  const [audioTab, setAudioTab] = useState<AudioTab>("sounds");
   const [buttons, setButtons] = useState<SoundButton[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -878,8 +952,32 @@ function SoundBoard() {
 
   return (
     <section className="flex flex-col gap-4">
-      {/* YouTube Spielmusik */}
-      <YouTubeMusicSearch />
+      {/* Sub-Tab-Navigation: Sounds | Musik */}
+      <div className="flex gap-1 bg-muted rounded-xl p-1">
+        {([
+          { id: "sounds" as AudioTab, label: "Sounds",  icon: <Volume2 size={14} /> },
+          { id: "musik"  as AudioTab, label: "Musik",   icon: <Music2  size={14} /> },
+        ]).map(({ id, label, icon }) => (
+          <button
+            key={id}
+            onClick={() => { setAudioTab(id); setEditMode(false); setFormMode(null); }}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all",
+              audioTab === id
+                ? "bg-white text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {icon}{label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Musik-Tab ─────────────────────────────────────────── */}
+      {audioTab === "musik" && <YouTubeMusicSearch />}
+
+      {/* ── Sounds-Tab ────────────────────────────────────────── */}
+      {audioTab === "sounds" && (<>
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -1138,6 +1236,8 @@ function SoundBoard() {
       <p className="text-[11px] text-muted-foreground text-center leading-relaxed px-2">
         Sounds werden lokal gespeichert. YouTube-Links müssen öffentliche Videos sein.
       </p>
+
+      </>)} {/* Ende Sounds-Tab */}
     </section>
   );
 }
@@ -1330,7 +1430,7 @@ export default function ToolsPage() {
     { id: "score" as const, label: "Punkte", icon: <Trophy  size={15} /> },
     { id: "dice"  as const, label: "Würfel", icon: <Dices   size={15} /> },
     { id: "coin"  as const, label: "Münze",  icon: <Crown   size={15} /> },
-    { id: "sound" as const, label: "Sound",  icon: <Volume2 size={15} /> },
+    { id: "sound" as const, label: "Audio",  icon: <Headphones size={15} /> },
     { id: "timer" as const, label: "Timer",  icon: <Clock   size={15} /> },
   ];
 

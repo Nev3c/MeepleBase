@@ -9,7 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- Spielmusik-Suche im Sound-Tab: Spielname eingeben → YouTube-Videos werden direkt gesucht und inline abgespielt (via YouTube Data API, kein Seitenabsprung mehr)
+- Audio-Tab (ehemals Sound): zwei Sub-Tabs „Sounds" (Soundboard) und „Musik" (YouTube-Suche); Musik-Tab hat „Playlisten"- und „Songs"-Modus
+- Spielmusik-Suche: Playlist-Modus spielt zusammenhängende YouTube-Playlisten ab (nächster Track läuft automatisch); Songs-Modus für Einzeltracks
+- Profil: Einstellungen-Block auf einzelnen Link reduziert; App Tour in Community-Block verschoben; Admin in eigenem Block
 - Daten-Export (Art. 20 DSGVO): Button unter Einstellungen → Bibliothek lädt JSON-Datei mit Bibliothek, Partien, Notizen und Profil herunter (`/api/export`)
 - Datenschutzerklärung (`/privacy`): vollständige DSGVO-konforme DSE inkl. Abschnitt zu GPS-Koordinaten, Rechtsgrundlagen, Drittanbietern, Betroffenenrechten
 - Impressum (`/impressum`) und Nutzungsbedingungen (`/terms`): erste Versionen (Impressum-Pflichtfelder noch zu ergänzen)
