@@ -67,6 +67,7 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState(false);
+  const [sheetMaxHeight, setSheetMaxHeight] = useState<string>("92dvh");
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,6 +190,18 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
+  // Resize the sheet when the soft keyboard opens/closes so it never hides behind it.
+  // visualViewport.height already excludes the keyboard on Android and iOS.
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setSheetMaxHeight(`${Math.floor(vv.height * 0.92)}px`);
+    update();
+    vv.addEventListener("resize", update);
+    return () => vv.removeEventListener("resize", update);
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -196,7 +209,7 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
-        style={{ maxHeight: "92dvh" }}
+        style={{ maxHeight: sheetMaxHeight }}
         role="dialog" aria-modal="true"
       >
         {/* Drag handle */}
@@ -395,7 +408,7 @@ function SearchTab({
                 Nicht gefunden. Suche das Spiel auf BGG, kopiere den Link und füge ihn hier ein.
               </p>
               <a
-                href={`https://boardgamegeek.com/search?q=${encodeURIComponent(trimmed)}&objecttype=boardgame`}
+                href={`https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=${encodeURIComponent(trimmed)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -414,7 +427,7 @@ function SearchTab({
             <p className="font-medium text-sm mb-1">Kein Spiel gefunden</p>
             <p className="text-muted-foreground text-xs mb-3">Prüf die Schreibweise oder suche auf Englisch</p>
             <a
-              href={`https://boardgamegeek.com/search?q=${encodeURIComponent(trimmed)}&objecttype=boardgame`}
+              href={`https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=${encodeURIComponent(trimmed)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 underline underline-offset-2"

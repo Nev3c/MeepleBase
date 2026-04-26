@@ -4,15 +4,17 @@ const WIKIDATA_SPARQL = "https://query.wikidata.org/sparql";
 
 function buildQuery(q: string): string {
   const escaped = q.toLowerCase().replace(/"/g, '\\"');
+  // No P31 class constraint — any Wikidata item with a BGG ID property (P2339)
+  // qualifies. This catches newer games not yet classified as Q131436 (board game)
+  // in Wikidata while still being BGG-relevant (P2339 is exclusively a BGG property).
   return `
 SELECT DISTINCT ?itemLabel ?bggId WHERE {
-  ?item wdt:P31 wd:Q131436 ;
-        wdt:P2339 ?bggId .
+  ?item wdt:P2339 ?bggId .
   ?item rdfs:label ?itemLabel .
   FILTER(CONTAINS(LCASE(?itemLabel), "${escaped}"))
   FILTER(LANG(?itemLabel) = "en")
 }
-LIMIT 12
+LIMIT 15
 `.trim();
 }
 

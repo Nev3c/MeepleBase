@@ -58,7 +58,7 @@ interface DraftPlayer {
   winner: boolean;
 }
 
-type PlaysTab = "vergangen" | "geplant";
+type PlaysTab = "vergangen" | "laufend";
 type PlaySortKey = "date_desc" | "date_asc" | "game_asc";
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -85,6 +85,9 @@ export function PlaysClient({
   const [pastSheetOpen, setPastSheetOpen] = useState(false);
   const [editPlay, setEditPlay] = useState<Play | null>(null);
   const [prefillPlayers, setPrefillPlayers] = useState<DraftPlayer[] | undefined>(undefined);
+
+  // Session complete via play sheet — holds the session being completed
+  const [completingSession, setCompletingSession] = useState<PlannedSession | null>(null);
 
   // Planned-session sheet
   const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
@@ -171,6 +174,19 @@ export function PlaysClient({
     router.refresh(); // reload plays list to show the newly created plays
   }
 
+  // Called when the user saves plays from the session-complete flow
+  async function handleSessionPlayCreated(newPlays: Play[]) {
+    if (completingSession) {
+      // Mark session as completed server-side (creates stub plays too, but our manual ones win)
+      await fetch(`/api/play-sessions/${completingSession.id}/complete`, { method: "POST" });
+      setSessions((prev) => prev.filter((s) => s.id !== completingSession.id));
+      setCompletingSession(null);
+    }
+    setPlays((prev) => [...newPlays, ...prev]);
+    setPastSheetOpen(false);
+    router.refresh();
+  }
+
   const pendingInviteCount = sessions.filter(
     (s) => !s.is_organizer && s.my_invite_status === "invited"
   ).length;
@@ -184,7 +200,7 @@ export function PlaysClient({
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">Partien</h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {plays.length} gespielt · {sessions.length} geplant
+                {plays.length} gespielt · {sessions.length} laufend
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -224,7 +240,7 @@ export function PlaysClient({
               <button
                 onClick={() => activeTab === "vergangen" ? setPastSheetOpen(true) : setPlannedSheetOpen(true)}
                 className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-colors"
-                aria-label={activeTab === "vergangen" ? "Partie erfassen" : "Spieleabend planen"}
+                aria-label={activeTab === "vergangen" ? "Partie erfassen" : "Spieleabend anlegen"}
               >
                 <Plus size={18} strokeWidth={2.5} />
               </button>
@@ -247,16 +263,16 @@ export function PlaysClient({
                 Vergangen
               </button>
               <button
-                onClick={() => setActiveTab("geplant")}
+                onClick={() => setActiveTab("laufend")}
                 className={cn(
                   "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
-                  activeTab === "geplant"
+                  activeTab === "laufend"
                     ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <Calendar size={14} />
-                Geplant
+                Laufend
                 {pendingInviteCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
                     {pendingInviteCount}
@@ -289,11 +305,16 @@ export function PlaysClient({
             )
           ) : (
             sessions.length === 0 ? (
-              <EmptyStateGeplant onAdd={() => setPlannedSheetOpen(true)} />
+              <EmptyStateLaufend onAdd={() => setPlannedSheetOpen(true)} />
             ) : (
               <div className="flex flex-col gap-3">
                 {sessions.map((session) => (
-                  <SessionCard key={session.id} session={session} onCompleted={handleSessionCompleted} />
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    onCompleted={handleSessionCompleted}
+                    onCompleteWithScores={(s) => setCompletingSession(s)}
+                  />
                 ))}
               </div>
             )
@@ -316,6 +337,15 @@ export function PlaysClient({
           editPlay={editPlay}
           onClose={() => setEditPlay(null)}
           onSavedSingle={handlePlayUpdated}
+        />
+      )}
+      {/* ── Complete session with scores ─────────────────────────────────────── */}
+      {completingSession && (
+        <PastPlaySheet
+          libraryGames={libraryGames}
+          sessionPrefill={completingSession}
+          onClose={() => setCompletingSession(null)}
+          onSaved={handleSessionPlayCreated}
         />
       )}
 
@@ -545,7 +575,11 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted }: { session: PlannedSession; onCompleted: (id: string) => void }) {
+function SessionCard({ session, onCompleted, onCompleteWithScores }: {
+  session: PlannedSession;
+  onCompleted: (id: string) => void;
+  onCompleteWithScores: (session: PlannedSession) => void;
+}) {
   const date = new Date(session.session_date);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
   const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
@@ -716,38 +750,47 @@ function SessionCard({ session, onCompleted }: { session: PlannedSession; onComp
         )}
 
         {/* Abschließen — organizer only */}
-        {session.is_organizer && !confirmComplete && (
-          <button
-            onClick={() => setConfirmComplete(true)}
-            className="mt-3 w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-semibold hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
-          >
-            <CheckCircle2 size={14} /> Spielabend abschließen
-          </button>
-        )}
-
-        {session.is_organizer && confirmComplete && (
-          <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
-            <p className="text-xs text-green-800 font-medium leading-snug">
-              Partie für alle {accepted + 1} Teilnehmer eintragen
-              {session.games.length > 1 ? ` (${session.games.length} Spiele)` : ""}?
-              Scores können danach bearbeitet werden.
-            </p>
-            <div className="flex gap-2">
+        {session.is_organizer && (
+          <div className="mt-3 flex flex-col gap-2">
+            {/* Primary: record with scores */}
+            <button
+              onClick={() => onCompleteWithScores(session)}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Edit2 size={14} /> Scores &amp; Fotos erfassen
+            </button>
+            {/* Secondary: quick complete without scores */}
+            {!confirmComplete && (
               <button
-                onClick={() => setConfirmComplete(false)}
-                disabled={completing}
-                className="flex-1 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground disabled:opacity-50"
+                onClick={() => setConfirmComplete(true)}
+                className="w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
               >
-                Abbrechen
+                <CheckCircle2 size={13} /> Schnell abschließen (ohne Scores)
               </button>
-              <button
-                onClick={handleComplete}
-                disabled={completing}
-                className="flex-1 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
-              >
-                {completing ? "Wird eingetragen…" : <><CheckCircle2 size={12} /> Eintragen</>}
-              </button>
-            </div>
+            )}
+            {confirmComplete && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
+                <p className="text-xs text-green-800 font-medium leading-snug">
+                  Partie für alle {accepted + 1} Teilnehmer ohne Scores eintragen?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmComplete(false)}
+                    disabled={completing}
+                    className="flex-1 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground disabled:opacity-50"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={handleComplete}
+                    disabled={completing}
+                    className="flex-1 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
+                  >
+                    {completing ? "Wird eingetragen…" : <><CheckCircle2 size={12} /> Eintragen</>}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -933,6 +976,7 @@ function PastPlaySheet({
   libraryGames,
   editPlay,
   prefillPlayers,
+  sessionPrefill,
   onClose,
   onSaved,
   onSavedSingle,
@@ -940,6 +984,7 @@ function PastPlaySheet({
   libraryGames: LibraryGame[];
   editPlay?: Play | null;
   prefillPlayers?: DraftPlayer[];
+  sessionPrefill?: PlannedSession | null;
   onClose: () => void;
   onSaved?: (plays: Play[]) => void;
   onSavedSingle?: (play: Play) => void;
@@ -955,17 +1000,28 @@ function PastPlaySheet({
   const [editGlobalSearching, setEditGlobalSearching] = useState(false);
   const [editGlobalSelected, setEditGlobalSelected] = useState<{ bgg_id: number; name: string; thumbnail_url: string | null } | null>(null);
 
-  // For create mode: multi-game
-  const [selectedGames, setSelectedGames] = useState<SelectedGame[]>([]);
+  // For create mode: multi-game (pre-fill from session if provided)
+  const [selectedGames, setSelectedGames] = useState<SelectedGame[]>(
+    sessionPrefill
+      ? sessionPrefill.games.map((g) => ({ id: g.id, name: g.name, thumbnail_url: g.thumbnail_url }))
+      : []
+  );
 
-  const [playedAt, setPlayedAt] = useState(editPlay?.played_at?.slice(0, 10) ?? today);
+  const [playedAt, setPlayedAt] = useState(
+    editPlay?.played_at?.slice(0, 10) ?? sessionPrefill?.session_date?.slice(0, 10) ?? today
+  );
   const [duration, setDuration] = useState(editPlay?.duration_minutes?.toString() ?? "");
-  const [location, setLocation] = useState(editPlay?.location ?? "");
+  const [location, setLocation] = useState(editPlay?.location ?? sessionPrefill?.location ?? "");
   const [notes, setNotes] = useState(editPlay?.notes ?? "");
   const [cooperative, setCooperative] = useState(editPlay?.cooperative ?? false);
+
+  // Players: edit > session invitees (accepted) > prefillPlayers > empty
+  const sessionAccepted = sessionPrefill?.invitees.filter((i) => i.status === "accepted") ?? [];
   const [players, setPlayers] = useState<DraftPlayer[]>(
     editPlay?.players && editPlay.players.length > 0
       ? editPlay.players.map((p) => ({ display_name: p.display_name, score: p.score?.toString() ?? "", winner: p.winner }))
+      : sessionAccepted.length > 0
+      ? sessionAccepted.map((i) => ({ display_name: i.display_name ?? i.username, score: "", winner: false }))
       : prefillPlayers && prefillPlayers.length > 0
       ? prefillPlayers
       : [{ display_name: "", score: "", winner: false }]
@@ -1156,7 +1212,7 @@ function PastPlaySheet({
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
           <h2 className="font-display text-lg font-semibold">
-            {isEdit ? "Partie bearbeiten" : "Partie(n) erfassen"}
+            {isEdit ? "Partie bearbeiten" : sessionPrefill ? "Spielabend abschließen" : "Partie(n) erfassen"}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
@@ -1608,7 +1664,7 @@ function EmptyStatePast({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function EmptyStateGeplant({ onAdd }: { onAdd: () => void }) {
+function EmptyStateLaufend({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
       <div className="w-20 h-20 rounded-3xl bg-amber-50 flex items-center justify-center mb-4">

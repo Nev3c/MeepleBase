@@ -34,6 +34,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Onboarding-Banner in der Bibliothek für neue Accounts (< 30 Tage, noch kein Onboarding abgeschlossen)
 
 ### Changed
+- Partien-Seite: Tab „Geplant" heißt jetzt „Laufend" — bessere Beschreibung für laufende/bevorstehende Spieleabende
+- Partien-Seite: Spielerabend abschließen jetzt mit zwei Optionen: „Scores & Fotos erfassen" öffnet PastPlaySheet mit vorausgefüllten Spielen, Datum, Ort und zugesagten Spielern; „Schnell abschließen" für scoreloses Abschließen
+- Spieler-Seite: neuer „Markt"-Tab zeigt Spiele zum Verkauf von Freunden (vorher im Freunde-Tab versteckt)
 - Tools-Tabs: Label unter jedem Icon ist jetzt immer sichtbar (nicht mehr nur beim aktiven Tab)
 - Profil: Profilbild direkt auf dem Profil antippbar zum Hochladen (nicht mehr nur in den Einstellungen)
 - Melodice durch YouTube-Musiksuche ersetzt (vollständig in-app, kein externer Absprung mehr)
@@ -47,6 +50,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - In-App Changelog auf v0.5.0 aktualisiert
 
 ### Fixed
+- Bibliothek: Spielsuche „the hunger" und andere Spiele ohne explizite Wikidata-Klassifizierung fanden keine Ergebnisse — SPARQL-Constraint `P31 = Q131436` entfernt; BGG-ID-Property `P2339` reicht als Filter; Limit auf 15 erhöht
+- Bibliothek: Mobilgerät — Tastatur überlagert Suchergebnisse; `visualViewport.resize`-Listener setzt Sheet-Höhe dynamisch in Pixel statt `dvh`-Units
+- Bibliothek: BGG-Fallback-Link führte zu 404 — URL auf stabiles `geeksearch.php?action=search&objecttype=boardgame&q=…`-Format geändert
 - Geplante Partien: Einladungen senden funktioniert nicht — POST /api/play-sessions verwendete den User-Client für alle INSERTs, was eine zirkuläre RLS-Auswertung auslöste (`play_sessions` SELECT-Policy referenziert `play_session_invites`; `play_session_invites` INSERT-Policy referenziert `play_sessions`). Alle Writes jetzt via Admin-Client (Service Role), Auth bleibt via `getUser()` gesichert, Ownership explizit mit `created_by: user.id` gesetzt.
 - Einladung annehmen/ablehnen: Gleiches RLS-Zirkular-Problem in POST /api/play-sessions/[id]/respond behoben — Update jetzt via Admin-Client mit expliziter Ownership-Prüfung (`.eq("invited_user_id", user.id)`)
 

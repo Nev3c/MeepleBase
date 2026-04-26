@@ -20,7 +20,7 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 type NearbyStatus = "idle" | "locating" | "loading" | "done" | "denied" | "error";
 type SortMode = "az" | "entfernung";
-type PlayersTab = "chats" | "freunde" | "einladungen" | "suche";
+type PlayersTab = "chats" | "freunde" | "einladungen" | "markt" | "suche";
 
 interface SearchPlayer {
   id: string;
@@ -249,13 +249,13 @@ export function PlayersClient({
             <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">Spieler</h1>
           </div>
 
-          {/* ── 3-Tab Bar ── */}
+          {/* ── Tab Bar ── */}
           <div className="flex gap-0">
             <TabButton
               active={activeTab === "chats"}
               onClick={() => setActiveTab("chats")}
               badge={localTotalUnread > 0 ? localTotalUnread : undefined}
-              icon={<MessageSquare size={14} />}
+              icon={<MessageSquare size={13} />}
             >
               Chats
             </TabButton>
@@ -263,7 +263,7 @@ export function PlayersClient({
               active={activeTab === "freunde"}
               onClick={() => setActiveTab("freunde")}
               badge={totalPending > 0 ? totalPending : undefined}
-              icon={<Users size={14} />}
+              icon={<Users size={13} />}
             >
               Freunde
             </TabButton>
@@ -271,14 +271,22 @@ export function PlayersClient({
               active={activeTab === "einladungen"}
               onClick={() => setActiveTab("einladungen")}
               badge={actionableInvites.length > 0 ? actionableInvites.length : undefined}
-              icon={<Calendar size={14} />}
+              icon={<Calendar size={13} />}
             >
               Einlad.
             </TabButton>
             <TabButton
+              active={activeTab === "markt"}
+              onClick={() => setActiveTab("markt")}
+              badge={forSaleGames.length > 0 ? forSaleGames.length : undefined}
+              icon={<Tag size={13} />}
+            >
+              Markt
+            </TabButton>
+            <TabButton
               active={activeTab === "suche"}
               onClick={() => setActiveTab("suche")}
-              icon={<Search size={14} />}
+              icon={<Search size={13} />}
             >
               Suche
             </TabButton>
@@ -299,7 +307,6 @@ export function PlayersClient({
             friends={friends}
             pendingReceived={pendingReceived}
             pendingSent={pendingSent}
-            forSaleGames={forSaleGames}
             localUnreadByUser={localUnreadByUser}
             onRespondToRequest={respondToRequest}
             onCancelRequest={cancelRequest}
@@ -320,6 +327,9 @@ export function PlayersClient({
               });
             }}
           />
+        )}
+        {activeTab === "markt" && (
+          <MarktTab forSaleGames={forSaleGames} />
         )}
         {activeTab === "suche" && (
           <SucheTab
@@ -506,13 +516,12 @@ function ChatsTab({
 // ── Freunde Tab ───────────────────────────────────────────────────────────────
 
 function FreundeTab({
-  friends, pendingReceived, pendingSent, forSaleGames, localUnreadByUser,
+  friends, pendingReceived, pendingSent, localUnreadByUser,
   onRespondToRequest, onCancelRequest, onOpenSheet,
 }: {
   friends: FriendProfile[];
   pendingReceived: FriendProfile[];
   pendingSent: FriendProfile[];
-  forSaleGames: ForSaleGame[];
   localUnreadByUser: Record<string, number>;
   onRespondToRequest: (fId: string, action: "accept" | "decline") => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
@@ -560,16 +569,6 @@ function FreundeTab({
         )}
       </section>
 
-      {/* For-sale games */}
-      {forSaleGames.length > 0 && (
-        <section>
-          <SectionLabel count={forSaleGames.length}>Zu Verkaufen</SectionLabel>
-          <div className="flex flex-col gap-2.5">
-            {forSaleGames.map((item) => <ForSaleCard key={item.id} item={item} />)}
-          </div>
-        </section>
-      )}
-
       {/* Sent requests */}
       {pendingSent.length > 0 && (
         <section>
@@ -581,6 +580,37 @@ function FreundeTab({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+// ── Markt Tab ─────────────────────────────────────────────────────────────────
+
+function MarktTab({ forSaleGames }: { forSaleGames: ForSaleGame[] }) {
+  if (forSaleGames.length === 0) {
+    return (
+      <EmptyState
+        icon={<Tag size={26} className="text-amber-400" />}
+        iconBg="bg-amber-50"
+        title="Noch nichts zu verkaufen"
+        subtitle="Wenn Freunde Spiele zum Verkauf anbieten, erscheinen sie hier."
+      />
+    );
+  }
+
+  return (
+    <div className="px-4 pt-5 pb-10 flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/60">
+          {forSaleGames.length} {forSaleGames.length === 1 ? "Angebot" : "Angebote"} von Freunden
+        </p>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {forSaleGames.map((item) => <ForSaleCard key={item.id} item={item} />)}
+      </div>
+      <p className="text-xs text-muted-foreground/50 text-center pt-2">
+        Schreib dem Anbieter eine Nachricht, um Interesse zu bekunden.
+      </p>
     </div>
   );
 }
