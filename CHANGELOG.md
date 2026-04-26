@@ -34,9 +34,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Onboarding-Banner in der Bibliothek für neue Accounts (< 30 Tage, noch kein Onboarding abgeschlossen)
 
 ### Changed
-- Partien-Seite: Tab „Geplant" heißt jetzt „Laufend" — bessere Beschreibung für laufende/bevorstehende Spieleabende
-- Partien-Seite: Spielerabend abschließen jetzt mit zwei Optionen: „Scores & Fotos erfassen" öffnet PastPlaySheet mit vorausgefüllten Spielen, Datum, Ort und zugesagten Spielern; „Schnell abschließen" für scoreloses Abschließen
-- Spieler-Seite: neuer „Markt"-Tab zeigt Spiele zum Verkauf von Freunden (vorher im Freunde-Tab versteckt)
+- Tools: Audio ist jetzt der erste Tab (statt Punkte) — schnellster Zugriff auf das meistgenutzte Tool
+- Partien-Seite: „Geplant"-Tab steht wieder zuerst (vor Vergangen) und ist Default beim Öffnen — passt besser zum Workflow „Was steht an?"
+- Partien-Seite: Scores/Fotos erfassen schließt den Spielabend NICHT mehr automatisch ab — Abschluss nur über die explizite „Spielabend abschließen"-Aktion
+- Spieler-Seite: Tab-Layout neu gestaltet (Icon oben, Label unten, Badge schwebt am Icon) — alle 5 Tabs deutlich entstauchter; „Einlad." → „Termine"
+- Spieler-Seite: „Markt"-Tab zeigt jetzt eigene Verkaufsangebote zusätzlich zu den Freunde-Angeboten, klar getrennt nach „Deine Angebote" und „Von Freunden"; eigene Angebote führen ins Spiel-Detail (zum Bearbeiten), Freunde-Angebote zum Profil
+- Spieler-Seite: Markt-Tab-Badge zählt nur noch Freunde-Angebote (eigene zählen nicht als „neu")
 - Tools-Tabs: Label unter jedem Icon ist jetzt immer sichtbar (nicht mehr nur beim aktiven Tab)
 - Profil: Profilbild direkt auf dem Profil antippbar zum Hochladen (nicht mehr nur in den Einstellungen)
 - Melodice durch YouTube-Musiksuche ersetzt (vollständig in-app, kein externer Absprung mehr)
@@ -50,6 +53,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - In-App Changelog auf v0.5.0 aktualisiert
 
 ### Fixed
+- Admin: Neue Registrierungen mit Auto-Confirm umgingen den `/auth/callback` und wurden nie als ausstehende Freigaben erfasst — neuer `POST /api/auth/post-signup`-Endpunkt setzt `approved=false` direkt nach dem Sign-Up wenn `REQUIRE_APPROVAL=true`. Admin-Liste zeigt jetzt zusätzlich auch Profile mit `approved IS NULL` als ausstehend (deckt Legacy-User ab)
+- Bibliothek: Tastatur-Overlay nachhaltig gelöst — Sheet wird jetzt per `visualViewport.height + offsetTop` über die Tastatur gehoben (vorher: nur `maxHeight` reduziert, was bei `position:fixed; bottom:0` nicht hilft, da das gegen den Layout-Viewport ankert, der durch die Tastatur nicht schrumpft); Animations-Transition für sanftes Hoch-/Runtergleiten
+- Bibliothek: Spielsuche fällt auf BGG-Namens-API (`geekdo`) zurück, wenn Wikidata keine Treffer hat — fängt z.B. „The Hunger" ab, das in Wikidata kein P2339-Statement hat
 - Bibliothek: Spielsuche „the hunger" und andere Spiele ohne explizite Wikidata-Klassifizierung fanden keine Ergebnisse — SPARQL-Constraint `P31 = Q131436` entfernt; BGG-ID-Property `P2339` reicht als Filter; Limit auf 15 erhöht
 - Bibliothek: Mobilgerät — Tastatur überlagert Suchergebnisse; `visualViewport.resize`-Listener setzt Sheet-Höhe dynamisch in Pixel statt `dvh`-Units
 - Bibliothek: BGG-Fallback-Link führte zu 404 — URL auf stabiles `geeksearch.php?action=search&objecttype=boardgame&q=…`-Format geändert

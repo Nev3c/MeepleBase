@@ -58,7 +58,7 @@ interface DraftPlayer {
   winner: boolean;
 }
 
-type PlaysTab = "vergangen" | "laufend";
+type PlaysTab = "geplant" | "vergangen";
 type PlaySortKey = "date_desc" | "date_asc" | "game_asc";
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export function PlaysClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<PlaysTab>("vergangen");
+  const [activeTab, setActiveTab] = useState<PlaysTab>("geplant");
   const [plays, setPlays] = useState<Play[]>(initialPlays);
   const [sessions, setSessions] = useState<PlannedSession[]>(initialSessions);
 
@@ -174,15 +174,12 @@ export function PlaysClient({
     router.refresh(); // reload plays list to show the newly created plays
   }
 
-  // Called when the user saves plays from the session-complete flow
-  async function handleSessionPlayCreated(newPlays: Play[]) {
-    if (completingSession) {
-      // Mark session as completed server-side (creates stub plays too, but our manual ones win)
-      await fetch(`/api/play-sessions/${completingSession.id}/complete`, { method: "POST" });
-      setSessions((prev) => prev.filter((s) => s.id !== completingSession.id));
-      setCompletingSession(null);
-    }
+  // Called when the user saves plays from the session score-entry flow.
+  // IMPORTANT: This does NOT complete the session — completion is a dedicated action.
+  // The session stays in the Geplant list until the user explicitly clicks "Abschließen".
+  function handleSessionPlayCreated(newPlays: Play[]) {
     setPlays((prev) => [...newPlays, ...prev]);
+    setCompletingSession(null);
     setPastSheetOpen(false);
     router.refresh();
   }
@@ -200,7 +197,7 @@ export function PlaysClient({
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">Partien</h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {plays.length} gespielt · {sessions.length} laufend
+                {sessions.length} geplant · {plays.length} gespielt
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -238,9 +235,9 @@ export function PlaysClient({
                 </div>
               )}
               <button
-                onClick={() => activeTab === "vergangen" ? setPastSheetOpen(true) : setPlannedSheetOpen(true)}
+                onClick={() => activeTab === "geplant" ? setPlannedSheetOpen(true) : setPastSheetOpen(true)}
                 className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-colors"
-                aria-label={activeTab === "vergangen" ? "Partie erfassen" : "Spieleabend anlegen"}
+                aria-label={activeTab === "geplant" ? "Spieleabend anlegen" : "Partie erfassen"}
               >
                 <Plus size={18} strokeWidth={2.5} />
               </button>
@@ -250,6 +247,23 @@ export function PlaysClient({
           {/* ── Tab toggle ─────────────────────────────────────────────────── */}
           <div className="max-w-2xl mx-auto">
             <div className="flex bg-muted rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setActiveTab("geplant")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                  activeTab === "geplant"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Calendar size={14} />
+                Geplant
+                {pendingInviteCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                    {pendingInviteCount}
+                  </span>
+                )}
+              </button>
               <button
                 onClick={() => setActiveTab("vergangen")}
                 className={cn(
@@ -262,30 +276,28 @@ export function PlaysClient({
                 <Clock size={14} />
                 Vergangen
               </button>
-              <button
-                onClick={() => setActiveTab("laufend")}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
-                  activeTab === "laufend"
-                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Calendar size={14} />
-                Laufend
-                {pendingInviteCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                    {pendingInviteCount}
-                  </span>
-                )}
-              </button>
             </div>
           </div>
         </div>
 
         {/* ── Tab content ────────────────────────────────────────────────────── */}
         <div className="px-4 py-4 max-w-2xl mx-auto w-full">
-          {activeTab === "vergangen" ? (
+          {activeTab === "geplant" ? (
+            sessions.length === 0 ? (
+              <EmptyStateGeplant onAdd={() => setPlannedSheetOpen(true)} />
+            ) : (
+              <div className="flex flex-col gap-3">
+                {sessions.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    onCompleted={handleSessionCompleted}
+                    onRecordScores={(s) => setCompletingSession(s)}
+                  />
+                ))}
+              </div>
+            )
+          ) : (
             sortedPlays.length === 0 ? (
               <EmptyStatePast onAdd={() => setPastSheetOpen(true)} />
             ) : (
@@ -299,21 +311,6 @@ export function PlaysClient({
                     showDeleteConfirm={deleteId === play.id}
                     onConfirmDelete={() => handleDelete(play.id)}
                     onCancelDelete={() => setDeleteId(null)}
-                  />
-                ))}
-              </div>
-            )
-          ) : (
-            sessions.length === 0 ? (
-              <EmptyStateLaufend onAdd={() => setPlannedSheetOpen(true)} />
-            ) : (
-              <div className="flex flex-col gap-3">
-                {sessions.map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    onCompleted={handleSessionCompleted}
-                    onCompleteWithScores={(s) => setCompletingSession(s)}
                   />
                 ))}
               </div>
@@ -575,10 +572,10 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted, onCompleteWithScores }: {
+function SessionCard({ session, onCompleted, onRecordScores }: {
   session: PlannedSession;
   onCompleted: (id: string) => void;
-  onCompleteWithScores: (session: PlannedSession) => void;
+  onRecordScores: (session: PlannedSession) => void;
 }) {
   const date = new Date(session.session_date);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
@@ -749,29 +746,29 @@ function SessionCard({ session, onCompleted, onCompleteWithScores }: {
           </div>
         )}
 
-        {/* Abschließen — organizer only */}
+        {/* Aktionen — organizer only */}
         {session.is_organizer && (
           <div className="mt-3 flex flex-col gap-2">
-            {/* Primary: record with scores */}
+            {/* Primary edit: record scores/photos — does NOT complete the session */}
             <button
-              onClick={() => onCompleteWithScores(session)}
+              onClick={() => onRecordScores(session)}
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
             >
               <Edit2 size={14} /> Scores &amp; Fotos erfassen
             </button>
-            {/* Secondary: quick complete without scores */}
+            {/* Dedicated complete action */}
             {!confirmComplete && (
               <button
                 onClick={() => setConfirmComplete(true)}
-                className="w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
+                className="w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 size={13} /> Schnell abschließen (ohne Scores)
+                <CheckCircle2 size={13} /> Spielabend abschließen
               </button>
             )}
             {confirmComplete && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
                 <p className="text-xs text-green-800 font-medium leading-snug">
-                  Partie für alle {accepted + 1} Teilnehmer ohne Scores eintragen?
+                  Spielabend abschließen? Falls noch keine Scores erfasst sind, werden Partien für alle {accepted + 1} Teilnehmer ohne Scores eingetragen.
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -786,7 +783,7 @@ function SessionCard({ session, onCompleted, onCompleteWithScores }: {
                     disabled={completing}
                     className="flex-1 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
                   >
-                    {completing ? "Wird eingetragen…" : <><CheckCircle2 size={12} /> Eintragen</>}
+                    {completing ? "Wird abgeschlossen…" : <><CheckCircle2 size={12} /> Abschließen</>}
                   </button>
                 </div>
               </div>
@@ -1664,7 +1661,7 @@ function EmptyStatePast({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function EmptyStateLaufend({ onAdd }: { onAdd: () => void }) {
+function EmptyStateGeplant({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
       <div className="w-20 h-20 rounded-3xl bg-amber-50 flex items-center justify-center mb-4">

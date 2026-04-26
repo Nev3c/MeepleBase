@@ -56,8 +56,13 @@ export function RegisterForm() {
       return;
     }
 
-    // Auto-confirm ON (Supabase returns session immediately) → go straight to onboarding
+    // Auto-confirm ON (Supabase returns session immediately) → run post-signup setup, then onboarding
     if (data.session) {
+      // Fire-and-forget approval init; if REQUIRE_APPROVAL is on, this flags the new user as pending.
+      // Middleware will redirect to /waiting on next navigation.
+      try {
+        await fetch("/api/auth/post-signup", { method: "POST" });
+      } catch { /* non-blocking */ }
       router.push("/onboarding");
       return;
     }

@@ -68,6 +68,10 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState(false);
   const [sheetMaxHeight, setSheetMaxHeight] = useState<string>("92dvh");
+  // Distance from the bottom of the layout viewport to the bottom of the visual
+  // viewport — equals the soft-keyboard height when keyboard is open, 0 otherwise.
+  // Used to lift the sheet above the keyboard instead of being clipped behind it.
+  const [keyboardOffset, setKeyboardOffset] = useState<number>(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,16 +194,41 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  // Resize the sheet when the soft keyboard opens/closes so it never hides behind it.
-  // visualViewport.height already excludes the keyboard on Android and iOS.
+  // Lift the sheet above the soft keyboard.
+  //
+  // The trick: `position: fixed; bottom: 0` anchors to the LAYOUT viewport, which
+  // does not shrink when the keyboard opens. So `bottom: 0` ends up behind the
+  // keyboard. visualViewport.height tracks the visible area excluding keyboard.
+  //
+  // keyboardHeight = layoutInner - vv.height - vv.offsetTop
+  // → set sheet's `bottom` to that value so its bottom edge sits exactly on top
+  //   of the keyboard. Cap maxHeight so it never grows taller than visual area.
+  //
+  // Both `resize` and `scroll` events fire as the keyboard animates in/out;
+  // listening to both keeps the sheet locked above the keyboard during the
+  // animation rather than only after it settles.
   useEffect(() => {
     if (!open) return;
     const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => setSheetMaxHeight(`${Math.floor(vv.height * 0.92)}px`);
+    if (!vv) {
+      setSheetMaxHeight("92dvh");
+      setKeyboardOffset(0);
+      return;
+    }
+    const update = () => {
+      const layout = window.innerHeight;
+      const kb = Math.max(0, layout - vv.height - vv.offsetTop);
+      setKeyboardOffset(kb);
+      // Cap height so sheet always fits inside visual viewport with breathing room
+      setSheetMaxHeight(`${Math.floor(vv.height * 0.92)}px`);
+    };
     update();
     vv.addEventListener("resize", update);
-    return () => vv.removeEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
   }, [open]);
 
   if (!open) return null;
@@ -208,8 +237,13 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     <>
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
-        style={{ maxHeight: sheetMaxHeight }}
+        className="fixed left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
+        style={{
+          bottom: keyboardOffset,
+          maxHeight: sheetMaxHeight,
+          // Smooth lift when keyboard appears/disappears
+          transition: keyboardOffset > 0 ? "bottom 120ms ease-out" : "bottom 200ms ease-in",
+        }}
         role="dialog" aria-modal="true"
       >
         {/* Drag handle */}

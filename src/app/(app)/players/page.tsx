@@ -92,6 +92,9 @@ export default async function PlayersPage() {
         | { id: string; name: string; thumbnail_url: string | null }[] | null;
   };
 
+  // Friends' for-sale games + own for-sale games (combined later for the Markt tab)
+  const fsUserIds = Array.from(new Set([user.id, ...acceptedFriendIds]));
+
   const [profilesResult, fsGamesResult] = await Promise.all([
     allOtherIds.length > 0
       ? admin
@@ -99,13 +102,11 @@ export default async function PlayersPage() {
           .select("id, username, display_name, avatar_url, location, library_visibility")
           .in("id", allOtherIds)
       : Promise.resolve({ data: [] as ProfileRow[] }),
-    acceptedFriendIds.length > 0
-      ? admin
-          .from("user_games")
-          .select("id, user_id, sale_price, game:games(id, name, thumbnail_url)")
-          .in("user_id", acceptedFriendIds)
-          .eq("status", "for_sale")
-      : Promise.resolve({ data: [] as RawFsGame[] }),
+    admin
+      .from("user_games")
+      .select("id, user_id, sale_price, game:games(id, name, thumbnail_url)")
+      .in("user_id", fsUserIds)
+      .eq("status", "for_sale"),
   ]);
 
   const profileMap = new Map(((profilesResult.data ?? []) as ProfileRow[]).map((p) => [p.id, p]));
@@ -150,16 +151,24 @@ export default async function PlayersPage() {
     else if (f.status === "pending" && f.requester_id === user.id) pendingSent.push(entry);
   }
 
-  // ── 8. Build for-sale games ───────────────────────────────────────────────────
+  // ── 8. Build for-sale games — own + friends' (own marked via user_id === me) ──
+  // Fetch own profile in parallel later if needed; for now, owner_username left blank for me
+  const { data: myProfile } = await admin
+    .from("profiles")
+    .select("username, display_name")
+    .eq("id", user.id)
+    .single();
+
   const forSaleGames: ForSaleGame[] = ((fsGamesResult.data ?? []) as RawFsGame[]).map((ug) => {
-    const owner = profileMap.get(ug.user_id);
+    const isMe = ug.user_id === user.id;
+    const owner = isMe ? null : profileMap.get(ug.user_id);
     const game = Array.isArray(ug.game) ? ug.game[0] ?? null : ug.game;
     return {
       id: ug.id,
       user_id: ug.user_id,
       sale_price: ug.sale_price ?? null,
-      owner_username: owner?.username ?? "?",
-      owner_display_name: owner?.display_name ?? null,
+      owner_username: isMe ? (myProfile?.username ?? "Du") : (owner?.username ?? "?"),
+      owner_display_name: isMe ? (myProfile?.display_name ?? null) : (owner?.display_name ?? null),
       game: game as { id: string; name: string; thumbnail_url: string | null } | null,
     };
   });

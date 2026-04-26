@@ -61,7 +61,7 @@ function formatTime(dateStr: string): string {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export function PlayersClient({
-  // currentUserId available for future use (e.g. composing messages)
+  currentUserId,
   conversations,
   friends: initialFriends,
   pendingReceived: initialPendingReceived,
@@ -255,7 +255,7 @@ export function PlayersClient({
               active={activeTab === "chats"}
               onClick={() => setActiveTab("chats")}
               badge={localTotalUnread > 0 ? localTotalUnread : undefined}
-              icon={<MessageSquare size={13} />}
+              icon={<MessageSquare size={18} />}
             >
               Chats
             </TabButton>
@@ -263,7 +263,7 @@ export function PlayersClient({
               active={activeTab === "freunde"}
               onClick={() => setActiveTab("freunde")}
               badge={totalPending > 0 ? totalPending : undefined}
-              icon={<Users size={13} />}
+              icon={<Users size={18} />}
             >
               Freunde
             </TabButton>
@@ -271,22 +271,25 @@ export function PlayersClient({
               active={activeTab === "einladungen"}
               onClick={() => setActiveTab("einladungen")}
               badge={actionableInvites.length > 0 ? actionableInvites.length : undefined}
-              icon={<Calendar size={13} />}
+              icon={<Calendar size={18} />}
             >
-              Einlad.
+              Termine
             </TabButton>
             <TabButton
               active={activeTab === "markt"}
               onClick={() => setActiveTab("markt")}
-              badge={forSaleGames.length > 0 ? forSaleGames.length : undefined}
-              icon={<Tag size={13} />}
+              badge={(() => {
+                const friendCount = forSaleGames.filter((g) => g.user_id !== currentUserId).length;
+                return friendCount > 0 ? friendCount : undefined;
+              })()}
+              icon={<Tag size={18} />}
             >
               Markt
             </TabButton>
             <TabButton
               active={activeTab === "suche"}
               onClick={() => setActiveTab("suche")}
-              icon={<Search size={13} />}
+              icon={<Search size={18} />}
             >
               Suche
             </TabButton>
@@ -329,7 +332,7 @@ export function PlayersClient({
           />
         )}
         {activeTab === "markt" && (
-          <MarktTab forSaleGames={forSaleGames} />
+          <MarktTab forSaleGames={forSaleGames} currentUserId={currentUserId} />
         )}
         {activeTab === "suche" && (
           <SucheTab
@@ -376,19 +379,21 @@ function TabButton({
     <button
       onClick={onClick}
       className={cn(
-        "relative flex items-center justify-center gap-1.5 flex-1 py-2.5 text-sm font-medium transition-colors",
+        "relative flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-2 text-[11px] font-medium transition-colors",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
       )}
     >
-      {icon}
-      {children}
-      {badge !== undefined && (
-        <span className="min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
-          {badge > 9 ? "9+" : badge}
-        </span>
-      )}
+      <div className="relative flex items-center justify-center">
+        {icon}
+        {badge !== undefined && (
+          <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
+      </div>
+      <span className="leading-none truncate w-full text-center">{children}</span>
       <span className={cn(
-        "absolute bottom-0 left-3 right-3 h-0.5 rounded-full transition-all duration-200",
+        "absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-all duration-200",
         active ? "bg-amber-500 opacity-100" : "opacity-0"
       )} />
     </button>
@@ -432,7 +437,7 @@ function ChatsTab({
             className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
             aria-label="Schließen"
           >
-            <X size={13} />
+            <X size={18} />
           </button>
         </div>
       )}
@@ -441,7 +446,7 @@ function ChatsTab({
       {pushState === "subscribed" && (
         <div className="mx-4 mt-3 flex items-center justify-between gap-2 px-3.5 py-2 bg-green-50 border border-green-200 rounded-xl">
           <div className="flex items-center gap-2">
-            <Bell size={13} className="text-green-600" />
+            <Bell size={18} className="text-green-600" />
             <p className="text-xs text-green-700 font-medium">Benachrichtigungen aktiv</p>
           </div>
           <button
@@ -586,31 +591,63 @@ function FreundeTab({
 
 // ── Markt Tab ─────────────────────────────────────────────────────────────────
 
-function MarktTab({ forSaleGames }: { forSaleGames: ForSaleGame[] }) {
+function MarktTab({ forSaleGames, currentUserId }: {
+  forSaleGames: ForSaleGame[];
+  currentUserId: string;
+}) {
+  const ownGames    = forSaleGames.filter((g) => g.user_id === currentUserId);
+  const friendGames = forSaleGames.filter((g) => g.user_id !== currentUserId);
+
   if (forSaleGames.length === 0) {
     return (
       <EmptyState
         icon={<Tag size={26} className="text-amber-400" />}
         iconBg="bg-amber-50"
-        title="Noch nichts zu verkaufen"
-        subtitle="Wenn Freunde Spiele zum Verkauf anbieten, erscheinen sie hier."
+        title="Markt leer"
+        subtitle={`Markiere Spiele in deiner Bibliothek als „zum Verkauf", oder warte bis Freunde Angebote einstellen.`}
       />
     );
   }
 
   return (
-    <div className="px-4 pt-5 pb-10 flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/60">
-          {forSaleGames.length} {forSaleGames.length === 1 ? "Angebot" : "Angebote"} von Freunden
+    <div className="px-4 pt-5 pb-10 flex flex-col gap-5">
+      {/* Eigene Angebote */}
+      {ownGames.length > 0 && (
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-bold tracking-widest uppercase text-amber-700/80">
+              Deine Angebote · {ownGames.length}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {ownGames.map((item) => <ForSaleCard key={item.id} item={item} isOwn />)}
+          </div>
+        </section>
+      )}
+
+      {/* Freunde-Angebote */}
+      {friendGames.length > 0 && (
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/60">
+              Von Freunden · {friendGames.length}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {friendGames.map((item) => <ForSaleCard key={item.id} item={item} />)}
+          </div>
+          <p className="text-xs text-muted-foreground/50 text-center pt-1">
+            Schreib dem Anbieter eine Nachricht, um Interesse zu bekunden.
+          </p>
+        </section>
+      )}
+
+      {/* Hint when only own listings */}
+      {friendGames.length === 0 && ownGames.length > 0 && (
+        <p className="text-xs text-muted-foreground/50 text-center pt-1">
+          Noch keine Angebote von Freunden — sobald sie Spiele zum Verkauf einstellen, erscheinen sie hier.
         </p>
-      </div>
-      <div className="flex flex-col gap-2.5">
-        {forSaleGames.map((item) => <ForSaleCard key={item.id} item={item} />)}
-      </div>
-      <p className="text-xs text-muted-foreground/50 text-center pt-2">
-        Schreib dem Anbieter eine Nachricht, um Interesse zu bekunden.
-      </p>
+      )}
     </div>
   );
 }
@@ -890,7 +927,7 @@ function PendingRequestCard({ fp, onRespond }: {
         >
           {loading === "accept"
             ? <span className="w-3 h-3 border-2 border-white/60 border-t-white rounded-full animate-spin" />
-            : <UserCheck size={13} />}
+            : <UserCheck size={18} />}
           {loading === "accept" ? "…" : "Annehmen"}
         </button>
       </div>
@@ -937,35 +974,49 @@ function PendingSentCard({ fp, onCancel }: {
 
 // ── For Sale Card ─────────────────────────────────────────────────────────────
 
-function ForSaleCard({ item }: { item: ForSaleGame }) {
+function ForSaleCard({ item, isOwn = false }: { item: ForSaleGame; isOwn?: boolean }) {
   const ownerName = item.owner_display_name ?? item.owner_username;
   const priceLabel = item.sale_price != null
     ? `€\u202f${item.sale_price.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
     : "Preis auf Anfrage";
 
+  // Own listing → link to library detail; friend listing → link to friend profile
+  const href = isOwn && item.game?.id ? `/games/${item.game.id}` : `/players/${item.user_id}`;
+
   return (
     <Link
-      href={`/players/${item.user_id}`}
-      className="flex items-center gap-3 p-3 bg-card rounded-2xl border border-green-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all active:scale-[0.99]"
+      href={href}
+      className={cn(
+        "flex items-center gap-3 p-3 bg-card rounded-2xl shadow-sm hover:shadow-md transition-all active:scale-[0.99]",
+        isOwn ? "border border-amber-200 hover:border-amber-300" : "border border-green-200 hover:border-green-300"
+      )}
     >
-      <div className="relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-green-50">
+      <div className={cn("relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden", isOwn ? "bg-amber-50" : "bg-green-50")}>
         {item.game?.thumbnail_url ? (
           <Image src={item.game.thumbnail_url} alt={item.game.name} fill className="object-cover" sizes="56px" loading="lazy" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Tag size={20} className="text-green-400" />
+            <Tag size={20} className={isOwn ? "text-amber-400" : "text-green-400"} />
           </div>
         )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-foreground text-sm leading-tight truncate">{item.game?.name ?? "Unbekanntes Spiel"}</h3>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">von {ownerName}</p>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          {isOwn ? "Dein Angebot" : `von ${ownerName}`}
+        </p>
       </div>
       <div className="flex-shrink-0 flex flex-col items-end gap-1">
-        <span className="text-sm font-bold text-green-700 tabular-nums">{priceLabel}</span>
-        <span className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full font-medium">
-          <ShoppingBag size={9} />Anfragen
-        </span>
+        <span className={cn("text-sm font-bold tabular-nums", isOwn ? "text-amber-700" : "text-green-700")}>{priceLabel}</span>
+        {isOwn ? (
+          <span className="flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full font-medium">
+            <Tag size={9} />Bearbeiten
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded-full font-medium">
+            <ShoppingBag size={9} />Anfragen
+          </span>
+        )}
       </div>
     </Link>
   );

@@ -61,8 +61,12 @@ export function AdminClient() {
     setActing(null);
   }
 
-  const pending = users.filter((u) => u.approved === false);
-  const approved = users.filter((u) => u.approved !== false);
+  // Pending = approved is explicitly false OR null (never decided).
+  // approved===true → user is approved.
+  // This handles legacy users who slipped through the /auth/callback init when
+  // REQUIRE_APPROVAL was off, plus users who auto-confirmed (skip callback).
+  const pending  = users.filter((u) => u.approved !== true);
+  const approved = users.filter((u) => u.approved === true);
 
   return (
     <div className="flex flex-col min-h-dvh bg-[#FDFAF6] px-4 py-8 max-w-xl mx-auto gap-6">

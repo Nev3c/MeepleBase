@@ -40,6 +40,40 @@ async function fetchThumbnail(bggId: number): Promise<string | null> {
   }
 }
 
+// BGG's internal geekdo endpoint behaves differently than the XML API:
+// it's not blocked from Vercel IPs and returns autocomplete-style hits by name.
+// Used as fallback when Wikidata has no match (e.g. niche or new releases not yet
+// labelled in Wikidata).
+async function bggNameFallback(q: string): Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]> {
+  try {
+    const res = await fetch(
+      `https://boardgamegeek.com/api/geekdo?search=${encodeURIComponent(q)}&objecttype=boardgame&nosession=1&showcount=15`,
+      {
+        signal: AbortSignal.timeout(6000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/json",
+          "Referer": "https://boardgamegeek.com/",
+        },
+        next: { revalidate: 1800 },
+      }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = (data?.items ?? data?.results ?? []) as Record<string, unknown>[];
+    return items
+      .map((item) => ({
+        bgg_id: Number(item.objectid ?? item.id ?? 0),
+        name: String(item.name ?? ""),
+        thumbnail_url: item.thumbnailhref ? `https:${String(item.thumbnailhref)}` : null,
+      }))
+      .filter((r) => r.bgg_id > 0 && r.name.length > 0)
+      .slice(0, 15);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim();
   if (!q || q.length < 2) {
@@ -68,7 +102,17 @@ export async function GET(req: NextRequest) {
       .map((b) => ({ bgg_id: Number(b.bggId.value), name: b.itemLabel.value }))
       .filter((r) => r.bgg_id > 0);
 
-    // Fetch thumbnails in parallel
+    // Fallback: if Wikidata has nothing, ask BGG directly by name (geekdo endpoint
+    // works from Vercel IPs unlike the XML API). Catches games like "The Hunger"
+    // where Wikidata has no English label or no P2339 BGG-ID statement.
+    if (base.length === 0) {
+      const bggHits = await bggNameFallback(q);
+      if (bggHits.length > 0) {
+        return NextResponse.json({ results: bggHits });
+      }
+    }
+
+    // Fetch thumbnails in parallel for Wikidata hits
     const thumbnails = await Promise.all(base.map((r) => fetchThumbnail(r.bgg_id)));
 
     const results = base.map((r, i) => ({
@@ -78,6 +122,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ results });
   } catch {
-    return NextResponse.json({ results: [], error: "fetch_failed" });
+    // Last-resort fallback: try BGG by name if everything else explodes
+    const bggHits = await bggNameFallback(q);
+    return NextResponse.json({ results: bggHits });
   }
 }

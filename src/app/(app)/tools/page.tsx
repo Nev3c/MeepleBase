@@ -1616,7 +1616,7 @@ function GameTimer() {
 // ── Tools Page ────────────────────────────────────────────────────────────────
 
 export default function ToolsPage() {
-  const [tab, setTab] = useState<"score" | "dice" | "coin" | "sound" | "timer">("score");
+  const [tab, setTab] = useState<"sound" | "score" | "dice" | "coin" | "timer">("sound");
 
   function changeTab(id: typeof tab) {
     setTab(id);
@@ -1625,10 +1625,10 @@ export default function ToolsPage() {
   }
 
   const TAB_ITEMS = [
+    { id: "sound" as const, label: "Audio",  icon: <Headphones size={15} /> },
     { id: "score" as const, label: "Punkte", icon: <Trophy  size={15} /> },
     { id: "dice"  as const, label: "Würfel", icon: <Dices   size={15} /> },
     { id: "coin"  as const, label: "Münze",  icon: <Crown   size={15} /> },
-    { id: "sound" as const, label: "Audio",  icon: <Headphones size={15} /> },
     { id: "timer" as const, label: "Timer",  icon: <Clock   size={15} /> },
   ];
 
