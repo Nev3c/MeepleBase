@@ -698,7 +698,7 @@ function activatePlaylist(playlistId: string) {
     musicIframeRef.current.src = `https://www.youtube.com/embed/videoseries?list=${playlistId}&autoplay=1`;
     if (playlistId !== activePlaylistId) {
       setActivePlaylistId(playlistId);
-      void fetchTracks(playlistId);
+      /* tracks for YT playlists not loaded */
     }
   }
 
