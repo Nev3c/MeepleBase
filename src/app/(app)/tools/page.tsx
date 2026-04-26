@@ -11,7 +11,7 @@ import {
   Sword, Shield, Swords, Gamepad2,
   Dice1, Dice2, Dice3, Dice4, Dice5, Dice6,
   Dog, Cat, Ship, Plane, Rocket,
-  Timer, Search, Headphones, ListMusic,
+  Timer, Search, ListMusic,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
