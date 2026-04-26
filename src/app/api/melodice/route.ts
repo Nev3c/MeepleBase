@@ -131,7 +131,7 @@ function slugVariants(q: string): string[] {
   // Doppel-Bindestrich → einfach
   variants.add(base.replace(/--+/g, "-"));
 
-  return [...variants].filter(Boolean);
+  return Array.from(variants).filter(Boolean);
 }
 
 // ── Metadaten aus HTML lesen ──────────────────────────────────────────────────
