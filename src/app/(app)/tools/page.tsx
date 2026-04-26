@@ -691,19 +691,7 @@ function YouTubeMusicSearch() {
     resetPlayer();
   }
 
-  async function fetchTracks(playlistId: string) {
-    setTracksLoading(true);
-    setTracks([]);
-    try {
-      const res = await fetch(`/api/youtube-music?playlistId=${encodeURIComponent(playlistId)}`);
-      const data = await res.json() as { tracks?: YtTrack[]; error?: string };
-      if (res.ok) setTracks(data.tracks ?? []);
-    } catch { /* ignore */ } finally {
-      setTracksLoading(false);
-    }
-  }
-
-  function activatePlaylist(playlistId: string) {
+function activatePlaylist(playlistId: string) {
     setPlayingId(playlistId);
     setActiveTrackId(null);
     if (!musicIframeRef.current) return;
