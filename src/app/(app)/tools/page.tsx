@@ -1056,7 +1056,7 @@ function YouTubeMusicSearch() {
 type AudioTab = "sounds" | "musik";
 
 function SoundBoard() {
-  const [audioTab, setAudioTab] = useState<AudioTab>("sounds");
+  const [audioTab, setAudioTab] = useState<AudioTab>("musik");
   const [buttons, setButtons] = useState<SoundButton[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -1171,8 +1171,8 @@ function SoundBoard() {
       {/* Sub-Tab-Navigation: Sounds | Musik */}
       <div className="flex gap-1 bg-muted rounded-xl p-1">
         {([
-          { id: "sounds" as AudioTab, label: "Sounds",  icon: <Volume2 size={14} /> },
           { id: "musik"  as AudioTab, label: "Musik",   icon: <Music2  size={14} /> },
+          { id: "sounds" as AudioTab, label: "Sounds",  icon: <Volume2 size={14} /> },
         ]).map(({ id, label, icon }) => (
           <button
             key={id}
