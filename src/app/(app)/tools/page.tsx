@@ -668,7 +668,6 @@ function YouTubeMusicSearch() {
 
   // Playlist track state
   const [tracks, setTracks] = useState<YtTrack[]>([]);
-  const [tracksLoading, setTracksLoading] = useState(false);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
 
