@@ -649,9 +649,10 @@ function NoApiKeyHint() {
 // ── Melodice response type ────────────────────────────────────────────────────
 interface MelodiceResult {
   found: boolean;
-  playlistId?: string;
+  tracks?: YtTrack[];
+  videoIds?: string[];
+  embedSrc?: string;
   gameTitle?: string;
-  trackCount?: number;
   sourceUrl?: string;
 }
 
@@ -728,19 +729,17 @@ function YouTubeMusicSearch() {
       const melodiceRes = await fetch(`/api/melodice?q=${encodeURIComponent(q)}`);
       const melodice = await melodiceRes.json() as MelodiceResult;
 
-      if (melodice.found && melodice.playlistId) {
-        // ✅ Melodice hat das Spiel → sofort abspielen
+      if (melodice.found && melodice.embedSrc && melodice.tracks && melodice.tracks.length > 0) {
+        // ✅ Melodice hat das Spiel — kuratierte Track-Liste verwenden
         setMelodiceResult(melodice);
+        setTracks(melodice.tracks);
 
         if (mode === "playlisten") {
-          // Gesamte Playlist abspielen
-          activatePlaylist(melodice.playlistId);
-        } else {
-          // Songs-Modus: Einzelne Tracks aus der Melodice-Playlist laden
-          setActivePlaylistId(melodice.playlistId);
-          void fetchTracks(melodice.playlistId);
-          // Kein Auto-Play — Nutzer wählt Track
+          // Alle Tracks sequenziell abspielen
+          setPlayingId("melodice");
+          if (musicIframeRef.current) musicIframeRef.current.src = melodice.embedSrc;
         }
+        // Songs-Modus: kein Auto-Play, Nutzer wählt Track aus der Liste
         return;
       }
 
@@ -783,24 +782,33 @@ function YouTubeMusicSearch() {
     }
   }
 
-  function stopYtItem() {
+  function stopPlaying() {
     setPlayingId(null);
     setActiveTrackId(null);
     if (musicIframeRef.current) musicIframeRef.current.src = "";
   }
 
-  function playTrack(track: YtTrack, playlistId: string) {
+  function playTrack(track: YtTrack) {
     setActiveTrackId(track.videoId);
-    setPlayingId(playlistId); // Playlist als "spielend" markieren
+    setPlayingId(track.videoId);
     if (!musicIframeRef.current) return;
-    musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?list=${playlistId}&autoplay=1`;
+    // Wenn Melodice-Tracks: spiele mit den restlichen als playlist (sequenziell)
+    const melodiceTracks = melodiceResult?.tracks ?? [];
+    if (melodiceTracks.length > 0) {
+      const allIds = melodiceTracks.map((t) => t.videoId);
+      musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?playlist=${allIds.join(",")}&autoplay=1`;
+    } else if (activePlaylistId) {
+      musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?list=${activePlaylistId}&autoplay=1`;
+    } else {
+      musicIframeRef.current.src = `https://www.youtube.com/embed/${track.videoId}?autoplay=1`;
+    }
   }
 
-  // Melodice gefunden + Songs-Modus: Track wählen ohne dass Playlist läuft
-  const isMelodiceMode = melodiceResult?.found === true && melodiceResult.playlistId;
+  // Melodice gefunden + Songs-Modus: Track wählen
+  const isMelodiceMode = melodiceResult?.found === true && (melodiceResult.tracks?.length ?? 0) > 0;
   const isSongsMode = mode === "songs";
-  const showTrackPicker = isMelodiceMode && isSongsMode && activePlaylistId;
-  const showTrackList = activePlaylistId && playingId && mode === "playlisten";
+  const showTrackPicker = isMelodiceMode && isSongsMode;
+  const showTrackList = (tracks.length > 0) && playingId && mode === "playlisten";
 
   return (
     <div className="flex flex-col gap-3">
@@ -861,7 +869,7 @@ function YouTubeMusicSearch() {
       )}
 
       {/* ── Melodice-Ergebnis: Playlisten-Modus ──────────────────────────────── */}
-      {isMelodiceMode && mode === "playlisten" && (
+      {isMelodiceMode && mode === "playlisten" && melodiceResult && (
         <div className={cn(
           "flex items-center gap-2.5 p-2 rounded-xl border",
           playingId ? "bg-amber-50 border-amber-200" : "border-border hover:bg-muted/50"
@@ -875,17 +883,20 @@ function YouTubeMusicSearch() {
             </p>
             <p className="text-[10px] text-amber-600 font-medium leading-tight flex items-center gap-1">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-              Melodice-kuratiert
-              {melodiceResult.trackCount ? ` · ${melodiceResult.trackCount} Titel` : ""}
+              Melodice-kuratiert · {melodiceResult.tracks?.length ?? 0} Titel
             </p>
           </div>
           {playingId ? (
-            <button onClick={stopYtItem} className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] text-amber-700 hover:bg-amber-100 transition-colors font-medium">
+            <button onClick={stopPlaying} className="flex-shrink-0 px-2 py-1 rounded-lg text-[10px] text-amber-700 hover:bg-amber-100 transition-colors font-medium">
               Stop
             </button>
           ) : (
             <button
-              onClick={() => activatePlaylist(melodiceResult.playlistId!)}
+              onClick={() => {
+                if (!melodiceResult.embedSrc || !musicIframeRef.current) return;
+                setPlayingId("melodice");
+                musicIframeRef.current.src = melodiceResult.embedSrc;
+              }}
               className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0 hover:bg-amber-600 transition-colors"
             >
               <svg viewBox="0 0 12 12" className="w-3 h-3 text-white fill-current ml-0.5">
@@ -901,7 +912,7 @@ function YouTubeMusicSearch() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
           <p className="text-[11px] text-amber-700 font-medium flex-1">
-            Melodice-Playlist gefunden – wähle einen Track:
+            {melodiceResult?.gameTitle ?? query} – wähle einen Titel:
           </p>
         </div>
       )}
@@ -920,7 +931,7 @@ function YouTubeMusicSearch() {
               return (
                 <button
                   key={r.id}
-                  onClick={() => (isPlaying ? stopYtItem() : playYtItem(r))}
+                  onClick={() => (isPlaying ? stopPlaying() : playYtItem(r))}
                   className={cn(
                     "flex items-center gap-2.5 p-2 rounded-xl text-left transition-all border",
                     isPlaying
@@ -981,72 +992,56 @@ function YouTubeMusicSearch() {
         title="Spielmusik Player"
       />
 
-      {/* ── Trackliste (Playlisten-Modus: läuft + Melodice oder YT-Playlist) ── */}
-      {(showTrackList || showTrackPicker) && (
+      {/* ── Trackliste (Playlisten läuft ODER Songs-Picker) ─────────────────── */}
+      {(showTrackList || showTrackPicker) && tracks.length > 0 && (
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
           <div className="px-3 py-2 bg-muted/40 border-b border-border flex items-center gap-2">
             <ListMusic size={12} className="text-muted-foreground" />
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
               {showTrackPicker ? "Titel auswählen" : "Trackliste"}
             </span>
-            {tracksLoading && <span className="ml-auto"><MusicTabSpinner /></span>}
-            {!tracksLoading && tracks.length > 0 && (
-              <span className="ml-auto text-[10px] text-muted-foreground">{tracks.length} Titel</span>
-            )}
+            <span className="ml-auto text-[10px] text-muted-foreground">{tracks.length} Titel</span>
           </div>
-
-          {tracksLoading && (
-            <div className="py-4 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground animate-pulse">Lade Trackliste…</p>
-            </div>
-          )}
-
-          {!tracksLoading && tracks.length === 0 && (
-            <p className="text-xs text-muted-foreground px-3 py-3">Keine Tracks gefunden.</p>
-          )}
-
-          {!tracksLoading && tracks.length > 0 && (
-            <div className="max-h-64 overflow-y-auto divide-y divide-border">
-              {tracks.map((track) => {
-                const isActive = activeTrackId === track.videoId;
-                return (
-                  <button
-                    key={track.videoId}
-                    onClick={() => playTrack(track, activePlaylistId!)}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
-                      isActive ? "bg-amber-50" : "hover:bg-muted/40"
-                    )}
-                  >
-                    <span className={cn(
-                      "text-[10px] font-bold w-5 text-right flex-shrink-0 tabular-nums",
-                      isActive ? "text-amber-500" : "text-muted-foreground/60"
-                    )}>
-                      {track.position + 1}
+          <div className="max-h-64 overflow-y-auto divide-y divide-border">
+            {tracks.map((track) => {
+              const isActive = activeTrackId === track.videoId;
+              return (
+                <button
+                  key={track.videoId}
+                  onClick={() => playTrack(track)}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                    isActive ? "bg-amber-50" : "hover:bg-muted/40"
+                  )}
+                >
+                  <span className={cn(
+                    "text-[10px] font-bold w-5 text-right flex-shrink-0 tabular-nums",
+                    isActive ? "text-amber-500" : "text-muted-foreground/60"
+                  )}>
+                    {track.position + 1}
+                  </span>
+                  {isActive ? (
+                    <span className="flex gap-0.5 items-end h-3 flex-shrink-0 w-4">
+                      {[0, 100, 200].map((d) => (
+                        <span key={d} className="w-1 bg-amber-500 rounded-full animate-bounce"
+                          style={{ height: "100%", animationDelay: `${d}ms` }} />
+                      ))}
                     </span>
-                    {isActive ? (
-                      <span className="flex gap-0.5 items-end h-3 flex-shrink-0 w-4">
-                        {[0, 100, 200].map((d) => (
-                          <span key={d} className="w-1 bg-amber-500 rounded-full animate-bounce"
-                            style={{ height: "100%", animationDelay: `${d}ms` }} />
-                        ))}
-                      </span>
-                    ) : (
-                      <svg viewBox="0 0 12 12" className="w-3 h-3 text-muted-foreground/40 fill-current flex-shrink-0 ml-0.5">
-                        <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
-                      </svg>
-                    )}
-                    <span className={cn(
-                      "flex-1 text-xs leading-snug line-clamp-1",
-                      isActive ? "font-semibold text-amber-700" : "font-medium text-foreground"
-                    )}>
-                      {track.title}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  ) : (
+                    <svg viewBox="0 0 12 12" className="w-3 h-3 text-muted-foreground/40 fill-current flex-shrink-0 ml-0.5">
+                      <path d="M2 1.5l9 4.5-9 4.5V1.5z" />
+                    </svg>
+                  )}
+                  <span className={cn(
+                    "flex-1 text-xs leading-snug line-clamp-1",
+                    isActive ? "font-semibold text-amber-700" : "font-medium text-foreground"
+                  )}>
+                    {track.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
