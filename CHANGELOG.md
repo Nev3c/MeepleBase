@@ -21,6 +21,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spieler-Suche (A-Z und Entfernung): Nur Spieler mit hinterlegter PLZ werden angezeigt (bereits in players/page.tsx + /api/players/search)
 
 ### Fixed
+- Spiel hinzufügen: Hero-Bild und Metadaten jetzt vollständig beim ersten Hinzufügen — `games/add` extrahiert jetzt `complexity` + `best_players` aus dem geekitems-Response; `image_url` fällt auf `imageurl` zurück wenn `topimageurl` fehlt; `thumbnail_url` des Suchergebnisses wird als letzter Fallback übergeben falls der geekitems-Fetch komplett scheitert; manueller BGG-Aktualisieren-Klick danach nicht mehr nötig
+- CSV-Import: `image_url` wurde fälschlicherweise auf das kleine Thumbnail gesetzt (`imageurl` statt `topimageurl`); jetzt `topimageurl ?? imageurl` — Hero-Bild nach CSV-Import korrekt
 - Bibliothek: Nach Spiel-Hinzufügen wurde nur das neue Spiel angezeigt — `AddGameSheet` ruft jetzt `onSuccess()` auf, das `filter.search` zurücksetzt bevor `router.refresh()` läuft; Suchfilter war aus dem Library-Suchfeld erhalten geblieben und hat nach dem Refresh alle anderen Spiele herausgefiltert
 - Tastatur-Sprünge auf Android: `interactiveWidget: "resizes-visual-viewport"` im Viewport-Meta ergänzt — Android Chrome 108+ verkleinert jetzt das Visual-Viewport wenn die Tastatur aufgeht (analog zu iOS 15+); `position:fixed; bottom:0` Elemente folgen dem Visual-Viewport und werden nicht mehr von der Tastatur überdeckt
 - Spieler-Seite: „Partie aufzeichnen" verlinkte auf `/plays/new` (404) — jetzt `/plays?player=NAME`

@@ -174,7 +174,15 @@ export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab
       const res = await fetch("/api/games/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bgg_id: selected.bgg_id, status, name: selected.name }),
+        body: JSON.stringify({
+          bgg_id: selected.bgg_id,
+          status,
+          name: selected.name,
+          // Pass the search-result thumbnail as a client-side fallback.
+          // games/add uses this if the geekitems fetch on the server fails,
+          // so the game always has at least a cover image immediately after add.
+          thumbnail_url: selected.thumbnail_url ?? null,
+        }),
       });
       if (res.status === 409) { setAddError("Bereits in deiner Bibliothek."); setAdding(false); return; }
       if (!res.ok) { setAddError("Hinzufügen fehlgeschlagen. Bitte nochmal versuchen."); setAdding(false); return; }

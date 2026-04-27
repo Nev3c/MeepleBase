@@ -71,7 +71,9 @@ async function enrichGame(bggId: number): Promise<Record<string, unknown> | null
       max_playtime: item.maxplaytime ? Number(item.maxplaytime) : null,
       complexity: complexity && !isNaN(complexity) ? complexity : null,
       thumbnail_url: item.imageurl ?? null,
-      image_url: item.imageurl ?? null,
+      // topimageurl = large official cover art; fall back to imageurl so image_url is
+      // never null when any image is available (hero on game detail uses image_url first).
+      image_url: (item.topimageurl as string | null) ?? (item.imageurl as string | null) ?? null,
       description: item.short_description ?? null,
       categories: names(links.boardgamecategory).length ? names(links.boardgamecategory) : null,
       mechanics: names(links.boardgamemechanic).length ? names(links.boardgamemechanic) : null,
