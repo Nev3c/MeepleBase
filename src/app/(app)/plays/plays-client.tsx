@@ -1397,7 +1397,7 @@ function PastPlaySheet({
           {sessionPrefill && (
             <p className="text-[11px] text-muted-foreground text-center leading-snug">
               Speichern erstellt nur die Partien — der Spielabend bleibt offen.
-              Zum Beenden nutze „Spielabend abschließen" auf der Karte.
+              Zum Beenden nutze &bdquo;Spielabend abschließen&ldquo; auf der Karte.
             </p>
           )}
           <button onClick={handleSave} disabled={saving || (!isEdit && selectedGames.length === 0) || (isEdit && !editGameId && !editGlobalSelected)}
