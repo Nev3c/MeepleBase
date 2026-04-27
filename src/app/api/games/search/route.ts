@@ -89,6 +89,47 @@ async function bggNameFallback(q: string): Promise<{ bgg_id: number; name: strin
   }
 }
 
+// BGG geeksearch.php HTML scrape — the classic PHP search page is not a REST
+// API and is unlikely to be blocked from Vercel IPs (unlike /xmlapi2/).
+// Extracts game IDs and names from the HTML link structure.
+async function bggSearchScrape(q: string): Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]> {
+  try {
+    const res = await fetch(
+      `https://boardgamegeek.com/geeksearch.php?action=search&objecttype=boardgame&q=${encodeURIComponent(q)}`,
+      {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Referer": "https://boardgamegeek.com/",
+        },
+        next: { revalidate: 3600 },
+      }
+    );
+    if (!res.ok) return [];
+    const html = await res.text();
+    if (!html.includes("/boardgame/")) return [];
+
+    // Extract: <a href="/boardgame/324844/the-hunger">The Hunger</a>
+    const results: { bgg_id: number; name: string; thumbnail_url: null }[] = [];
+    const linkRe = /href="\/boardgame\/(\d+)\/[^"]*"[^>]*>([^<]{1,80})<\/a>/g;
+    const seenIds = new Set<number>();
+    let m: RegExpExecArray | null;
+    while ((m = linkRe.exec(html)) !== null) {
+      const bgg_id = Number(m[1]);
+      const name = m[2].trim().replace(/&amp;/g, "&").replace(/&#039;/g, "'").replace(/&quot;/g, '"');
+      if (bgg_id > 0 && name.length > 1 && !seenIds.has(bgg_id)) {
+        seenIds.add(bgg_id);
+        results.push({ bgg_id, name, thumbnail_url: null });
+      }
+    }
+    return results.slice(0, 15);
+  } catch {
+    return [];
+  }
+}
+
 // BGG XML API v2 full-text search — returns a proper ranked search index
 // (not just autocomplete prefix matching). This finds games that geekdo misses,
 // e.g. "The Hunger" which doesn't appear in the nosession geekdo result.
@@ -185,13 +226,13 @@ export async function GET(req: NextRequest) {
   // autocomplete can surface games whose titles begin with an article.
   const strippedQ = stripLeadingArticle(q);
 
-  // Run everything in parallel: Wikidata + BGG geekdo (+ stripped variant) + BGG XML API
+  // Run everything in parallel: Wikidata + BGG geekdo (+ stripped) + BGG XML + BGG HTML scrape
   const bggGeekdoSearches: Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>[] = [
     bggNameFallback(q),
   ];
   if (strippedQ) bggGeekdoSearches.push(bggNameFallback(strippedQ));
 
-  const [wikidataSettled, xmlSettled, ...geekdoSettledAll] = await Promise.allSettled([
+  const [wikidataSettled, xmlSettled, scrapeSettled, ...geekdoSettledAll] = await Promise.allSettled([
     fetch(wikidataUrl, {
       signal: AbortSignal.timeout(8000),
       headers: {
@@ -201,6 +242,7 @@ export async function GET(req: NextRequest) {
       next: { revalidate: 3600 },
     }),
     bggXmlSearch(q),
+    bggSearchScrape(q),
     ...bggGeekdoSearches,
   ]);
 
@@ -217,16 +259,18 @@ export async function GET(req: NextRequest) {
     } catch { /* parse error → treat as empty */ }
   }
 
-  // BGG XML results (may be empty if 401/blocked from this IP)
+  // BGG XML results (may be empty if 401/blocked)
   const xmlHits = xmlSettled.status === "fulfilled" ? xmlSettled.value : [];
+  // BGG HTML scrape results (geeksearch.php — full-text, usually not IP-blocked)
+  const scrapeHits = scrapeSettled.status === "fulfilled" ? scrapeSettled.value : [];
 
   // Merge geekdo results from both queries, deduplicate by bgg_id
   const rawGeekdoHits = geekdoSettledAll.flatMap((s) =>
     s.status === "fulfilled" ? s.value : []
   );
 
-  // Combine all BGG sources: XML first (better ranking), then geekdo
-  const allBggRaw = [...xmlHits, ...rawGeekdoHits];
+  // Combine all BGG sources: XML first, then scrape (has proper names), then geekdo
+  const allBggRaw = [...xmlHits, ...scrapeHits, ...rawGeekdoHits];
   const seenIds = new Set<number>();
   const bggHits = allBggRaw.filter((g) => {
     if (seenIds.has(g.bgg_id)) return false;
