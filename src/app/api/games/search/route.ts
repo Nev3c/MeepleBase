@@ -6,16 +6,16 @@ const WIKIDATA_SPARQL = "https://query.wikidata.org/sparql";
 function buildQuery(q: string): string {
   const escaped = q.toLowerCase().replace(/"/g, '\\"');
   // No P31 class constraint — any Wikidata item with a BGG ID property (P2339)
-  // qualifies. This catches newer games not yet classified as Q131436 (board game)
-  // in Wikidata while still being BGG-relevant (P2339 is exclusively a BGG property).
+  // qualifies. Search both English AND German labels so localized titles like
+  // "Dune: Geheimnisse der Häuser" are found alongside English counterparts.
   return `
 SELECT DISTINCT ?itemLabel ?bggId WHERE {
   ?item wdt:P2339 ?bggId .
   ?item rdfs:label ?itemLabel .
   FILTER(CONTAINS(LCASE(?itemLabel), "${escaped}"))
-  FILTER(LANG(?itemLabel) = "en")
+  FILTER(LANG(?itemLabel) IN ("en", "de"))
 }
-LIMIT 15
+LIMIT 20
 `.trim();
 }
 
@@ -35,6 +35,7 @@ async function fetchThumbnail(bggId: number): Promise<string | null> {
     );
     if (!res.ok) return null;
     const data = await res.json();
+    // IMPORTANT: always use item.imageurl — NEVER item.topimageurl (community upload, privacy risk).
     return data?.item?.imageurl ?? null;
   } catch {
     return null;
@@ -92,6 +93,7 @@ async function bggNameFallback(q: string): Promise<{ bgg_id: number; name: strin
 // BGG geeksearch.php HTML scrape — the classic PHP search page is not a REST
 // API and is unlikely to be blocked from Vercel IPs (unlike /xmlapi2/).
 // Extracts game IDs and names from the HTML link structure.
+// Limit raised to 25 to catch lower-ranked localised titles.
 async function bggSearchScrape(q: string): Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]> {
   try {
     const res = await fetch(
@@ -124,7 +126,7 @@ async function bggSearchScrape(q: string): Promise<{ bgg_id: number; name: strin
         results.push({ bgg_id, name, thumbnail_url: null });
       }
     }
-    return results.slice(0, 15);
+    return results.slice(0, 25); // raised from 15 → 25 to catch less-popular localised titles
   } catch {
     return [];
   }
@@ -174,130 +176,173 @@ async function bggXmlSearch(q: string): Promise<{ bgg_id: number; name: string; 
   }
 }
 
+type SearchResult = { bgg_id: number; name: string; thumbnail_url: string | null; year_published?: number | null };
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim();
   if (!q || q.length < 2) {
     return NextResponse.json({ results: [] });
   }
 
-  // ── Step 0: Search local games table first (fast, no external calls) ─────────
-  // Games table has public read RLS — admin client not needed but used for
-  // consistency and to avoid needing a per-request auth cookie here.
-  try {
-    const admin = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-    const { data: localGames } = await admin
-      .from("games")
-      .select("bgg_id, name, thumbnail_url, year")
-      .ilike("name", `%${q}%`)
-      .not("bgg_id", "is", null)
-      .order("name", { ascending: true })
-      .limit(15);
-
-    if (localGames && localGames.length >= 5) {
-      // Enough local results — return immediately, no external API needed
-      return NextResponse.json({
-        results: localGames.map((g) => ({
-          bgg_id: g.bgg_id as number,
-          name: g.name as string,
-          thumbnail_url: (g.thumbnail_url as string | null) ?? null,
-          year_published: (g.year as number | null) ?? null,
-        })),
-        source: "local",
-      });
-    }
-  } catch { /* local DB unavailable → fall through to external search */ }
-
-  // Run Wikidata and BGG geekdo IN PARALLEL.
-  //
-  // Previous approach was sequential: Wikidata → BGG only if Wikidata returned 0
-  // results OR threw. But if Wikidata returned !res.ok, we returned early and
-  // never reached BGG — meaning games like "The Hunger" (not yet in Wikidata
-  // with a P2339 statement) were lost.
-  //
-  // Now both run simultaneously. We use Wikidata results if present (richer data
-  // with BGG IDs for lookup); otherwise fall back to BGG geekdo results which
-  // already include thumbnails (thumbnailhref field).
-  const wikidataUrl = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildQuery(q))}`;
-
   // Also search without leading article ("the hunger" → "hunger") so BGG
   // autocomplete can surface games whose titles begin with an article.
   const strippedQ = stripLeadingArticle(q);
 
-  // Run everything in parallel: Wikidata + BGG geekdo (+ stripped) + BGG XML + BGG HTML scrape
+  const wikidataUrl = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildQuery(q))}`;
+
   const bggGeekdoSearches: Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>[] = [
     bggNameFallback(q),
   ];
   if (strippedQ) bggGeekdoSearches.push(bggNameFallback(strippedQ));
 
-  const [wikidataSettled, xmlSettled, scrapeSettled, ...geekdoSettledAll] = await Promise.allSettled([
-    fetch(wikidataUrl, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        "Accept": "application/sparql-results+json",
-        "User-Agent": "MeepleBase/1.0 (https://meeple-base.vercel.app)",
-      },
-      next: { revalidate: 3600 },
-    }),
-    bggXmlSearch(q),
-    bggSearchScrape(q),
-    ...bggGeekdoSearches,
-  ]);
+  // ── Run local DB AND all external searches in parallel ─────────────────────
+  //
+  // IMPORTANT: No early-return on local results any more.
+  //
+  // Previous approach: return immediately when local DB returned ≥5 results.
+  // Problem: when a user has many popular games with the same prefix already in
+  // the local DB (e.g. 7 "Dune: …" games), external sources are never queried
+  // and localized/less-popular titles like "Dune: Geheimnisse der Häuser" are
+  // invisible — even though BGG would find them.
+  //
+  // New approach: all sources start at the same time. Local results (which
+  // already have thumbnails) are shown first; external fills the remaining slots
+  // up to TOTAL_LIMIT. Total latency = max(local_time, external_time) ≈
+  // external_time either way, so there is no meaningful performance regression.
+  const [localSettled, wikidataSettled, xmlSettled, scrapeSettled, ...geekdoSettledAll] =
+    await Promise.allSettled([
+      // ① Local games table (fast Supabase query, results have thumbnails)
+      (async (): Promise<SearchResult[]> => {
+        try {
+          const admin = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+          const { data } = await admin
+            .from("games")
+            .select("bgg_id, name, thumbnail_url, year")
+            .ilike("name", `%${q}%`)
+            .not("bgg_id", "is", null)
+            .order("name", { ascending: true })
+            .limit(10);
+          return (data ?? []).map((g) => ({
+            bgg_id: g.bgg_id as number,
+            name: g.name as string,
+            thumbnail_url: (g.thumbnail_url as string | null) ?? null,
+            year_published: (g.year as number | null) ?? null,
+          }));
+        } catch {
+          return [];
+        }
+      })(),
+      // ② Wikidata SPARQL (EN + DE labels)
+      fetch(wikidataUrl, {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "Accept": "application/sparql-results+json",
+          "User-Agent": "MeepleBase/1.0 (https://meeple-base.vercel.app)",
+        },
+        next: { revalidate: 3600 },
+      }),
+      // ③ BGG XML search
+      bggXmlSearch(q),
+      // ④ BGG HTML scrape (geeksearch.php)
+      bggSearchScrape(q),
+      // ⑤ BGG geekdo autocomplete (+ stripped variant)
+      ...bggGeekdoSearches,
+    ]);
 
-  // Parse Wikidata result
+  // ── Local results (shown first — already have thumbnails) ─────────────────
+  const localHits: SearchResult[] = localSettled.status === "fulfilled" ? localSettled.value : [];
+  const seenIds = new Set<number>(localHits.map((g) => g.bgg_id));
+  const TOTAL_LIMIT = 15;
+  const slots = Math.max(0, TOTAL_LIMIT - localHits.length);
+
+  if (slots === 0) {
+    // Local already fills all slots — return immediately (fast path preserved
+    // when user has ≥15 matching games in the local DB).
+    return NextResponse.json({ results: localHits.slice(0, TOTAL_LIMIT), source: "local" });
+  }
+
+  // ── Parse Wikidata results ─────────────────────────────────────────────────
+  // Deduplicate by bgg_id and prefer English label over German.
+  // SPARQL JSON: language-tagged literals carry "xml:lang" on the binding object.
   let wikidataBase: { bgg_id: number; name: string }[] = [];
   if (wikidataSettled.status === "fulfilled" && wikidataSettled.value.ok) {
     try {
       const data = await wikidataSettled.value.json();
-      const bindings: Array<{ itemLabel: { value: string }; bggId: { value: string } }> =
-        data.results?.bindings ?? [];
-      wikidataBase = bindings
-        .map((b) => ({ bgg_id: Number(b.bggId.value), name: b.itemLabel.value }))
-        .filter((r) => r.bgg_id > 0);
+      type Binding = {
+        itemLabel: { value: string; "xml:lang"?: string };
+        bggId: { value: string };
+      };
+      const bindings: Binding[] = data.results?.bindings ?? [];
+
+      // Prefer English label; accept German as fallback
+      const byId = new Map<number, { name: string; isEn: boolean }>();
+      for (const b of bindings) {
+        const bggId = Number(b.bggId.value);
+        if (!bggId) continue;
+        const isEn = (b.itemLabel["xml:lang"] ?? "") === "en";
+        const existing = byId.get(bggId);
+        if (!existing || (!existing.isEn && isEn)) {
+          byId.set(bggId, { name: b.itemLabel.value, isEn });
+        }
+      }
+      wikidataBase = Array.from(byId.entries())
+        .map(([bggId, { name }]) => ({ bgg_id: bggId, name }))
+        .filter((r) => !seenIds.has(r.bgg_id));
     } catch { /* parse error → treat as empty */ }
   }
 
-  // BGG XML results (may be empty if 401/blocked)
-  const xmlHits = xmlSettled.status === "fulfilled" ? xmlSettled.value : [];
-  // BGG HTML scrape results (geeksearch.php — full-text, usually not IP-blocked)
-  const scrapeHits = scrapeSettled.status === "fulfilled" ? scrapeSettled.value : [];
+  // ── Parse BGG results ──────────────────────────────────────────────────────
+  const xmlHits   = (xmlSettled.status    === "fulfilled" ? xmlSettled.value    : []).filter((g) => !seenIds.has(g.bgg_id));
+  const scrapeHits = (scrapeSettled.status === "fulfilled" ? scrapeSettled.value : []).filter((g) => !seenIds.has(g.bgg_id));
+  const rawGeekdoHits = geekdoSettledAll
+    .flatMap((s) => (s.status === "fulfilled" ? s.value : []))
+    .filter((g) => !seenIds.has(g.bgg_id));
 
-  // Merge geekdo results from both queries, deduplicate by bgg_id
-  const rawGeekdoHits = geekdoSettledAll.flatMap((s) =>
-    s.status === "fulfilled" ? s.value : []
-  );
+  // Merge all BGG sources (XML first → scrape → geekdo), dedup
+  const bggMergedSeen = new Set<number>(seenIds);
+  const mergedBgg: { bgg_id: number; name: string; thumbnail_url: string | null }[] = [];
+  for (const g of [...xmlHits, ...scrapeHits, ...rawGeekdoHits]) {
+    if (!bggMergedSeen.has(g.bgg_id)) {
+      bggMergedSeen.add(g.bgg_id);
+      mergedBgg.push(g);
+    }
+  }
 
-  // Combine all BGG sources: XML first, then scrape (has proper names), then geekdo
-  const allBggRaw = [...xmlHits, ...scrapeHits, ...rawGeekdoHits];
-  const seenIds = new Set<number>();
-  const bggHits = allBggRaw.filter((g) => {
-    if (seenIds.has(g.bgg_id)) return false;
-    seenIds.add(g.bgg_id);
-    return true;
-  }).slice(0, 15);
+  // ── Build final result: local first, external fills remaining slots ─────────
+  // Wikidata preferred (stable BGG IDs, curated data); BGG direct as fallback.
 
-  // Prefer Wikidata (has stable BGG IDs), enrich with thumbnails
   if (wikidataBase.length > 0) {
-    const thumbnails = await Promise.all(wikidataBase.map((r) => fetchThumbnail(r.bgg_id)));
+    const wikiSlice = wikidataBase.slice(0, slots);
+    const thumbnails = await Promise.all(wikiSlice.map((r) => fetchThumbnail(r.bgg_id)));
     return NextResponse.json({
-      results: wikidataBase.map((r, i) => ({ ...r, thumbnail_url: thumbnails[i] ?? null })),
+      results: [
+        ...localHits,
+        ...wikiSlice.map((r, i) => ({ ...r, thumbnail_url: thumbnails[i] ?? null })),
+      ].slice(0, TOTAL_LIMIT),
     });
   }
 
-  // XML results have no thumbnails — fetch them; geekdo results already have thumbnails
-  if (bggHits.length > 0) {
+  if (mergedBgg.length > 0) {
+    const bggSlice = mergedBgg.slice(0, slots);
     // Fetch thumbnails only for results that don't already have one (geekdo provides them)
     const enriched = await Promise.all(
-      bggHits.map(async (r) => {
+      bggSlice.map(async (r) => {
         if (r.thumbnail_url) return r;
         const thumb = await fetchThumbnail(r.bgg_id);
         return { ...r, thumbnail_url: thumb };
       })
     );
-    return NextResponse.json({ results: enriched });
+    return NextResponse.json({
+      results: [
+        ...localHits,
+        ...enriched,
+      ].slice(0, TOTAL_LIMIT),
+    });
   }
 
-  return NextResponse.json({ results: [] });
+  // Only local results available
+  return NextResponse.json({ results: localHits.slice(0, TOTAL_LIMIT) });
 }
