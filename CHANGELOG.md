@@ -23,7 +23,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - Spieler-Seite: „Partie aufzeichnen" verlinkte auf `/plays/new` (404) — jetzt `/plays?player=NAME`
 - Spieler-Seite: Radius-Chips flickerten während der Suche (Farbe sprang beim Laden) — vereinfachte Bedingung, Chip ist immer amber wenn ausgewählt
-- Bibliothek: Tastatur-Sprünge beim Öffnen des Hinzufügen-Sheets behoben — `transform: translateY` statt `bottom`-Animation, 80px-Threshold filtert iOS-Autocomplete-Bar-Ruckeln, CSS-Transition für flüssiges Nachführen
+- Spieler-Seite: Radius-Chips änderten Größe wenn „Neu"-Button erschien — Button immer im DOM (invisible statt entfernt), Layout-Shift behoben
+- Bibliothek: Tastatur-Sprünge beim Öffnen des Hinzufügen-Sheets behoben — Sheet-Höhe bleibt immer konstant (92dvh), nur `transform: translateY` verändert sich beim Tastaturöffnen
+- Onboarding: PLZ-Eingabe direkt im Spieler-Slide möglich; Hinweistext auf allgemeine Auffindbarkeit aktualisiert
+- Spieler-Tab: Hinweisbanner wenn keine PLZ hinterlegt (mit Direkt-Link zu Einstellungen, dismissbar)
 
 ---
 

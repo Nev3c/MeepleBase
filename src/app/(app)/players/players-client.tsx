@@ -43,6 +43,7 @@ interface Props {
   initialSearchResults: SearchPlayer[];
   forSaleGames: ForSaleGame[];
   pendingInvites: SessionInviteForPlayer[];
+  hasLocation: boolean;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export function PlayersClient({
   initialSearchResults,
   forSaleGames,
   pendingInvites: initialPendingInvites,
+  hasLocation,
 }: Props) {
   const router = useRouter();
 
@@ -139,6 +141,16 @@ export function PlayersClient({
   const [nearbyResults, setNearbyResults] = useState<SearchPlayer[] | null>(null);
   const [nearbyRadius, setNearbyRadius] = useState(50);
   const [sortMode, setSortMode] = useState<SortMode>("az");
+
+  // PLZ banner — dismissable, persisted in localStorage
+  const [plzBannerDismissed, setPlzBannerDismissed] = useState(() => {
+    try { return localStorage.getItem("meeplebase_plz_banner_dismissed") === "1"; } catch { return false; }
+  });
+  function dismissPlzBanner() {
+    try { localStorage.setItem("meeplebase_plz_banner_dismissed", "1"); } catch { /* ignore */ }
+    setPlzBannerDismissed(true);
+  }
+  const showPlzBanner = !hasLocation && !plzBannerDismissed;
 
   function handleSearchInput(val: string) {
     setSearchQuery(val);
@@ -335,22 +347,41 @@ export function PlayersClient({
           <MarktTab forSaleGames={forSaleGames} currentUserId={currentUserId} />
         )}
         {activeTab === "suche" && (
-          <SucheTab
-            searchQuery={searchQuery}
-            searchResults={searchResults}
-            searching={searching}
-            nearbyStatus={nearbyStatus}
-            nearbyResults={nearbyResults}
-            nearbyRadius={nearbyRadius}
-            sortMode={sortMode}
-            onSearchInput={handleSearchInput}
-            onNearbySearch={handleNearbySearch}
-            onNearbyRadiusChange={setNearbyRadius}
-            onClearSearch={() => { setSearchQuery(""); setSearchResults(initialSearchResults); }}
-            onSortChange={handleSortChange}
-            onSendRequest={sendRequest}
-            onCancelRequest={cancelRequest}
-          />
+          <>
+            {/* PLZ missing banner */}
+            {showPlzBanner && (
+              <div className="mx-4 mt-4 flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-3.5">
+                <MapPin size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    <span className="font-semibold">Keine PLZ hinterlegt.</span> Ohne Postleitzahl können dich andere Spieler nicht finden und du siehst keine Spieler in deiner Nähe.
+                  </p>
+                  <Link href="/settings" className="inline-block mt-1.5 text-xs font-semibold text-amber-700 underline underline-offset-2">
+                    Jetzt in Einstellungen ergänzen →
+                  </Link>
+                </div>
+                <button onClick={dismissPlzBanner} className="p-0.5 text-amber-400 hover:text-amber-600 shrink-0" aria-label="Banner schließen">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+            <SucheTab
+              searchQuery={searchQuery}
+              searchResults={searchResults}
+              searching={searching}
+              nearbyStatus={nearbyStatus}
+              nearbyResults={nearbyResults}
+              nearbyRadius={nearbyRadius}
+              sortMode={sortMode}
+              onSearchInput={handleSearchInput}
+              onNearbySearch={handleNearbySearch}
+              onNearbyRadiusChange={setNearbyRadius}
+              onClearSearch={() => { setSearchQuery(""); setSearchResults(initialSearchResults); }}
+              onSortChange={handleSortChange}
+              onSendRequest={sendRequest}
+              onCancelRequest={cancelRequest}
+            />
+          </>
         )}
       </div>
 
@@ -1258,11 +1289,16 @@ function SucheTab({
                 </button>
               ))}
             </div>
-            {nearbyDone && (
-              <button onClick={() => onNearbySearch(nearbyRadius)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card shrink-0">
-                <LocateFixed size={11} />Neu
-              </button>
-            )}
+            {/* Always rendered so chips never change size; invisible until results are ready */}
+            <button
+              onClick={() => onNearbySearch(nearbyRadius)}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card shrink-0",
+                !nearbyDone && "invisible pointer-events-none"
+              )}
+            >
+              <LocateFixed size={11} />Neu
+            </button>
           </div>
           {nearbyDone && rawResults.length > 0 && (
             <div className="relative">

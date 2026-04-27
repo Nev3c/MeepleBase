@@ -157,7 +157,7 @@ export default async function PlayersPage() {
   // Fetch own profile in parallel later if needed; for now, owner_username left blank for me
   const { data: myProfile } = await admin
     .from("profiles")
-    .select("username, display_name")
+    .select("username, display_name, location")
     .eq("id", user.id)
     .single();
 
@@ -261,6 +261,7 @@ export default async function PlayersPage() {
       initialSearchResults={initialSearchResults}
       forSaleGames={forSaleGames}
       pendingInvites={pendingInvites}
+      hasLocation={!!(myProfile?.location?.trim())}
     />
   );
 }

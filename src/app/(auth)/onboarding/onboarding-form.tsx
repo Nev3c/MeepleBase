@@ -27,7 +27,7 @@ const GUIDE_STEPS = [
     icon: <Users size={48} className="text-amber-500" />,
     title: "Spieler",
     description: "Freunde hinzufügen, Nachrichten schreiben, Spielbibliotheken entdecken — und Spieleabende gemeinsam koordinieren.",
-    hint: "Tipp: Hinterlege deine Postleitzahl im Profil, damit andere Spieler dich in der Nähe-Suche finden können.",
+    withPlzInput: true,
   },
   {
     icon: <CalendarDays size={48} className="text-amber-500" />,
@@ -56,9 +56,12 @@ export function OnboardingForm() {
   function next() { setStep((s) => Math.min(s + 1, TOTAL_STEPS - 1)); }
   function back() { setStep((s) => Math.max(s - 1, 0)); }
 
-  // Guide steps 0–3
+  // Guide steps 0–(GUIDE_STEPS.length-1)
   if (step < GUIDE_STEPS.length) {
     const s = GUIDE_STEPS[step];
+    if ("withPlzInput" in s && s.withPlzInput) {
+      return <SpielersGuideStep icon={s.icon} title={s.title} description={s.description} step={step} total={TOTAL_STEPS} onNext={next} onBack={step > 0 ? back : undefined} />;
+    }
     return <GuideStep icon={s.icon} title={s.title} description={s.description} hint={"hint" in s ? (s as { hint: string }).hint : undefined} step={step} total={TOTAL_STEPS} onNext={next} onBack={step > 0 ? back : undefined} />;
   }
 
@@ -134,6 +137,81 @@ function GuideStep({
           )}
           <Button className="flex-1 h-11 gap-1" onClick={onNext}>
             Weiter <ChevronRight size={16} />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Spielers Guide Step (with inline PLZ input) ────────────────────────────
+
+function SpielersGuideStep({
+  icon, title, description, step, total, onNext, onBack,
+}: {
+  icon: React.ReactNode; title: string; description: string;
+  step: number; total: number; onNext: () => void; onBack?: () => void;
+}) {
+  const [plz, setPlz] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleNext() {
+    const trimmed = plz.trim();
+    if (trimmed.length >= 4) {
+      setSaving(true);
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from("profiles").update({ location: trimmed }).eq("id", user.id);
+        }
+      } catch { /* ignore — not critical */ }
+      setSaving(false);
+    }
+    onNext();
+  }
+
+  return (
+    <div className="flex flex-col gap-8 animate-slide-up">
+      <div className="bg-card rounded-3xl border border-border shadow-card p-8 flex flex-col items-center text-center gap-5">
+        <div className="w-20 h-20 rounded-2xl bg-amber-50 flex items-center justify-center">
+          {icon}
+        </div>
+        <div className="w-full">
+          <h2 className="font-display text-2xl font-semibold text-foreground mb-2">{title}</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
+
+          {/* PLZ input block */}
+          <div className="mt-4 flex flex-col gap-3 text-left">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              <p className="text-xs text-amber-800 leading-relaxed">
+                💡 <span className="font-semibold">Damit andere Spieler dich finden können</span> und du Spieler in deiner Nähe siehst, hinterlege deine Postleitzahl. Kann jederzeit geändert werden.
+              </p>
+            </div>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              placeholder="Postleitzahl (z. B. 89073)"
+              value={plz}
+              onChange={(e) => setPlz(e.target.value.replace(/\D/g, "").slice(0, 5))}
+              className="text-center tracking-widest text-base h-12"
+              disabled={saving}
+              autoComplete="postal-code"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <Dots current={step} total={total} />
+        <div className="flex gap-2">
+          {onBack && (
+            <Button variant="outline" className="flex-1 h-11" onClick={onBack} disabled={saving}>
+              Zurück
+            </Button>
+          )}
+          <Button className="flex-1 h-11 gap-1" onClick={handleNext} disabled={saving}>
+            {saving ? "Speichern…" : plz.trim().length >= 4 ? "Speichern & weiter" : "Überspringen"} <ChevronRight size={16} />
           </Button>
         </div>
       </div>

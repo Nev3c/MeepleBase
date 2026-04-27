@@ -221,8 +221,10 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       if (newKb === lastKb) return;
       if (newKb !== 0 && Math.abs(newKb - lastKb) < 80) return;
       lastKb = newKb;
+      // Only shift vertically — never resize the sheet.
+      // sheetMaxHeight stays at "92dvh" so the sheet height is constant;
+      // transform:translateY handles the lift smoothly via CSS transition.
       setKeyboardOffset(newKb);
-      setSheetMaxHeight(`${Math.floor(vv.height * 0.92)}px`);
     };
 
     // Sync measurement before first paint
