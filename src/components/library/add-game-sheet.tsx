@@ -210,10 +210,20 @@ export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab
     <>
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
-        className="fixed left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
+        className="fixed left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col overflow-hidden"
         style={{
           bottom: 0,
-          maxHeight: "92svh",
+          // Fixed height (not max-height) so the sheet never resizes as search results
+          // load — that was the root cause of the "zucken" on Android.
+          //
+          // min(92svh, 100dvh) logic:
+          //   • Keyboard closed: dvh ≈ svh  →  min(92svh, 100dvh) = 92svh  → normal bottom sheet
+          //   • Keyboard open (with interactive-widget=resizes-visual-viewport):
+          //     dvh shrinks to the space above the keyboard  →  100dvh < 92svh
+          //     →  min() picks 100dvh  → sheet fills exactly the visible area above keyboard
+          //   • Autocomplete bar appears/disappears: dvh changes slightly, sheet adjusts
+          //     by CSS alone with no JS — no double-movement, no transform conflict.
+          height: "min(92svh, 100dvh)",
         }}
         role="dialog" aria-modal="true"
       >

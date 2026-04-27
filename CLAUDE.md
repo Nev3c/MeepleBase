@@ -648,6 +648,15 @@ BGG blockiert alle Anfragen von Vercel/Cloud-IPs mit 401.
 → Nach Code-Änderungen immer `git push` damit Vercel neu baut (lokaler dev-server reicht nicht für Produktionstests).
 → Preview-Tool kann React-State nicht über DOM-Value triggern — Spieler/Scores beim Testen direkt in der App eingeben.
 
+**Bottom-Sheet Tastatur-Verhalten (hart gelernt, April 2026 — Android + iOS):**
+→ Sheet benutzt `height: min(92svh, 100dvh)` (KEIN `max-height`, KEIN JS, KEIN `translateY`).
+→ `min(92svh, 100dvh)` Logik: Tastatur geschlossen → `dvh ≈ svh` → Ergebnis = 92svh (normales Sheet). Tastatur offen → `dvh` schrumpft stark → 100dvh < 92svh → Ergebnis = 100dvh (Sheet füllt Raum über Tastatur). Autocomplete-Bar: `dvh` ändert sich leicht, Sheet passt sich via CSS an — kein JS-Tracking nötig.
+→ `height` statt `max-height` ist entscheidend: bei `max-height` ändert sich die Sheet-Höhe wenn Suchergebnisse laden → sichtbares Rucken. Bei fester `height` bleibt das Sheet stabil, Inhalt scrollt intern.
+→ `overflow: hidden` auf dem Sheet-Div verhindert, dass wachsender Inhalt das Sheet aufbläht.
+→ Viewport-Meta muss `interactiveWidget: "resizes-visual"` haben (in `layout.tsx`): Android Chrome 108+ schrumpft dann das Visual-Viewport wenn die Tastatur aufgeht — `position:fixed; bottom:0` bleibt über der Tastatur (wie iOS 15+ nativ).
+→ iOS 15+: `position:fixed; bottom:0` folgt automatisch dem Visual-Viewport. `translateY` darf NICHT verwendet werden (würde Bewegung verdoppeln und Sheet nach unten schleudern).
+→ Das `dvh`-basierte Keyword-Tracking per JS (`visualViewport.resize`) wurde entfernt — es verursachte auf iOS die Doppelverschiebung und auf Android Layout-Instabilität.
+
 **Mobile Bottom-Nav: Stabilitätsregeln (hart gelernt, April 2026):**
 → ALLE Seiten-Wrapper in `(app)/` MÜSSEN `min-h-[calc(100dvh-72px)]` haben. Fehlt diese Klasse auf einer Seite, ist die Seite kürzer als alle anderen → Android Chrome passt beim Navigieren dorthin die Viewport-Höhe an → `position:fixed` Bottom-Nav springt kurz.
 → Flex-Inputs in flex-Containern MÜSSEN `min-w-0` haben. Browser-Default ist `min-width: auto` für `<input>`, was das Element am Schrumpfen hindert → horizontaler Overflow → auf Android Chrome verliert `position:fixed` seinen Viewport-Bezug und scrollt mit dem Inhalt.
@@ -656,11 +665,13 @@ BGG blockiert alle Anfragen von Vercel/Cloud-IPs mit 401.
 → Bottom-Nav aktiver Indikator immer im DOM lassen, nur Farbe wechseln (`bg-transparent` ↔ `bg-amber-500`). Konditionelles DOM-Einfügen/-Entfernen löst Repaints aus.
 → Icon `strokeWidth` und Label `font-weight` im Nav immer konstant (nicht pro aktivem/inaktivem State unterschiedlich) — unterschiedliche Werte verschieben das Layout minimal.
 
-**BGG geekitems API — Thumbnail-Felder:**
-→ `bgg/lookup` und `games/ensure` MÜSSEN dasselbe Feld verwenden: `item.imageurl` (nicht `item.images.thumb.url`).
-→ `item.imageurl` = Thumbnail-URL (klein), `item.topimageurl` = Vollbild-URL.
-→ `item.images.thumb.url` ist ein anderes, inkompatibles Format — führt zu falschen/leeren Thumbnails.
+**BGG geekitems API — Bild-Felder (KRITISCH — Datenschutz):**
+→ `item.imageurl` = **offizielle Cover-Art des Verlags** (sicher, kein Personenbezug). Dieses Feld IMMER für `thumbnail_url` UND `image_url` verwenden.
+→ `item.topimageurl` = **höchstbewertetes Community-Upload** — kann Fotos von Spielern/Personen enthalten. **NIEMALS** für `thumbnail_url` oder `image_url` verwenden (Datenschutzrisiko, DSGVO).
+→ `item.images.thumb.url` ist ein inkompatibles Format — führt zu falschen/leeren Thumbnails. Nicht verwenden.
+→ Regel: In ALLEN Routen gilt `thumbnail_url = image_url = item.imageurl`. Kein anderes Feld.
 → Bei `games/ensure`: Client übergibt `name` und `thumbnail_url` direkt (bereits via lookup gefetcht), Endpoint nutzt diese als primäre Quelle und fällt nur auf geekitems zurück wenn nicht vorhanden.
+→ **Hintergrund (April 2026):** Ein Commit setzte versehentlich `image_url = item.topimageurl`, was Community-Fotos als Hero-Bild anzeigen konnte. Wurde sofort reverted. Diese Regel ist Non-Negotiable.
 
 **Soziale Features — Datenbankschema (Phase 2):**
 → `friendships` Tabelle: requester_id, addressee_id, status (pending/accepted/declined). Unique auf (requester_id, addressee_id).

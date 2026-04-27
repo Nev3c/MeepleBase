@@ -87,10 +87,12 @@ export async function POST(request: NextRequest) {
         // Best-players poll (from geekitems community poll — same poll data as XML API).
         const bestPlayers = parseBestPlayers(item.polls);
 
-        // Hero image: topimageurl is the large/official cover art; fall back to imageurl
-        // (the smaller thumbnail) so image_url is never null when any image is available.
+        // IMPORTANT: always use item.imageurl for BOTH fields — never item.topimageurl.
+        // item.imageurl = official publisher cover art (safe, no people).
+        // item.topimageurl = highest-rated community upload (privacy risk: can contain
+        // personal photos of players). See CLAUDE.md § BGG geekitems API.
         const thumbnailUrl: string | null = (item.imageurl as string | null) ?? clientThumbnail;
-        const imageUrl: string | null = (item.topimageurl as string | null) ?? thumbnailUrl;
+        const imageUrl: string | null = thumbnailUrl; // same official cover art for hero
 
         upsertData = {
           bgg_id: bggId,
