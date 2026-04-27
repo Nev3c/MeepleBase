@@ -334,6 +334,7 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
       <AddGameSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
+        onSuccess={() => setFilter({ ...filter, search: "" })}
         bggUsername={profile?.bgg_username}
         initialTab={sheetInitialTab}
       />

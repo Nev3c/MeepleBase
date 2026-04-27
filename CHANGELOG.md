@@ -21,6 +21,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spieler-Suche (A-Z und Entfernung): Nur Spieler mit hinterlegter PLZ werden angezeigt (bereits in players/page.tsx + /api/players/search)
 
 ### Fixed
+- Bibliothek: Nach Spiel-Hinzufügen wurde nur das neue Spiel angezeigt — `AddGameSheet` ruft jetzt `onSuccess()` auf, das `filter.search` zurücksetzt bevor `router.refresh()` läuft; Suchfilter war aus dem Library-Suchfeld erhalten geblieben und hat nach dem Refresh alle anderen Spiele herausgefiltert
+- Tastatur-Sprünge auf Android: `interactiveWidget: "resizes-visual-viewport"` im Viewport-Meta ergänzt — Android Chrome 108+ verkleinert jetzt das Visual-Viewport wenn die Tastatur aufgeht (analog zu iOS 15+); `position:fixed; bottom:0` Elemente folgen dem Visual-Viewport und werden nicht mehr von der Tastatur überdeckt
 - Spieler-Seite: „Partie aufzeichnen" verlinkte auf `/plays/new` (404) — jetzt `/plays?player=NAME`
 - Spieler-Seite: Radius-Chips flickerten während der Suche (Farbe sprang beim Laden) — vereinfachte Bedingung, Chip ist immer amber wenn ausgewählt
 - Spieler-Seite: Radius-Chips änderten Größe wenn „Neu"-Button erschied — entfernt, kein Layout-Shift mehr

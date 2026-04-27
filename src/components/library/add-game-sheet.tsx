@@ -50,11 +50,15 @@ function extractBggId(input: string): number | null {
 interface AddGameSheetProps {
   open: boolean;
   onClose: () => void;
+  /** Called immediately after a game is successfully added (before the sheet auto-closes).
+   *  Use this to reset library filters so the user sees the full library including
+   *  the new game after router.refresh(). */
+  onSuccess?: () => void;
   bggUsername?: string | null;
   initialTab?: Tab;
 }
 
-export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search" }: AddGameSheetProps) {
+export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab = "search" }: AddGameSheetProps) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [step, setStep] = useState<Step>("search");
@@ -175,6 +179,10 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       if (res.status === 409) { setAddError("Bereits in deiner Bibliothek."); setAdding(false); return; }
       if (!res.ok) { setAddError("Hinzufügen fehlgeschlagen. Bitte nochmal versuchen."); setAdding(false); return; }
       setAddSuccess(true);
+      // Clear library search filter so the full library (incl. new game) is visible
+      // after router.refresh() — without this, a stale filter.search would hide all
+      // other games and only show the newly added one.
+      onSuccess?.();
       router.refresh();
       setTimeout(() => onClose(), 1200);
     } catch {
