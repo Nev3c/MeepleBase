@@ -25,7 +25,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spieler-Seite: Radius-Chips flickerten während der Suche (Farbe sprang beim Laden) — vereinfachte Bedingung, Chip ist immer amber wenn ausgewählt
 - Spieler-Seite: Radius-Chips änderten Größe wenn „Neu"-Button erschied — entfernt, kein Layout-Shift mehr
 - Bibliothek: Tastatur-Sprünge endgültig behoben — CSS-only `max-height: 92svh` (`svh` = konstante Small-Viewport-Height, ändert sich nie bei Tastatur); kein JS-Tracking, kein `translateY` mehr. iOS 15+ positioniert `position:fixed; bottom:0` automatisch über die Tastatur; `transform` verursachte eine doppelte Verschiebung und das Sheet flog nach unten wenn die Tastatur sich veränderte (Autocomplete-Bar etc.)
-- Spielsuche: „The Hunger" und andere Spiele mit Artikel im Titel werden jetzt gefunden — BGG geekdo-Suche läuft jetzt parallel mit und ohne führenden Artikel (z.B. „the hunger" + „hunger"); Ergebnisse werden zusammengeführt und dedupliziert
+- Spielsuche: BGG XML API v2 als dritte parallele Suchquelle ergänzt — vollständige Volltextsuche statt Autocomplete-Prefix-Matching; findet Spiele wie „The Hunger", die im nosession-geekdo-Endpunkt fehlen; Thumbnails werden nachgeladen; graceful fallback wenn BGG 401 zurückgibt
 - Spieler-Tab Suche: Radius-Chips zeigen Zahl und „km" jetzt immer zweizeilig (einheitliches Layout)
 - Spieler-Tab Suche: 3-Button-Toggle (A–Z / Nähe / Neu) statt 2; „Neu"-Tab zeigt 30 zuletzt beigetretene Spieler (ohne PLZ-Filter)
 - Onboarding: PLZ-Eingabe direkt im Spieler-Slide möglich; Hinweistext auf allgemeine Auffindbarkeit aktualisiert

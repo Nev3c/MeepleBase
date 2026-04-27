@@ -56,14 +56,13 @@ function stripLeadingArticle(q: string): string | null {
   return null;
 }
 
-// BGG's internal geekdo endpoint behaves differently than the XML API:
-// it's not blocked from Vercel IPs and returns autocomplete-style hits by name.
-// Used as fallback when Wikidata has no match (e.g. niche or new releases not yet
-// labelled in Wikidata).
+// BGG's internal geekdo endpoint: returns autocomplete-style hits by name.
+// Works from Vercel IPs (returns JSON when called with Accept: application/json).
+// Note: nosession=1 returns a limited result set; some games may be missing.
 async function bggNameFallback(q: string): Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]> {
   try {
     const res = await fetch(
-      `https://boardgamegeek.com/api/geekdo?search=${encodeURIComponent(q)}&objecttype=boardgame&nosession=1&showcount=15`,
+      `https://boardgamegeek.com/api/geekdo?search=${encodeURIComponent(q)}&objecttype=boardgame&nosession=1&showcount=30`,
       {
         signal: AbortSignal.timeout(6000),
         headers: {
@@ -84,7 +83,51 @@ async function bggNameFallback(q: string): Promise<{ bgg_id: number; name: strin
         thumbnail_url: item.thumbnailhref ? `https:${String(item.thumbnailhref)}` : null,
       }))
       .filter((r) => r.bgg_id > 0 && r.name.length > 0)
-      .slice(0, 15);
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+// BGG XML API v2 full-text search — returns a proper ranked search index
+// (not just autocomplete prefix matching). This finds games that geekdo misses,
+// e.g. "The Hunger" which doesn't appear in the nosession geekdo result.
+// May return 401 if BGG requires auth from this IP; handled gracefully.
+async function bggXmlSearch(q: string): Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]> {
+  try {
+    const res = await fetch(
+      `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(q)}&type=boardgame`,
+      {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/xml, text/xml, */*",
+          "Referer": "https://boardgamegeek.com/",
+        },
+        next: { revalidate: 3600 },
+      }
+    );
+    if (!res.ok) return [];
+    const xml = await res.text();
+    if (!xml.includes("<items")) return [];
+
+    // Parse XML with regex — no DOMParser on server, no external parser needed
+    const results: { bgg_id: number; name: string; thumbnail_url: null }[] = [];
+    const itemRe = /<item\s+type="boardgame"\s+id="(\d+)">([\s\S]*?)<\/item>/g;
+    const nameRe = /<name\s+type="primary"\s+sortindex="\d+"\s+value="([^"]*)"\s*\/>/;
+    let m: RegExpExecArray | null;
+    while ((m = itemRe.exec(xml)) !== null) {
+      const bgg_id = Number(m[1]);
+      const nameMatch = nameRe.exec(m[2]);
+      if (bgg_id > 0 && nameMatch) {
+        // Decode XML entities
+        const name = nameMatch[1]
+          .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+          .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&apos;/g, "'");
+        results.push({ bgg_id, name, thumbnail_url: null });
+      }
+    }
+    return results.slice(0, 20);
   } catch {
     return [];
   }
@@ -142,12 +185,13 @@ export async function GET(req: NextRequest) {
   // autocomplete can surface games whose titles begin with an article.
   const strippedQ = stripLeadingArticle(q);
 
-  const bggSearches: Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>[] = [
+  // Run everything in parallel: Wikidata + BGG geekdo (+ stripped variant) + BGG XML API
+  const bggGeekdoSearches: Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>[] = [
     bggNameFallback(q),
   ];
-  if (strippedQ) bggSearches.push(bggNameFallback(strippedQ));
+  if (strippedQ) bggGeekdoSearches.push(bggNameFallback(strippedQ));
 
-  const [wikidataSettled, ...bggSettledAll] = await Promise.allSettled([
+  const [wikidataSettled, xmlSettled, ...geekdoSettledAll] = await Promise.allSettled([
     fetch(wikidataUrl, {
       signal: AbortSignal.timeout(8000),
       headers: {
@@ -156,7 +200,8 @@ export async function GET(req: NextRequest) {
       },
       next: { revalidate: 3600 },
     }),
-    ...bggSearches,
+    bggXmlSearch(q),
+    ...bggGeekdoSearches,
   ]);
 
   // Parse Wikidata result
@@ -172,12 +217,18 @@ export async function GET(req: NextRequest) {
     } catch { /* parse error → treat as empty */ }
   }
 
-  // Merge BGG results from both queries, deduplicate by bgg_id
-  const rawBggHits = bggSettledAll.flatMap((s) =>
+  // BGG XML results (may be empty if 401/blocked from this IP)
+  const xmlHits = xmlSettled.status === "fulfilled" ? xmlSettled.value : [];
+
+  // Merge geekdo results from both queries, deduplicate by bgg_id
+  const rawGeekdoHits = geekdoSettledAll.flatMap((s) =>
     s.status === "fulfilled" ? s.value : []
   );
+
+  // Combine all BGG sources: XML first (better ranking), then geekdo
+  const allBggRaw = [...xmlHits, ...rawGeekdoHits];
   const seenIds = new Set<number>();
-  const bggHits = rawBggHits.filter((g) => {
+  const bggHits = allBggRaw.filter((g) => {
     if (seenIds.has(g.bgg_id)) return false;
     seenIds.add(g.bgg_id);
     return true;
@@ -191,6 +242,18 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // BGG geekdo already provides thumbnails — return directly
-  return NextResponse.json({ results: bggHits });
+  // XML results have no thumbnails — fetch them; geekdo results already have thumbnails
+  if (bggHits.length > 0) {
+    // Fetch thumbnails only for results that don't already have one (geekdo provides them)
+    const enriched = await Promise.all(
+      bggHits.map(async (r) => {
+        if (r.thumbnail_url) return r;
+        const thumb = await fetchThumbnail(r.bgg_id);
+        return { ...r, thumbnail_url: thumb };
+      })
+    );
+    return NextResponse.json({ results: enriched });
+  }
+
+  return NextResponse.json({ results: [] });
 }
