@@ -41,6 +41,21 @@ async function fetchThumbnail(bggId: number): Promise<string | null> {
   }
 }
 
+// Strip leading articles so "the hunger" also searches "hunger" on BGG.
+// BGG autocomplete returns "The Hunger" when querying "hunger" but may not
+// surface it when the full query is "the hunger" (article-heavy prefix matching).
+function stripLeadingArticle(q: string): string | null {
+  const articles = ["the ", "a ", "an ", "die ", "das ", "der ", "les ", "le ", "la ", "los ", "las "];
+  const lower = q.toLowerCase();
+  for (const art of articles) {
+    if (lower.startsWith(art)) {
+      const stripped = q.slice(art.length).trim();
+      return stripped.length >= 2 ? stripped : null;
+    }
+  }
+  return null;
+}
+
 // BGG's internal geekdo endpoint behaves differently than the XML API:
 // it's not blocked from Vercel IPs and returns autocomplete-style hits by name.
 // Used as fallback when Wikidata has no match (e.g. niche or new releases not yet
@@ -123,7 +138,16 @@ export async function GET(req: NextRequest) {
   // already include thumbnails (thumbnailhref field).
   const wikidataUrl = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildQuery(q))}`;
 
-  const [wikidataSettled, bggSettled] = await Promise.allSettled([
+  // Also search without leading article ("the hunger" → "hunger") so BGG
+  // autocomplete can surface games whose titles begin with an article.
+  const strippedQ = stripLeadingArticle(q);
+
+  const bggSearches: Promise<{ bgg_id: number; name: string; thumbnail_url: string | null }[]>[] = [
+    bggNameFallback(q),
+  ];
+  if (strippedQ) bggSearches.push(bggNameFallback(strippedQ));
+
+  const [wikidataSettled, ...bggSettledAll] = await Promise.allSettled([
     fetch(wikidataUrl, {
       signal: AbortSignal.timeout(8000),
       headers: {
@@ -132,7 +156,7 @@ export async function GET(req: NextRequest) {
       },
       next: { revalidate: 3600 },
     }),
-    bggNameFallback(q),
+    ...bggSearches,
   ]);
 
   // Parse Wikidata result
@@ -148,7 +172,16 @@ export async function GET(req: NextRequest) {
     } catch { /* parse error → treat as empty */ }
   }
 
-  const bggHits = bggSettled.status === "fulfilled" ? bggSettled.value : [];
+  // Merge BGG results from both queries, deduplicate by bgg_id
+  const rawBggHits = bggSettledAll.flatMap((s) =>
+    s.status === "fulfilled" ? s.value : []
+  );
+  const seenIds = new Set<number>();
+  const bggHits = rawBggHits.filter((g) => {
+    if (seenIds.has(g.bgg_id)) return false;
+    seenIds.add(g.bgg_id);
+    return true;
+  }).slice(0, 15);
 
   // Prefer Wikidata (has stable BGG IDs), enrich with thumbnails
   if (wikidataBase.length > 0) {

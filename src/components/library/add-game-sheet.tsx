@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X, ArrowLeft, Check, Download, List, Plus, ExternalLink } from "lucide-react";
 import Image from "next/image";
@@ -67,14 +67,6 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState(false);
-  // Fixed in px so it never reacts to dvh/vh changes when the keyboard appears.
-  // Computed once at open time from window.innerHeight (layout viewport).
-  const [sheetMaxHeight, setSheetMaxHeight] = useState<string>("92vh");
-  // Distance from the bottom of the layout viewport to the bottom of the visual
-  // viewport — equals the soft-keyboard height when keyboard is open, 0 otherwise.
-  // Used to lift the sheet above the keyboard instead of being clipped behind it.
-  const [keyboardOffset, setKeyboardOffset] = useState<number>(0);
-
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -196,53 +188,6 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  // Keyboard handling strategy:
-  //
-  //   PROBLEM: dvh/vh units are dynamic — they change when the keyboard opens.
-  //   This caused the sheet to resize (jump) even when we stopped calling
-  //   setSheetMaxHeight, because the CSS unit value itself was changing.
-  //
-  //   FIX: Lock sheetMaxHeight to a FIXED px value (window.innerHeight × 0.92)
-  //   captured ONCE when the sheet opens. This is immune to all viewport changes.
-  //
-  //   iOS: window.innerHeight stays constant; vv.height shrinks → delta = keyboard
-  //   height → we apply translateY(-kb) to lift the sheet above the keyboard.
-  //
-  //   Android (Chrome ≥108): window.innerHeight shrinks WITH the keyboard.
-  //   vv.height does the same → delta ≈ 0 → no translateY needed. The sheet's
-  //   position:fixed bottom:0 naturally sits above the keyboard because the
-  //   layout viewport shrank. The fixed px height means the sheet never resizes.
-  //
-  //   80px threshold filters iOS autocomplete-bar micro-resizes (~44px).
-  //   CSS transition on transform gives a smooth lift.
-  useLayoutEffect(() => {
-    if (!open) return;
-
-    // Freeze height once. Must use px — never vh/dvh/svh which are dynamic.
-    setSheetMaxHeight(`${Math.floor(window.innerHeight * 0.92)}px`);
-    setKeyboardOffset(0);
-
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    let lastKb = 0;
-
-    const compute = () => {
-      const newKb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      if (newKb === lastKb) return;
-      if (newKb !== 0 && Math.abs(newKb - lastKb) < 80) return;
-      lastKb = newKb;
-      setKeyboardOffset(newKb);
-    };
-
-    vv.addEventListener("resize", compute);
-    vv.addEventListener("scroll", compute);
-    return () => {
-      vv.removeEventListener("resize", compute);
-      vv.removeEventListener("scroll", compute);
-    };
-  }, [open]);
-
   if (!open) return null;
 
   return (
@@ -252,13 +197,7 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
         className="fixed left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
         style={{
           bottom: 0,
-          maxHeight: sheetMaxHeight,
-          // transform is GPU-composited (no layout cost) → smooth on iOS.
-          // CSS transition lets the sheet smoothly chase the keyboard animation
-          // instead of jumping in discrete state-update steps.
-          transform: `translateY(-${keyboardOffset}px)`,
-          transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
-          willChange: "transform",
+          maxHeight: "92svh",
         }}
         role="dialog" aria-modal="true"
       >
