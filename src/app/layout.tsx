@@ -60,7 +60,7 @@ export const viewport: Viewport = {
   // Android Chrome 108+: visual viewport shrinks when keyboard opens → position:fixed;
   // bottom:0 follows it automatically (same behaviour iOS 15+ has natively).
   // Without this, Android anchors fixed elements to the layout viewport (keyboard covers them).
-  interactiveWidget: "resizes-visual-viewport",
+  interactiveWidget: "resizes-visual",
 };
 
 export default function RootLayout({
