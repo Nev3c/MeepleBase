@@ -67,7 +67,9 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState(false);
-  const [sheetMaxHeight, setSheetMaxHeight] = useState<string>("92dvh");
+  // Fixed in px so it never reacts to dvh/vh changes when the keyboard appears.
+  // Computed once at open time from window.innerHeight (layout viewport).
+  const [sheetMaxHeight, setSheetMaxHeight] = useState<string>("92vh");
   // Distance from the bottom of the layout viewport to the bottom of the visual
   // viewport — equals the soft-keyboard height when keyboard is open, 0 otherwise.
   // Used to lift the sheet above the keyboard instead of being clipped behind it.
@@ -194,41 +196,45 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  // Lift the sheet above the soft keyboard.
+  // Keyboard handling strategy:
   //
-  // Strategy:
-  //   • sheet stays at `bottom: 0` (fixed)
-  //   • `transform: translateY(-keyboardOffset)` lifts it — GPU-composited,
-  //     no layout recalculation, smooth even during rapid state updates
-  //   • `maxHeight: vv.height × 0.92` keeps content within the visual viewport
-  //   • 80 px threshold filters the iOS autocomplete-bar micro-resizes (~44 px)
-  //     so the sheet doesn't jump every time the suggestion bar appears
-  //   • CSS transition on `transform` smooths the initial keyboard-open animation
+  //   PROBLEM: dvh/vh units are dynamic — they change when the keyboard opens.
+  //   This caused the sheet to resize (jump) even when we stopped calling
+  //   setSheetMaxHeight, because the CSS unit value itself was changing.
+  //
+  //   FIX: Lock sheetMaxHeight to a FIXED px value (window.innerHeight × 0.92)
+  //   captured ONCE when the sheet opens. This is immune to all viewport changes.
+  //
+  //   iOS: window.innerHeight stays constant; vv.height shrinks → delta = keyboard
+  //   height → we apply translateY(-kb) to lift the sheet above the keyboard.
+  //
+  //   Android (Chrome ≥108): window.innerHeight shrinks WITH the keyboard.
+  //   vv.height does the same → delta ≈ 0 → no translateY needed. The sheet's
+  //   position:fixed bottom:0 naturally sits above the keyboard because the
+  //   layout viewport shrank. The fixed px height means the sheet never resizes.
+  //
+  //   80px threshold filters iOS autocomplete-bar micro-resizes (~44px).
+  //   CSS transition on transform gives a smooth lift.
   useLayoutEffect(() => {
     if (!open) return;
+
+    // Freeze height once. Must use px — never vh/dvh/svh which are dynamic.
+    setSheetMaxHeight(`${Math.floor(window.innerHeight * 0.92)}px`);
+    setKeyboardOffset(0);
+
     const vv = window.visualViewport;
-    if (!vv) {
-      setSheetMaxHeight("92dvh");
-      setKeyboardOffset(0);
-      return;
-    }
+    if (!vv) return;
 
     let lastKb = 0;
 
     const compute = () => {
       const newKb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      // Skip trivial fluctuations (autocomplete bar ≈ 44–55 px → threshold 80)
       if (newKb === lastKb) return;
       if (newKb !== 0 && Math.abs(newKb - lastKb) < 80) return;
       lastKb = newKb;
-      // Only shift vertically — never resize the sheet.
-      // sheetMaxHeight stays at "92dvh" so the sheet height is constant;
-      // transform:translateY handles the lift smoothly via CSS transition.
       setKeyboardOffset(newKb);
     };
 
-    // Sync measurement before first paint
-    compute();
     vv.addEventListener("resize", compute);
     vv.addEventListener("scroll", compute);
     return () => {

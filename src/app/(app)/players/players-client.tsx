@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 import {
   UserPlus, UserCheck, UserX, Clock, X, Search,
-  Users, MessageSquare, MapPin, LocateFixed, ArrowDownAZ,
+  Users, MessageSquare, MapPin, LocateFixed, ArrowDownAZ, Sparkles,
   Tag, ShoppingBag, BookOpen, Dices, ChevronRight, Bell, BellOff,
   Calendar, Check, Gamepad2, CheckCircle2, XCircle,
 } from "lucide-react";
@@ -19,7 +19,7 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type NearbyStatus = "idle" | "locating" | "loading" | "done" | "denied" | "error";
-type SortMode = "az" | "entfernung";
+type SortMode = "az" | "entfernung" | "neu";
 type PlayersTab = "chats" | "freunde" | "einladungen" | "markt" | "suche";
 
 interface SearchPlayer {
@@ -41,6 +41,7 @@ interface Props {
   unreadByUser: Record<string, number>;
   totalUnread: number;
   initialSearchResults: SearchPlayer[];
+  initialNewPlayers: SearchPlayer[];
   forSaleGames: ForSaleGame[];
   pendingInvites: SessionInviteForPlayer[];
   hasLocation: boolean;
@@ -70,6 +71,7 @@ export function PlayersClient({
   unreadByUser,
   totalUnread,
   initialSearchResults,
+  initialNewPlayers,
   forSaleGames,
   pendingInvites: initialPendingInvites,
   hasLocation,
@@ -373,6 +375,7 @@ export function PlayersClient({
               nearbyResults={nearbyResults}
               nearbyRadius={nearbyRadius}
               sortMode={sortMode}
+              newPlayers={initialNewPlayers}
               onSearchInput={handleSearchInput}
               onNearbySearch={handleNearbySearch}
               onNearbyRadiusChange={setNearbyRadius}
@@ -1218,19 +1221,25 @@ const RADIUS_OPTIONS = [5, 15, 25, 50, 100] as const;
 
 function SucheTab({
   searchQuery, searchResults, searching, nearbyStatus, nearbyResults,
-  nearbyRadius, sortMode, onSearchInput, onNearbySearch, onNearbyRadiusChange,
+  nearbyRadius, sortMode, newPlayers, onSearchInput, onNearbySearch, onNearbyRadiusChange,
   onClearSearch, onSortChange, onSendRequest, onCancelRequest,
 }: {
   searchQuery: string; searchResults: SearchPlayer[] | null; searching: boolean;
   nearbyStatus: NearbyStatus; nearbyResults: SearchPlayer[] | null; nearbyRadius: number;
-  sortMode: SortMode; onSearchInput: (v: string) => void; onNearbySearch: (r?: number) => void;
-  onNearbyRadiusChange: (r: number) => void; onClearSearch: () => void;
-  onSortChange: (m: SortMode) => void; onSendRequest: (p: SearchPlayer) => Promise<void>;
+  sortMode: SortMode; newPlayers: SearchPlayer[]; onSearchInput: (v: string) => void;
+  onNearbySearch: (r?: number) => void; onNearbyRadiusChange: (r: number) => void;
+  onClearSearch: () => void; onSortChange: (m: SortMode) => void;
+  onSendRequest: (p: SearchPlayer) => Promise<void>;
   onCancelRequest: (fId: string, pId: string) => Promise<void>;
 }) {
   const isNearby = sortMode === "entfernung";
+  const isNeu = sortMode === "neu";
   const [localFilter, setLocalFilter] = useState("");
-  const rawResults: SearchPlayer[] = isNearby ? (nearbyResults ?? []) : (searchResults ?? []);
+  const rawResults: SearchPlayer[] = isNearby
+    ? (nearbyResults ?? [])
+    : isNeu
+    ? newPlayers
+    : (searchResults ?? []);
   const visible = isNearby && localFilter.trim().length > 0
     ? rawResults.filter((p) =>
         p.username.toLowerCase().includes(localFilter.toLowerCase()) ||
@@ -1238,6 +1247,8 @@ function SucheTab({
     : rawResults;
   const sorted = isNearby
     ? [...visible].sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
+    : isNeu
+    ? visible // already ordered by created_at desc from server
     : [...visible].sort((a, b) => a.username.localeCompare(b.username, "de", { sensitivity: "base" }));
 
   const isLoading = searching || nearbyStatus === "locating" || nearbyStatus === "loading";
@@ -1245,10 +1256,11 @@ function SucheTab({
 
   return (
     <div className="flex flex-col px-4 pt-4 pb-10 gap-3">
-      {/* Mode switcher */}
+      {/* Mode switcher — 3 modes */}
       <div className="flex p-1 bg-muted/60 rounded-xl gap-1">
-        <ModeButton active={!isNearby} icon={<ArrowDownAZ size={14} />} onClick={() => onSortChange("az")}>A–Z</ModeButton>
-        <ModeButton active={isNearby} icon={<LocateFixed size={14} />} onClick={() => onSortChange("entfernung")}>In der Nähe</ModeButton>
+        <ModeButton active={!isNearby && !isNeu} icon={<ArrowDownAZ size={14} />} onClick={() => onSortChange("az")}>A–Z</ModeButton>
+        <ModeButton active={isNearby} icon={<LocateFixed size={14} />} onClick={() => onSortChange("entfernung")}>Nähe</ModeButton>
+        <ModeButton active={isNeu} icon={<Sparkles size={14} />} onClick={() => onSortChange("neu")}>Neu</ModeButton>
       </div>
 
       {/* A-Z text search */}
@@ -1279,26 +1291,17 @@ function SucheTab({
                   key={r} type="button"
                   onClick={() => { onNearbyRadiusChange(r); onNearbySearch(r); }}
                   className={cn(
-                    "flex-1 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+                    "flex-1 py-1 rounded-full border transition-colors flex flex-col items-center leading-none gap-px",
                     nearbyRadius === r
                       ? "bg-amber-500 text-white border-amber-500 shadow-sm"
                       : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-amber-700"
                   )}
                 >
-                  {r} km
+                  <span className="text-xs font-semibold">{r}</span>
+                  <span className="text-[10px] font-normal opacity-80">km</span>
                 </button>
               ))}
             </div>
-            {/* Always rendered so chips never change size; invisible until results are ready */}
-            <button
-              onClick={() => onNearbySearch(nearbyRadius)}
-              className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium border border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700 transition-all bg-card shrink-0",
-                !nearbyDone && "invisible pointer-events-none"
-              )}
-            >
-              <LocateFixed size={11} />Neu
-            </button>
           </div>
           {nearbyDone && rawResults.length > 0 && (
             <div className="relative">
@@ -1344,15 +1347,18 @@ function SucheTab({
       {!isLoading && isNearby && nearbyDone && rawResults.length === 0 && (
         <EmptyState icon={<MapPin size={24} className="text-muted-foreground" />} title="Keine Spieler in der Nähe" subtitle={`Im Umkreis von ${nearbyRadius} km noch niemand gefunden.`} />
       )}
-      {!isNearby && !isLoading && searchQuery.length >= 2 && searchResults?.length === 0 && (
+      {!isNearby && !isNeu && !isLoading && searchQuery.length >= 2 && searchResults?.length === 0 && (
         <EmptyState icon={<Search size={22} className="text-muted-foreground" />} title="Kein Spieler gefunden" subtitle="Versuch einen anderen Nutzernamen." />
+      )}
+      {isNeu && newPlayers.length === 0 && (
+        <EmptyState icon={<Sparkles size={22} className="text-muted-foreground" />} title="Noch niemand neu beigetreten" subtitle="Schau später nochmal rein." />
       )}
 
       {/* Results */}
       {sorted.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 px-0.5 mb-1">
-            {sorted.length} Spieler{isNearby && ` · ${nearbyRadius} km`}
+            {isNeu ? "Zuletzt beigetreten" : `${sorted.length} Spieler${isNearby ? ` · ${nearbyRadius} km` : ""}`}
           </p>
           {sorted.map((player) => (
             <SearchResultCard

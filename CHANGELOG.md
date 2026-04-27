@@ -23,10 +23,13 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - Spieler-Seite: „Partie aufzeichnen" verlinkte auf `/plays/new` (404) — jetzt `/plays?player=NAME`
 - Spieler-Seite: Radius-Chips flickerten während der Suche (Farbe sprang beim Laden) — vereinfachte Bedingung, Chip ist immer amber wenn ausgewählt
-- Spieler-Seite: Radius-Chips änderten Größe wenn „Neu"-Button erschien — Button immer im DOM (invisible statt entfernt), Layout-Shift behoben
-- Bibliothek: Tastatur-Sprünge beim Öffnen des Hinzufügen-Sheets behoben — Sheet-Höhe bleibt immer konstant (92dvh), nur `transform: translateY` verändert sich beim Tastaturöffnen
+- Spieler-Seite: Radius-Chips änderten Größe wenn „Neu"-Button erschied — entfernt, kein Layout-Shift mehr
+- Bibliothek: Tastatur-Sprünge endgültig behoben — Sheet-Höhe wird beim Öffnen als fixer px-Wert eingefroren; dvh/vh sind dynamisch und veränderten die Höhe wenn die Tastatur erschien
+- Spieler-Tab Suche: Radius-Chips zeigen Zahl und „km" jetzt immer zweizeilig (einheitliches Layout)
+- Spieler-Tab Suche: 3-Button-Toggle (A–Z / Nähe / Neu) statt 2; „Neu"-Tab zeigt 30 zuletzt beigetretene Spieler (ohne PLZ-Filter)
 - Onboarding: PLZ-Eingabe direkt im Spieler-Slide möglich; Hinweistext auf allgemeine Auffindbarkeit aktualisiert
 - Spieler-Tab: Hinweisbanner wenn keine PLZ hinterlegt (mit Direkt-Link zu Einstellungen, dismissbar)
+- Spielsuche: Wikidata und BGG geekdo laufen jetzt parallel — BGG-Fallback wird nicht mehr übersprungen wenn Wikidata unavailable ist (behebt „nicht gefunden" für Spiele wie „The Hunger")
 
 ---
 

@@ -111,50 +111,53 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* local DB unavailable → fall through to external search */ }
 
-  try {
-    const url = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildQuery(q))}`;
-    const res = await fetch(url, {
+  // Run Wikidata and BGG geekdo IN PARALLEL.
+  //
+  // Previous approach was sequential: Wikidata → BGG only if Wikidata returned 0
+  // results OR threw. But if Wikidata returned !res.ok, we returned early and
+  // never reached BGG — meaning games like "The Hunger" (not yet in Wikidata
+  // with a P2339 statement) were lost.
+  //
+  // Now both run simultaneously. We use Wikidata results if present (richer data
+  // with BGG IDs for lookup); otherwise fall back to BGG geekdo results which
+  // already include thumbnails (thumbnailhref field).
+  const wikidataUrl = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildQuery(q))}`;
+
+  const [wikidataSettled, bggSettled] = await Promise.allSettled([
+    fetch(wikidataUrl, {
+      signal: AbortSignal.timeout(8000),
       headers: {
         "Accept": "application/sparql-results+json",
         "User-Agent": "MeepleBase/1.0 (https://meeple-base.vercel.app)",
       },
       next: { revalidate: 3600 },
-    });
+    }),
+    bggNameFallback(q),
+  ]);
 
-    if (!res.ok) {
-      return NextResponse.json({ results: [], error: "wikidata_unavailable" });
-    }
-
-    const data = await res.json();
-    const bindings: Array<{ itemLabel: { value: string }; bggId: { value: string } }> =
-      data.results?.bindings ?? [];
-
-    const base = bindings
-      .map((b) => ({ bgg_id: Number(b.bggId.value), name: b.itemLabel.value }))
-      .filter((r) => r.bgg_id > 0);
-
-    // Fallback: if Wikidata has nothing, ask BGG directly by name (geekdo endpoint
-    // works from Vercel IPs unlike the XML API). Catches games like "The Hunger"
-    // where Wikidata has no English label or no P2339 BGG-ID statement.
-    if (base.length === 0) {
-      const bggHits = await bggNameFallback(q);
-      if (bggHits.length > 0) {
-        return NextResponse.json({ results: bggHits });
-      }
-    }
-
-    // Fetch thumbnails in parallel for Wikidata hits
-    const thumbnails = await Promise.all(base.map((r) => fetchThumbnail(r.bgg_id)));
-
-    const results = base.map((r, i) => ({
-      ...r,
-      thumbnail_url: thumbnails[i] ?? null,
-    }));
-
-    return NextResponse.json({ results });
-  } catch {
-    // Last-resort fallback: try BGG by name if everything else explodes
-    const bggHits = await bggNameFallback(q);
-    return NextResponse.json({ results: bggHits });
+  // Parse Wikidata result
+  let wikidataBase: { bgg_id: number; name: string }[] = [];
+  if (wikidataSettled.status === "fulfilled" && wikidataSettled.value.ok) {
+    try {
+      const data = await wikidataSettled.value.json();
+      const bindings: Array<{ itemLabel: { value: string }; bggId: { value: string } }> =
+        data.results?.bindings ?? [];
+      wikidataBase = bindings
+        .map((b) => ({ bgg_id: Number(b.bggId.value), name: b.itemLabel.value }))
+        .filter((r) => r.bgg_id > 0);
+    } catch { /* parse error → treat as empty */ }
   }
+
+  const bggHits = bggSettled.status === "fulfilled" ? bggSettled.value : [];
+
+  // Prefer Wikidata (has stable BGG IDs), enrich with thumbnails
+  if (wikidataBase.length > 0) {
+    const thumbnails = await Promise.all(wikidataBase.map((r) => fetchThumbnail(r.bgg_id)));
+    return NextResponse.json({
+      results: wikidataBase.map((r, i) => ({ ...r, thumbnail_url: thumbnails[i] ?? null })),
+    });
+  }
+
+  // BGG geekdo already provides thumbnails — return directly
+  return NextResponse.json({ results: bggHits });
 }

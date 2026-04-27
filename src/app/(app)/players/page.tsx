@@ -249,6 +249,24 @@ export default async function PlayersPage() {
     friendship: friendshipMap.get(p.id) ?? null,
   }));
 
+  // ── 11. Newest players (for "Neu" tab) — ordered by created_at, no PLZ filter ─
+  type NewPlayerRow = { id: string; username: string; display_name: string | null; avatar_url: string | null; location: string | null };
+  const { data: newPlayersData } = await admin
+    .from("profiles")
+    .select("id, username, display_name, avatar_url, location")
+    .neq("id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  const initialNewPlayers = ((newPlayersData ?? []) as NewPlayerRow[]).map((p) => ({
+    id: p.id,
+    username: p.username,
+    display_name: p.display_name,
+    avatar_url: p.avatar_url,
+    location: p.location,
+    friendship: friendshipMap.get(p.id) ?? null,
+  }));
+
   return (
     <PlayersClient
       currentUserId={user.id}
@@ -259,6 +277,7 @@ export default async function PlayersPage() {
       unreadByUser={unreadByUser}
       totalUnread={totalUnread}
       initialSearchResults={initialSearchResults}
+      initialNewPlayers={initialNewPlayers}
       forSaleGames={forSaleGames}
       pendingInvites={pendingInvites}
       hasLocation={!!(myProfile?.location?.trim())}
