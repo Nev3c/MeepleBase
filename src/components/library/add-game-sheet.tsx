@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X, ArrowLeft, Check, Download, List, Plus, ExternalLink } from "lucide-react";
 import Image from "next/image";
@@ -194,20 +194,22 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  // Lift the sheet above the soft keyboard.
+  // Lift the sheet above the soft keyboard — no animation, no jitter.
   //
-  // The trick: `position: fixed; bottom: 0` anchors to the LAYOUT viewport, which
-  // does not shrink when the keyboard opens. So `bottom: 0` ends up behind the
-  // keyboard. visualViewport.height tracks the visible area excluding keyboard.
+  // `position: fixed; bottom: 0` anchors to the LAYOUT viewport, which doesn't
+  // shrink when the keyboard opens — `bottom: 0` ends up behind the keyboard.
+  // visualViewport.height tracks the visually-available area (keyboard excluded).
   //
-  // keyboardHeight = layoutInner - vv.height - vv.offsetTop
-  // → set sheet's `bottom` to that value so its bottom edge sits exactly on top
-  //   of the keyboard. Cap maxHeight so it never grows taller than visual area.
+  //   keyboardHeight = layoutInner - vv.height - vv.offsetTop
+  //   sheet.bottom   = keyboardHeight   (so its bottom edge sits on top of kb)
+  //   sheet.maxHeight ≤ vv.height       (never taller than visible area)
   //
-  // Both `resize` and `scroll` events fire as the keyboard animates in/out;
-  // listening to both keeps the sheet locked above the keyboard during the
-  // animation rather than only after it settles.
-  useEffect(() => {
+  // Anti-jitter rules:
+  // 1. useLayoutEffect → measure & set BEFORE first paint, no flash from 0→kb
+  // 2. requestAnimationFrame batching → coalesce iOS's bursty resize events
+  // 3. NO CSS transition on `bottom` → would fight with the keyboard's own
+  //    animation curve and produce a "jumping" feel
+  useLayoutEffect(() => {
     if (!open) return;
     const vv = window.visualViewport;
     if (!vv) {
@@ -215,19 +217,28 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       setKeyboardOffset(0);
       return;
     }
-    const update = () => {
+    let rafId = 0;
+    const compute = () => {
       const layout = window.innerHeight;
-      const kb = Math.max(0, layout - vv.height - vv.offsetTop);
+      const kb = Math.max(0, Math.round(layout - vv.height - vv.offsetTop));
       setKeyboardOffset(kb);
-      // Cap height so sheet always fits inside visual viewport with breathing room
       setSheetMaxHeight(`${Math.floor(vv.height * 0.92)}px`);
     };
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
+    const schedule = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        compute();
+      });
+    };
+    // Sync first measurement before paint
+    compute();
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
     return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
+      if (rafId) cancelAnimationFrame(rafId);
+      vv.removeEventListener("resize", schedule);
+      vv.removeEventListener("scroll", schedule);
     };
   }, [open]);
 
@@ -241,8 +252,9 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
         style={{
           bottom: keyboardOffset,
           maxHeight: sheetMaxHeight,
-          // Smooth lift when keyboard appears/disappears
-          transition: keyboardOffset > 0 ? "bottom 120ms ease-out" : "bottom 200ms ease-in",
+          // No transition on `bottom`: lets the sheet ride the keyboard's own
+          // animation curve frame-by-frame instead of fighting it.
+          willChange: "bottom",
         }}
         role="dialog" aria-modal="true"
       >

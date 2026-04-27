@@ -20,6 +20,24 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.0",
+    date: "2026-04-27",
+    title: "Spieler & Partien verbessert",
+    changes: [
+      { type: "feat", text: "Spieler-Seite: 5-Tab-Layout (Chats · Freunde · Termine · Markt · Suche) — übersichtlicher und entstauchter" },
+      { type: "feat", text: "Markt-Tab zeigt jetzt auch deine eigenen Verkaufsangebote, klar getrennt von Freunde-Angeboten" },
+      { type: "feat", text: "Spieler in der Nähe: neue Radius-Optionen 5 km und 15 km zusätzlich zu 25 / 50 / 100 km" },
+      { type: "feat", text: "Partie aufzeichnen beim Antippen eines Freundes öffnet direkt das Erfassungs-Sheet mit Freund vorausgefüllt" },
+      { type: "feat", text: "Spieler-Suche und Entfernungs-Modus zeigen nur Spieler mit hinterlegter PLZ — so funktioniert auch 'In der Nähe'" },
+      { type: "feat", text: "BGStats-Export: 'In BGStats eintragen'-Button im Share-Modal öffnet die BGStats-App mit allen Daten vorausgefüllt" },
+      { type: "feat", text: "Spielerabend abschließen: expliziter Button für Organisatoren — Scores & Fotos erfassen schließt den Abend nicht mehr automatisch" },
+      { type: "improve", text: "Geplant-Tab steht wieder zuerst auf der Partien-Seite und ist Standard beim Öffnen" },
+      { type: "improve", text: "Audio ist jetzt der erste Tab in den Tools — schnellster Zugriff auf das meistgenutzte Feature" },
+      { type: "fix", text: "Admin: Neue Registrierungen mit Auto-Bestätigung wurden nicht als ausstehende Freigaben erkannt" },
+      { type: "fix", text: "Bibliothek: BGG-Fallback jetzt auch für Spiele ohne Wikidata-Eintrag (z.B. 'The Hunger')" },
+    ],
+  },
+  {
     version: "v0.6.0",
     date: "2026-04-26",
     title: "Audio, Export & Galerie",
@@ -102,4 +120,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version;
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.0

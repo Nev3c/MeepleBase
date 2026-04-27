@@ -815,7 +815,7 @@ function FriendSheet({ friend, open, unreadCount, onClose, onRemove, onClearUnre
 
           {/* Record play */}
           <Link
-            href="/plays/new"
+            href={`/plays?player=${encodeURIComponent(p.display_name ?? p.username)}`}
             onClick={onClose}
             className="flex items-center gap-4 px-3 py-3.5 rounded-2xl hover:bg-muted/60 active:bg-muted transition-colors"
           >
@@ -1183,7 +1183,7 @@ function InviteCard({
   );
 }
 
-const RADIUS_OPTIONS = [25, 50, 100] as const;
+const RADIUS_OPTIONS = [5, 15, 25, 50, 100] as const;
 
 function SucheTab({
   searchQuery, searchResults, searching, nearbyStatus, nearbyResults,

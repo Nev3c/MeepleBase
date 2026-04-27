@@ -27,10 +27,14 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // Only return players who have a PLZ/location set — this is required to be
+  // discoverable both in A-Z and "in der Nähe" search. Mentioned in the App Tour.
   let query = admin
     .from("profiles")
     .select("id, username, display_name, avatar_url, location")
     .neq("id", user.id)
+    .not("location", "is", null)
+    .neq("location", "")
     .order("username", { ascending: true })
     .limit(50);
 

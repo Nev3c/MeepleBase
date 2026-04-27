@@ -37,6 +37,8 @@ export default async function PlayersPage() {
       .from("profiles")
       .select("id, username, display_name, avatar_url, location")
       .neq("id", user.id)
+      .not("location", "is", null)
+      .neq("location", "")
       .order("username", { ascending: true })
       .limit(50),
   ]);

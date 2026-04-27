@@ -100,8 +100,19 @@ export function PlaysClient({
   // Delete confirmation
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // Pre-fill players from score-tracker URL param
+  // Pre-fill players from score-tracker URL param OR from ?player=NAME (friend quick-record)
   useEffect(() => {
+    // ?player=NAME — from "Partie aufzeichnen" in the friend sheet
+    const playerName = searchParams.get("player");
+    if (playerName) {
+      setPrefillPlayers([{ display_name: playerName, score: "", winner: false }]);
+      setPastSheetOpen(true);
+      setActiveTab("vergangen");
+      router.replace("/plays", { scroll: false });
+      return;
+    }
+
+    // ?prefill=... — from score-tracker
     const prefill = searchParams.get("prefill");
     if (!prefill) return;
     try {
@@ -1209,7 +1220,7 @@ function PastPlaySheet({
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
           <h2 className="font-display text-lg font-semibold">
-            {isEdit ? "Partie bearbeiten" : sessionPrefill ? "Spielabend abschließen" : "Partie(n) erfassen"}
+            {isEdit ? "Partie bearbeiten" : sessionPrefill ? "Scores & Fotos erfassen" : "Partie(n) erfassen"}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
@@ -1382,7 +1393,13 @@ function PastPlaySheet({
           {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
         </div>
 
-        <div className="px-4 py-4 border-t border-border flex-shrink-0">
+        <div className="px-4 py-4 border-t border-border flex-shrink-0 flex flex-col gap-2">
+          {sessionPrefill && (
+            <p className="text-[11px] text-muted-foreground text-center leading-snug">
+              Speichern erstellt nur die Partien — der Spielabend bleibt offen.
+              Zum Beenden nutze „Spielabend abschließen" auf der Karte.
+            </p>
+          )}
           <button onClick={handleSave} disabled={saving || (!isEdit && selectedGames.length === 0) || (isEdit && !editGameId && !editGlobalSelected)}
             className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
             {saving ? (

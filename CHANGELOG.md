@@ -9,6 +9,22 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Spieler-Seite: Radius-Optionen 5 km und 15 km ergänzt (vorher: 25/50/100 km)
+- Spieler-Seite: „Partie aufzeichnen" im Freund-Sheet navigiert zu `/plays?player=NAME` und öffnet das Erfassungs-Sheet mit dem Freund vorausgefüllt
+- Plays-Client: `?player=NAME` Query-Param — öffnet Play-Sheet mit vorausgefülltem Spieler (Freund-Shortcut)
+- In-App-Changelog: v0.7.0 Eintrag mit allen Änderungen dieser Session
+
+### Changed
+- Spieler-Suche (A-Z und Entfernung): Nur Spieler mit hinterlegter PLZ werden angezeigt (bereits in players/page.tsx + /api/players/search)
+
+### Fixed
+- Spieler-Seite: „Partie aufzeichnen" verlinkte auf `/plays/new` (404) — jetzt `/plays?player=NAME`
+
+---
+
+## [Unreleased — vorherige Session]
+
+### Added
 - Audio-Tab (ehemals Sound): zwei Sub-Tabs „Sounds" (Soundboard) und „Musik" (YouTube-Suche); Musik-Tab hat „Playlisten"- und „Songs"-Modus
 - Spielmusik-Suche: Playlist-Modus spielt zusammenhängende YouTube-Playlisten ab (nächster Track läuft automatisch); Songs-Modus für Einzeltracks
 - Profil: Einstellungen-Block auf einzelnen Link reduziert; App Tour in Community-Block verschoben; Admin in eigenem Block
