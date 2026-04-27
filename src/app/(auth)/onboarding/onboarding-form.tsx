@@ -27,6 +27,7 @@ const GUIDE_STEPS = [
     icon: <Users size={48} className="text-amber-500" />,
     title: "Spieler",
     description: "Freunde hinzufügen, Nachrichten schreiben, Spielbibliotheken entdecken — und Spieleabende gemeinsam koordinieren.",
+    hint: "Tipp: Hinterlege deine Postleitzahl im Profil, damit andere Spieler dich in der Nähe-Suche finden können.",
   },
   {
     icon: <CalendarDays size={48} className="text-amber-500" />,
@@ -58,7 +59,7 @@ export function OnboardingForm() {
   // Guide steps 0–3
   if (step < GUIDE_STEPS.length) {
     const s = GUIDE_STEPS[step];
-    return <GuideStep {...s} step={step} total={TOTAL_STEPS} onNext={next} onBack={step > 0 ? back : undefined} />;
+    return <GuideStep icon={s.icon} title={s.title} description={s.description} hint={"hint" in s ? (s as { hint: string }).hint : undefined} step={step} total={TOTAL_STEPS} onNext={next} onBack={step > 0 ? back : undefined} />;
   }
 
   // Install step
@@ -101,9 +102,9 @@ function Dots({ current, total }: { current: number; total: number }) {
 // ── Guide Step ──────────────────────────────────────────────────────────────
 
 function GuideStep({
-  icon, title, description, step, total, onNext, onBack,
+  icon, title, description, hint, step, total, onNext, onBack,
 }: {
-  icon: React.ReactNode; title: string; description: string;
+  icon: React.ReactNode; title: string; description: string; hint?: string;
   step: number; total: number; onNext: () => void; onBack?: () => void;
 }) {
   return (
@@ -115,6 +116,11 @@ function GuideStep({
         <div>
           <h2 className="font-display text-2xl font-semibold text-foreground mb-2">{title}</h2>
           <p className="text-muted-foreground text-sm leading-relaxed">{description}</p>
+          {hint && (
+            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed text-left">
+              💡 {hint}
+            </p>
+          )}
         </div>
       </div>
 

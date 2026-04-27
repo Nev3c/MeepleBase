@@ -194,21 +194,16 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
-  // Lift the sheet above the soft keyboard — no animation, no jitter.
+  // Lift the sheet above the soft keyboard.
   //
-  // `position: fixed; bottom: 0` anchors to the LAYOUT viewport, which doesn't
-  // shrink when the keyboard opens — `bottom: 0` ends up behind the keyboard.
-  // visualViewport.height tracks the visually-available area (keyboard excluded).
-  //
-  //   keyboardHeight = layoutInner - vv.height - vv.offsetTop
-  //   sheet.bottom   = keyboardHeight   (so its bottom edge sits on top of kb)
-  //   sheet.maxHeight ≤ vv.height       (never taller than visible area)
-  //
-  // Anti-jitter rules:
-  // 1. useLayoutEffect → measure & set BEFORE first paint, no flash from 0→kb
-  // 2. requestAnimationFrame batching → coalesce iOS's bursty resize events
-  // 3. NO CSS transition on `bottom` → would fight with the keyboard's own
-  //    animation curve and produce a "jumping" feel
+  // Strategy:
+  //   • sheet stays at `bottom: 0` (fixed)
+  //   • `transform: translateY(-keyboardOffset)` lifts it — GPU-composited,
+  //     no layout recalculation, smooth even during rapid state updates
+  //   • `maxHeight: vv.height × 0.92` keeps content within the visual viewport
+  //   • 80 px threshold filters the iOS autocomplete-bar micro-resizes (~44 px)
+  //     so the sheet doesn't jump every time the suggestion bar appears
+  //   • CSS transition on `transform` smooths the initial keyboard-open animation
   useLayoutEffect(() => {
     if (!open) return;
     const vv = window.visualViewport;
@@ -217,28 +212,26 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       setKeyboardOffset(0);
       return;
     }
-    let rafId = 0;
+
+    let lastKb = 0;
+
     const compute = () => {
-      const layout = window.innerHeight;
-      const kb = Math.max(0, Math.round(layout - vv.height - vv.offsetTop));
-      setKeyboardOffset(kb);
+      const newKb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      // Skip trivial fluctuations (autocomplete bar ≈ 44–55 px → threshold 80)
+      if (newKb === lastKb) return;
+      if (newKb !== 0 && Math.abs(newKb - lastKb) < 80) return;
+      lastKb = newKb;
+      setKeyboardOffset(newKb);
       setSheetMaxHeight(`${Math.floor(vv.height * 0.92)}px`);
     };
-    const schedule = () => {
-      if (rafId) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        compute();
-      });
-    };
-    // Sync first measurement before paint
+
+    // Sync measurement before first paint
     compute();
-    vv.addEventListener("resize", schedule);
-    vv.addEventListener("scroll", schedule);
+    vv.addEventListener("resize", compute);
+    vv.addEventListener("scroll", compute);
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      vv.removeEventListener("resize", schedule);
-      vv.removeEventListener("scroll", schedule);
+      vv.removeEventListener("resize", compute);
+      vv.removeEventListener("scroll", compute);
     };
   }, [open]);
 
@@ -250,11 +243,14 @@ export function AddGameSheet({ open, onClose, bggUsername, initialTab = "search"
       <div
         className="fixed left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
         style={{
-          bottom: keyboardOffset,
+          bottom: 0,
           maxHeight: sheetMaxHeight,
-          // No transition on `bottom`: lets the sheet ride the keyboard's own
-          // animation curve frame-by-frame instead of fighting it.
-          willChange: "bottom",
+          // transform is GPU-composited (no layout cost) → smooth on iOS.
+          // CSS transition lets the sheet smoothly chase the keyboard animation
+          // instead of jumping in discrete state-update steps.
+          transform: `translateY(-${keyboardOffset}px)`,
+          transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+          willChange: "transform",
         }}
         role="dialog" aria-modal="true"
       >

@@ -13,12 +13,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spieler-Seite: „Partie aufzeichnen" im Freund-Sheet navigiert zu `/plays?player=NAME` und öffnet das Erfassungs-Sheet mit dem Freund vorausgefüllt
 - Plays-Client: `?player=NAME` Query-Param — öffnet Play-Sheet mit vorausgefülltem Spieler (Freund-Shortcut)
 - In-App-Changelog: v0.7.0 Eintrag mit allen Änderungen dieser Session
+- Onboarding: App-Tour „Spieler"-Slide zeigt jetzt Hinweis zur PLZ-Hinterlegung für Nähe-Suche
+- Einstellungen: BGG-Spielekatalog-Bulk-Import — füllt lokale `games`-Tabelle mit ~100 populären Spielen für schnelle Offline-Suche (GET liefert Zählstand, POST importiert Batch für Batch)
+- Spielsuche (`/api/games/search`): Lokale DB wird jetzt zuerst durchsucht (≥5 Treffer → sofortige Antwort ohne externe API)
 
 ### Changed
 - Spieler-Suche (A-Z und Entfernung): Nur Spieler mit hinterlegter PLZ werden angezeigt (bereits in players/page.tsx + /api/players/search)
 
 ### Fixed
 - Spieler-Seite: „Partie aufzeichnen" verlinkte auf `/plays/new` (404) — jetzt `/plays?player=NAME`
+- Spieler-Seite: Radius-Chips flickerten während der Suche (Farbe sprang beim Laden) — vereinfachte Bedingung, Chip ist immer amber wenn ausgewählt
+- Bibliothek: Tastatur-Sprünge beim Öffnen des Hinzufügen-Sheets behoben — `transform: translateY` statt `bottom`-Animation, 80px-Threshold filtert iOS-Autocomplete-Bar-Ruckeln, CSS-Transition für flüssiges Nachführen
 
 ---
 

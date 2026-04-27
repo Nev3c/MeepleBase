@@ -1248,8 +1248,8 @@ function SucheTab({
                   key={r} type="button"
                   onClick={() => { onNearbyRadiusChange(r); onNearbySearch(r); }}
                   className={cn(
-                    "flex-1 py-1.5 rounded-full text-xs font-semibold border transition-all",
-                    nearbyRadius === r && (nearbyDone || isLoading)
+                    "flex-1 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+                    nearbyRadius === r
                       ? "bg-amber-500 text-white border-amber-500 shadow-sm"
                       : "bg-card text-muted-foreground border-border hover:border-amber-300 hover:text-amber-700"
                   )}

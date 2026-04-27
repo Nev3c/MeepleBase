@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 const WIKIDATA_SPARQL = "https://query.wikidata.org/sparql";
 
@@ -79,6 +80,36 @@ export async function GET(req: NextRequest) {
   if (!q || q.length < 2) {
     return NextResponse.json({ results: [] });
   }
+
+  // ── Step 0: Search local games table first (fast, no external calls) ─────────
+  // Games table has public read RLS — admin client not needed but used for
+  // consistency and to avoid needing a per-request auth cookie here.
+  try {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data: localGames } = await admin
+      .from("games")
+      .select("bgg_id, name, thumbnail_url, year")
+      .ilike("name", `%${q}%`)
+      .not("bgg_id", "is", null)
+      .order("name", { ascending: true })
+      .limit(15);
+
+    if (localGames && localGames.length >= 5) {
+      // Enough local results — return immediately, no external API needed
+      return NextResponse.json({
+        results: localGames.map((g) => ({
+          bgg_id: g.bgg_id as number,
+          name: g.name as string,
+          thumbnail_url: (g.thumbnail_url as string | null) ?? null,
+          year_published: (g.year as number | null) ?? null,
+        })),
+        source: "local",
+      });
+    }
+  } catch { /* local DB unavailable → fall through to external search */ }
 
   try {
     const url = `${WIKIDATA_SPARQL}?format=json&query=${encodeURIComponent(buildQuery(q))}`;

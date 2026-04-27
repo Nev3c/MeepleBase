@@ -129,6 +129,62 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     setBgStatsError(null);
   }
 
+  // ── BGG Catalog state ─────────────────────────────────────────────────────
+  type CatalogPhase = "idle" | "loading" | "running" | "done" | "error";
+  const [catalogPhase, setCatalogPhase] = useState<CatalogPhase>("idle");
+  const [catalogCount, setCatalogCount] = useState<number | null>(null);
+  const [catalogProgress, setCatalogProgress] = useState(0);
+  const [catalogImported, setCatalogImported] = useState(0);
+  const catalogAbort = useRef(false);
+
+  useEffect(() => {
+    fetch("/api/games/bgg-catalog")
+      .then((r) => r.json())
+      .then((d: { count?: number }) => setCatalogCount(d.count ?? 0))
+      .catch(() => {});
+  }, []);
+
+  async function handleBggCatalog() {
+    if (catalogPhase === "running") {
+      catalogAbort.current = true;
+      setCatalogPhase("idle");
+      return;
+    }
+    catalogAbort.current = false;
+    setCatalogPhase("running");
+    setCatalogProgress(0);
+    setCatalogImported(0);
+
+    let termIndex = 0;
+    let totalImported = 0;
+
+    while (!catalogAbort.current) {
+      try {
+        const res = await fetch("/api/games/bgg-catalog", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ term_index: termIndex }),
+        });
+        if (!res.ok) { setCatalogPhase("error"); return; }
+        const data = await res.json() as {
+          done?: boolean; term_index?: number; imported?: number; progress?: number;
+        };
+        totalImported += data.imported ?? 0;
+        termIndex = data.term_index ?? termIndex + 1;
+        setCatalogProgress(data.progress ?? 0);
+        setCatalogImported(totalImported);
+        if (data.done) {
+          setCatalogPhase("done");
+          setCatalogCount((prev) => (prev ?? 0) + totalImported);
+          return;
+        }
+      } catch {
+        setCatalogPhase("error");
+        return;
+      }
+    }
+  }
+
   // ── BGG Bulk Refresh state ─────────────────────────────────────────────────
   const [refreshPhase, setRefreshPhase]   = useState<RefreshPhase>("idle");
   const [refreshPending, setRefreshPending] = useState<number | null>(null);
@@ -914,6 +970,59 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                   Erneut versuchen
                 </button>
               </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── BGG Spielekatalog ──────────────────────────────── */}
+        <section>
+          <div className="bg-card rounded-2xl border border-border shadow-card p-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-0.5">Spielekatalog aufbauen</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Lädt ~600 populäre Spiele von BoardGameGeek in die lokale Datenbank — danach findet die Spielsuche viele Titel sofort ohne externe Anfragen.
+              </p>
+            </div>
+
+            {catalogCount !== null && (
+              <p className="text-xs text-muted-foreground">
+                Aktuell <span className="font-semibold text-foreground">{catalogCount}</span> Spiele im Katalog
+              </p>
+            )}
+
+            {catalogPhase === "idle" || catalogPhase === "done" || catalogPhase === "error" ? (
+              <button
+                onClick={handleBggCatalog}
+                className="flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium hover:bg-amber-100 active:bg-amber-200 transition-colors"
+              >
+                <RefreshCw size={14} />
+                {catalogPhase === "done" ? "Erneut importieren" : "Katalog importieren"}
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{catalogProgress}% · {catalogImported} importiert</span>
+                  <button onClick={handleBggCatalog} className="flex items-center gap-1 hover:text-foreground transition-colors">
+                    <X size={12} /> Stopp
+                  </button>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-amber-400 rounded-full transition-all duration-300"
+                    style={{ width: `${catalogProgress}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground animate-pulse">Lade Spieledaten von BGG…</p>
+              </div>
+            )}
+
+            {catalogPhase === "done" && (
+              <p className="text-xs text-green-700 font-medium flex items-center gap-1.5">
+                <Check size={13} /> {catalogImported} neue Spiele hinzugefügt
+              </p>
+            )}
+            {catalogPhase === "error" && (
+              <p className="text-xs text-red-600">Fehler beim Laden — bitte erneut versuchen.</p>
             )}
           </div>
         </section>
