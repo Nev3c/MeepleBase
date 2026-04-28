@@ -22,6 +22,11 @@ interface LookupResult extends SearchResult {
   min_playtime?: number | null;
   max_playtime?: number | null;
   description?: string | null;
+  /** BGG canonical (primary) name — set when the search found the game via a
+   *  localized alternate name so the confirm step can offer both options. */
+  canonicalName?: string;
+  /** The localized name the user actually found the game by (e.g. German title). */
+  localizedName?: string;
 }
 
 type Step = "search" | "confirm";
@@ -144,13 +149,26 @@ export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab
   }, [query]);
 
   const handleSelectGame = useCallback(async (game: SearchResult) => {
+    // Capture the name the user found the game by (may be a localized title).
+    const searchResultName = game.name;
     setAdding(false);
     setAddError(null);
     setSearching(true);
     try {
       const res = await fetch(`/api/bgg/lookup?id=${game.bgg_id}`);
       const data = await res.json();
-      setSelected(res.ok && !data.error ? data : game);
+      if (res.ok && !data.error) {
+        const canonicalName: string = data.name; // BGG primary (English) name
+        if (searchResultName && searchResultName !== canonicalName) {
+          // User found the game via a localized name — offer both options.
+          // Default to the localized name so they don't have to switch manually.
+          setSelected({ ...data, name: searchResultName, localizedName: searchResultName, canonicalName });
+        } else {
+          setSelected(data);
+        }
+      } else {
+        setSelected(game);
+      }
     } catch {
       setSelected(game);
     } finally {
@@ -171,17 +189,25 @@ export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab
     setAdding(true);
     setAddError(null);
     try {
+      // When the user found the game via a localized name and kept that name,
+      // send it as custom_name → stored in user_games.custom_fields.name so
+      // game-card.tsx shows the localized title in the user's library.
+      const useLocalizedName =
+        selected.canonicalName && selected.name !== selected.canonicalName;
       const res = await fetch("/api/games/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bgg_id: selected.bgg_id,
           status,
-          name: selected.name,
+          // Always send the BGG canonical name for the shared games table.
+          name: selected.canonicalName ?? selected.name,
           // Pass the search-result thumbnail as a client-side fallback.
           // games/add uses this if the geekitems fetch on the server fails,
           // so the game always has at least a cover image immediately after add.
           thumbnail_url: selected.thumbnail_url ?? null,
+          // Optional: localized name to store in user_games.custom_fields.
+          ...(useLocalizedName ? { custom_name: selected.name } : {}),
         }),
       });
       if (res.status === 409) { setAddError("Bereits in deiner Bibliothek."); setAdding(false); return; }
@@ -306,6 +332,7 @@ export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab
             adding={adding}
             addError={addError}
             addSuccess={addSuccess}
+            onNameChange={(name) => setSelected((prev) => prev ? { ...prev, name } : prev)}
           />
         )}
       </div>
@@ -706,9 +733,10 @@ function ImportTab({ onClose }: { bggUsername?: string | null; onClose: () => vo
 
 // ── Confirm step ──────────────────────────────────────────────────────────────
 
-function ConfirmStep({ selected, status, setStatus, onAdd, adding, addError, addSuccess }: {
+function ConfirmStep({ selected, status, setStatus, onAdd, adding, addError, addSuccess, onNameChange }: {
   selected: LookupResult; status: GameStatus; setStatus: (s: GameStatus) => void;
   onAdd: () => void; adding: boolean; addError: string | null; addSuccess: boolean;
+  onNameChange?: (name: string) => void;
 }) {
   return (
     <div className="flex flex-col flex-1 px-4 py-4 gap-4 overflow-y-auto">
@@ -741,6 +769,43 @@ function ConfirmStep({ selected, status, setStatus, onAdd, adding, addError, add
           )}
         </div>
       </div>
+
+      {/* Name toggle — shown only when the game was found via a localized name */}
+      {selected.localizedName && selected.canonicalName && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Spieltitel in deiner Bibliothek</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onNameChange?.(selected.localizedName!)}
+              disabled={adding || addSuccess}
+              className={cn(
+                "flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all duration-150",
+                selected.name === selected.localizedName
+                  ? "border-amber-400 bg-amber-50 text-amber-900 shadow-sm"
+                  : "border-border bg-card hover:bg-muted/50"
+              )}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Deutsch</span>
+              <span className="text-xs font-medium leading-snug line-clamp-2">{selected.localizedName}</span>
+              {selected.name === selected.localizedName && <Check size={12} className="text-amber-600 mt-1" />}
+            </button>
+            <button
+              onClick={() => onNameChange?.(selected.canonicalName!)}
+              disabled={adding || addSuccess}
+              className={cn(
+                "flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all duration-150",
+                selected.name === selected.canonicalName
+                  ? "border-amber-400 bg-amber-50 text-amber-900 shadow-sm"
+                  : "border-border bg-card hover:bg-muted/50"
+              )}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">Englisch</span>
+              <span className="text-xs font-medium leading-snug line-clamp-2">{selected.canonicalName}</span>
+              {selected.name === selected.canonicalName && <Check size={12} className="text-amber-600 mt-1" />}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Status picker */}
       <div className="flex flex-col gap-2">

@@ -42,6 +42,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const bggId = Number(body.bgg_id);
   const status = body.status ?? "owned";
+  // Optional localized display name the user chose during the add flow.
+  // Stored in user_games.custom_fields.name; game-card.tsx prefers this over game.name.
+  const customName: string | null =
+    typeof body.custom_name === "string" && body.custom_name.trim()
+      ? body.custom_name.trim()
+      : null;
 
   if (!bggId) {
     return NextResponse.json({ error: "bgg_id fehlt" }, { status: 400 });
@@ -142,9 +148,16 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 3. user_games-Eintrag anlegen ─────────────────────────────────────────
+  // If the user chose a localized title (e.g. German), persist it in custom_fields.name
+  // so game-card.tsx can display it instead of the shared BGG canonical name.
   const { data: userGame, error: ugError } = await supabase
     .from("user_games")
-    .insert({ user_id: user.id, game_id: game.id, status })
+    .insert({
+      user_id: user.id,
+      game_id: game.id,
+      status,
+      ...(customName ? { custom_fields: { name: customName } } : {}),
+    })
     .select("*, game:games(*)")
     .single();
 

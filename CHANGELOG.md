@@ -20,6 +20,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - Spieler-Suche (A-Z und Entfernung): Nur Spieler mit hinterlegter PLZ werden angezeigt (bereits in players/page.tsx + /api/players/search)
 
+### Added
+- Spiel hinzufügen: Lokalisierter Spieltitel wählbar — wird ein Spiel über einen deutschen Namen gefunden (z. B. „Dune – Ein Spiel um Macht und Intrigen"), erscheint im Bestätigungs-Sheet ein DE/EN-Toggle; der gewählte Titel wird als `custom_fields.name` in `user_games` gespeichert und in der Bibliothek angezeigt; Standard ist der gefundene deutsche Titel
+
 ### Fixed
 - Spielsuche: Lokalisierte Spielnamen (z. B. „Dune: Geheimnisse der Häuser") erscheinen jetzt in den Ergebnissen. Zwei Bugs behoben: (1) lokale DB-Suche hat bei ≥5 Treffern externe Quellen komplett übersprungen; (2) Wikidata und BGG wurden exklusiv behandelt — hatte Wikidata ≥1 Treffer, wurde BGG komplett ignoriert. Jetzt laufen alle Quellen parallel und werden immer zusammengeführt; BGG geeksearch lädt jetzt Seite 1+2 parallel (~50 Treffer statt 25); Wikidata-Query erweitert auf EN + DE Labels.
 - Spielsuche: Ladekringel im Suchfeld sprang auf und ab statt zu drehen — `animate-spin` und `-translate-y-1/2` auf demselben SVG ließen die CSS-Keyframes das `translateY` bei jedem Frame überschreiben; Wrapper-Div trennt jetzt Positionierung von Animation.
