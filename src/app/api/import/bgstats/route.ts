@@ -49,11 +49,24 @@ interface BGStatsExport {
   players?: BGStatsPlayer[];
   locations?: BGStatsLocation[];
   plays?: BGStatsPlay[];
+  // Pagination (added by client-side chunking)
+  offset?: number;
 }
 
 // ── POST /api/import/bgstats ───────────────────────────────────────────────────
-// Body: parsed BGStats JSON export { games, players, locations, plays }
-// Returns: { imported, skipped_duplicates, skipped_no_game, errors, game_names_imported }
+// Body: parsed BGStats JSON export { games, players, locations, plays, offset? }
+//
+// Chunked import: the client sends the full BGStats export body on every request,
+// plus an optional `offset` (default 0). The route processes CHUNK_SIZE plays
+// starting at `offset` and returns `{ ..., total, next_offset, done }` so the
+// client can loop until done.
+//
+// Why chunking?  A BGStats export with 700+ plays previously exceeded Vercel's
+// function timeout (10 s free / 60 s pro) when processed all at once, because
+// the sequential play loop does 2 DB round-trips per play.  Chunking keeps each
+// request well under the timeout.
+
+const CHUNK_SIZE = 100;
 
 export async function POST(req: NextRequest) {
   const supabase = createClient();
@@ -76,10 +89,16 @@ export async function POST(req: NextRequest) {
   const bgsPlayers = body.players ?? [];
   const bgsLocations = body.locations ?? [];
   const bgsPlays = body.plays ?? [];
+  const offset = typeof body.offset === "number" && body.offset >= 0 ? body.offset : 0;
 
   if (bgsPlays.length === 0) {
     return NextResponse.json({ error: "Keine Partien in der Datei gefunden." }, { status: 400 });
   }
+
+  // ── Slice plays to the current chunk ────────────────────────────────────────
+  const chunk = bgsPlays.slice(offset, offset + CHUNK_SIZE);
+  const nextOffset = offset + CHUNK_SIZE;
+  const done = nextOffset >= bgsPlays.length;
 
   // ── Build lookup maps from BGStats IDs ──────────────────────────────────────
   const bgsGameMap = new Map<number, BGStatsGame>();
@@ -91,68 +110,77 @@ export async function POST(req: NextRequest) {
   const bgsLocationMap = new Map<number, BGStatsLocation>();
   for (const l of bgsLocations) bgsLocationMap.set(l.id, l);
 
-  // ── Resolve BGStats games → MeepleBase game UUIDs ───────────────────────────
+  // ── Resolve BGStats games → MeepleBase game UUIDs (only for this chunk) ─────
   // Cache: bgs game id → meeplebase game uuid
   const gameIdCache = new Map<number, string>();
   const gameNameCache = new Map<number, string>();
 
-  const uniqueBgsGameIds = Array.from(new Set(bgsPlays.map((p) => p.gameRefId)));
+  // Only resolve unique game IDs referenced in this chunk — avoids redundant DB
+  // lookups for games not used in this batch.
+  const uniqueBgsGameIds = Array.from(new Set(chunk.map((p) => p.gameRefId)));
 
-  for (const bgsId of uniqueBgsGameIds) {
-    const bgsGame = bgsGameMap.get(bgsId);
-    if (!bgsGame) continue;
+  // Run all game-resolution lookups in parallel (each is an independent DB query).
+  await Promise.all(
+    uniqueBgsGameIds.map(async (bgsId) => {
+      const bgsGame = bgsGameMap.get(bgsId);
+      if (!bgsGame) return;
 
-    // 1) Match by BGG ID
-    if (bgsGame.bggId) {
-      const { data: existing } = await admin
+      // 1) Match by BGG ID
+      if (bgsGame.bggId) {
+        const { data: existing } = await admin
+          .from("games")
+          .select("id, name")
+          .eq("bgg_id", bgsGame.bggId)
+          .maybeSingle();
+
+        if (existing) {
+          gameIdCache.set(bgsId, existing.id as string);
+          gameNameCache.set(bgsId, existing.name as string);
+          return;
+        }
+      }
+
+      // 2) Match by name (case-insensitive)
+      const { data: byName } = await admin
         .from("games")
         .select("id, name")
-        .eq("bgg_id", bgsGame.bggId)
+        .ilike("name", bgsGame.name.trim())
         .maybeSingle();
 
-      if (existing) {
-        gameIdCache.set(bgsId, existing.id as string);
-        gameNameCache.set(bgsId, existing.name as string);
-        continue;
+      if (byName) {
+        gameIdCache.set(bgsId, byName.id as string);
+        gameNameCache.set(bgsId, byName.name as string);
+        return;
       }
-    }
 
-    // 2) Match by name (case-insensitive)
-    const { data: byName } = await admin
-      .from("games")
-      .select("id, name")
-      .ilike("name", bgsGame.name.trim())
-      .maybeSingle();
+      // 3) Create minimal game entry
+      const insertPayload: Record<string, unknown> = {
+        name: bgsGame.name.trim(),
+      };
+      if (bgsGame.bggId) insertPayload.bgg_id = bgsGame.bggId;
 
-    if (byName) {
-      gameIdCache.set(bgsId, byName.id as string);
-      gameNameCache.set(bgsId, byName.name as string);
-      continue;
-    }
+      const { data: created } = await admin
+        .from("games")
+        .insert(insertPayload)
+        .select("id, name")
+        .single();
 
-    // 3) Create minimal game entry
-    const insertPayload: Record<string, unknown> = {
-      name: bgsGame.name.trim(),
-    };
-    if (bgsGame.bggId) insertPayload.bgg_id = bgsGame.bggId;
-
-    const { data: created } = await admin
-      .from("games")
-      .insert(insertPayload)
-      .select("id, name")
-      .single();
-
-    if (created) {
-      gameIdCache.set(bgsId, created.id as string);
-      gameNameCache.set(bgsId, created.name as string);
-    }
-  }
+      if (created) {
+        gameIdCache.set(bgsId, created.id as string);
+        gameNameCache.set(bgsId, created.name as string);
+      }
+    })
+  );
 
   // ── Fetch existing play dates for this user (for duplicate detection) ────────
-  // We compare: same user_id + same game_id + same calendar day
+  // We compare: same user_id + same game_id + same calendar day.
+  // Only fetching the IDs of games used in this chunk avoids a full-table scan
+  // for large play histories.
+  const chunkGameIds = Array.from(gameIdCache.values());
   const { data: existingPlays } = await supabase
     .from("plays")
-    .select("game_id, played_at");
+    .select("game_id, played_at")
+    .in("game_id", chunkGameIds.length > 0 ? chunkGameIds : ["00000000-0000-0000-0000-000000000000"]);
 
   const existingSet = new Set<string>();
   for (const ep of existingPlays ?? []) {
@@ -160,14 +188,14 @@ export async function POST(req: NextRequest) {
     existingSet.add(`${ep.game_id}::${day}`);
   }
 
-  // ── Import plays ─────────────────────────────────────────────────────────────
+  // ── Import plays in this chunk ───────────────────────────────────────────────
   let imported = 0;
   let skippedDuplicates = 0;
   let skippedNoGame = 0;
   let errors = 0;
   const importedGameNames: string[] = [];
 
-  for (const play of bgsPlays) {
+  for (const play of chunk) {
     const gameId = gameIdCache.get(play.gameRefId);
     if (!gameId) {
       skippedNoGame++;
@@ -240,7 +268,7 @@ export async function POST(req: NextRequest) {
         await admin.from("play_players").insert(playerRows);
       }
 
-      existingSet.add(dupKey); // prevent duplicate within same import
+      existingSet.add(dupKey); // prevent duplicate within same chunk
       imported++;
       const gameName = gameNameCache.get(play.gameRefId);
       if (gameName && !importedGameNames.includes(gameName)) {
@@ -257,5 +285,9 @@ export async function POST(req: NextRequest) {
     skipped_no_game: skippedNoGame,
     errors,
     game_names: importedGameNames.slice(0, 20),
+    // Pagination info for the client loop
+    total: bgsPlays.length,
+    next_offset: nextOffset,
+    done,
   });
 }

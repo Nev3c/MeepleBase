@@ -8,6 +8,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- BGStats-Import: Timeout-Fix — bei großen Exporten (700+ Partien) brach der Import nach ca. 50 Partien ab, weil die Vercel-Funktion (10 s Free / 60 s Pro) überschritten wurde. Import wird jetzt in Blöcken von 100 Partien verarbeitet; der Client schickt automatisch mehrere Anfragen hintereinander und zeigt einen Fortschrittsbalken (X/Y Partien)
+- BGStats-Import: Spielauflösung jetzt parallel (Promise.all statt sequenziellem for-of) — reduziert die Zeit pro Block erheblich bei Exporten mit vielen verschiedenen Spielen
+- BGG CSV-Import: Timeout-Fix — bei Sammlungen mit 500+ Spielen importierte die alte Route nur ~50 Spiele weil sie für jedes Spiel einen BGG-Metadaten-Fetch (geekitems, bis 6 s) auslöste und damit regelmäßig die Vercel-Timeout-Grenze überschritt. Die Route speichert jetzt nur Name + Jahr aus der CSV (kein BGG-Fetch mehr); Bilder und Metadaten lassen sich danach einmalig über Einstellungen → BGG-Daten aktualisieren nachladen
+- BGG CSV-Import: Batch-Größe von 5 auf 20 erhöht (kein BGG-Fetch mehr → sehr schnell)
+
+### Added
+- BGStats-Import: Fortschrittsbalken während des Imports zeigt wie viele Partien bereits importiert wurden (z. B. „350 / 724 Partien · 48%")
+- BGG CSV-Import: Hinweistext im Import-Ergebnis erklärt, dass Spielbilder und Metadaten danach über „BGG-Daten aktualisieren" geladen werden müssen
+- BGG CSV-Import: Erklärung im Schritte-Dialog was der Import beinhaltet und was nicht (kein automatisches Bildladen)
+
+---
+
 ### Added
 - Spieler-Seite: Radius-Optionen 5 km und 15 km ergänzt (vorher: 25/50/100 km)
 - Spieler-Seite: „Partie aufzeichnen" im Freund-Sheet navigiert zu `/plays?player=NAME` und öffnet das Erfassungs-Sheet mit dem Freund vorausgefüllt

@@ -682,7 +682,14 @@ function ImportTab({ onClose }: { bggUsername?: string | null; onClose: () => vo
           {importCount} {importCount === 1 ? "Spiel" : "Spiele"} importiert
           {skippedCount > 0 && `, ${skippedCount} bereits vorhanden`}
         </p>
-        <p className="text-xs text-muted-foreground mt-3">Schließt automatisch…</p>
+        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-left max-w-xs">
+          <p className="text-xs font-semibold text-amber-800 mb-1">Nächster Schritt</p>
+          <p className="text-xs text-amber-700 leading-relaxed">
+            Spielbilder und Metadaten (Cover, Spieleranzahl, Schwierigkeit) werden noch nicht automatisch geladen.
+            Gehe zu <span className="font-medium">Einstellungen → BGG-Daten aktualisieren</span> um sie für alle Spiele auf einmal zu holen.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground mt-4">Schließt automatisch…</p>
       </div>
     );
   }
@@ -724,6 +731,11 @@ function ImportTab({ onClose }: { bggUsername?: string | null; onClose: () => vo
             </span>
           </div>
         ))}
+        <div className="mt-1 pt-2.5 border-t border-border/60">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <span className="font-semibold text-foreground">Was importiert wird:</span> Name und Status (Besitz, Wunschliste …) aller Spiele aus deiner BGG-Sammlung. Spielbilder und Metadaten lädst du danach einmalig unter <span className="font-medium">Einstellungen → BGG-Daten aktualisieren</span>.
+          </p>
+        </div>
       </div>
 
       <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFileChange} className="hidden" aria-label="BGG CSV Datei auswählen" />

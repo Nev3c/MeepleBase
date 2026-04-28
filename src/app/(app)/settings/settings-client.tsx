@@ -53,6 +53,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     imported: number; skipped_duplicates: number; skipped_no_game: number; errors: number; game_names: string[];
   } | null>(null);
   const [bgStatsError, setBgStatsError] = useState<string | null>(null);
+  const [bgStatsDone, setBgStatsDone] = useState(0);
+  const [bgStatsTotal, setBgStatsTotal] = useState(0);
   const bgStatsInputRef = useRef<HTMLInputElement>(null);
 
   function handleBgStatsFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -95,23 +97,52 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     setBgStatsPhase("importing");
     setBgStatsError(null);
 
+    const total = bgStatsPreview?.plays ?? 0;
+    setBgStatsTotal(total);
+    setBgStatsDone(0);
+
+    let offset = 0;
+    let totalImported = 0;
+    let totalSkippedDuplicates = 0;
+    let totalSkippedNoGame = 0;
+    let totalErrors = 0;
+    const allGameNames: string[] = [];
+
     try {
-      const res = await fetch("/api/import/bgstats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bgStatsParsed),
-      });
-      const data = await res.json() as {
-        imported?: number; skipped_duplicates?: number; skipped_no_game?: number;
-        errors?: number; game_names?: string[]; error?: string;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Import fehlgeschlagen");
+      while (true) {
+        const res = await fetch("/api/import/bgstats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...bgStatsParsed, offset }),
+        });
+        const data = await res.json() as {
+          imported?: number; skipped_duplicates?: number; skipped_no_game?: number;
+          errors?: number; game_names?: string[]; error?: string;
+          total?: number; next_offset?: number; done?: boolean;
+        };
+        if (!res.ok) throw new Error(data.error ?? "Import fehlgeschlagen");
+
+        totalImported += data.imported ?? 0;
+        totalSkippedDuplicates += data.skipped_duplicates ?? 0;
+        totalSkippedNoGame += data.skipped_no_game ?? 0;
+        totalErrors += data.errors ?? 0;
+
+        for (const name of data.game_names ?? []) {
+          if (!allGameNames.includes(name)) allGameNames.push(name);
+        }
+
+        offset = data.next_offset ?? offset + 100;
+        setBgStatsDone(Math.min(offset, total));
+
+        if (data.done) break;
+      }
+
       setBgStatsResult({
-        imported: data.imported ?? 0,
-        skipped_duplicates: data.skipped_duplicates ?? 0,
-        skipped_no_game: data.skipped_no_game ?? 0,
-        errors: data.errors ?? 0,
-        game_names: data.game_names ?? [],
+        imported: totalImported,
+        skipped_duplicates: totalSkippedDuplicates,
+        skipped_no_game: totalSkippedNoGame,
+        errors: totalErrors,
+        game_names: allGameNames.slice(0, 20),
       });
       setBgStatsPhase("done");
       router.refresh();
@@ -127,6 +158,8 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
     setBgStatsPreview(null);
     setBgStatsResult(null);
     setBgStatsError(null);
+    setBgStatsDone(0);
+    setBgStatsTotal(0);
   }
 
   // ── BGG Catalog state ─────────────────────────────────────────────────────
@@ -1039,7 +1072,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                 </a>
                 . Exportiere deine Daten dort unter{" "}
                 <span className="font-medium text-foreground">Einstellungen → Daten exportieren → JSON</span>{" "}
-                und lade die Datei hier hoch.
+                und lade die Datei hier hoch. Bereits vorhandene Partien werden automatisch übersprungen — du kannst den Import also problemlos mehrfach ausführen.
               </p>
             </div>
 
@@ -1095,11 +1128,24 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
               </div>
             )}
 
-            {/* Importing */}
+            {/* Importing — progress bar */}
             {bgStatsPhase === "importing" && (
-              <div className="flex items-center gap-3 py-1">
-                <SpinnerIcon />
-                <p className="text-sm text-muted-foreground animate-pulse">Partien werden importiert…</p>
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {bgStatsDone} / {bgStatsTotal} Partien
+                  </span>
+                  <span className="tabular-nums">
+                    {bgStatsTotal > 0 ? Math.round((bgStatsDone / bgStatsTotal) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                    style={{ width: `${bgStatsTotal > 0 ? Math.round((bgStatsDone / bgStatsTotal) * 100) : 0}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground animate-pulse">Importiere Partien…</p>
               </div>
             )}
 
