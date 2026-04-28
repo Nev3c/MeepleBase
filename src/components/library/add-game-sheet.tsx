@@ -16,6 +16,8 @@ interface SearchResult {
   thumbnail_url?: string | null;
   /** German alternate name carried from Wikidata when `name` is the EN primary title */
   localizedName?: string | null;
+  /** Which data source returned this result */
+  source?: "local" | "wikidata" | "bgg";
 }
 
 interface LookupResult extends SearchResult {
@@ -515,14 +517,28 @@ function SearchTab({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm leading-tight truncate">{game.name}</p>
-                    {/* Show the alternate-language title as a subtitle for discoverability
-                        e.g. searching "dune" shows EN title + DE title underneath */}
+                    {/* Alternate-language subtitle — shown when Wikidata has both EN+DE labels */}
                     {game.localizedName && (
                       <p className="text-xs text-amber-700/70 truncate leading-tight">{game.localizedName}</p>
                     )}
                     {game.year_published && <p className="text-muted-foreground text-xs mt-0.5">{game.year_published}</p>}
                   </div>
-                  <span className="text-muted-foreground text-xs flex-shrink-0">#{game.bgg_id}</span>
+                  {/* Right side: source badge + bgg_id */}
+                  <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                    {game.source && (
+                      <span className={cn(
+                        "text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md leading-none",
+                        game.source === "local"
+                          ? "bg-amber-100 text-amber-700"
+                          : game.source === "wikidata"
+                          ? "bg-slate-100 text-slate-500"
+                          : "bg-slate-100 text-slate-400"
+                      )}>
+                        {game.source === "local" ? "Lokal" : game.source === "wikidata" ? "Wikidata" : "BGG"}
+                      </span>
+                    )}
+                    <span className="text-muted-foreground text-xs">#{game.bgg_id}</span>
+                  </div>
                 </button>
               </li>
             ))}

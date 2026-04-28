@@ -15,7 +15,7 @@ SELECT DISTINCT ?itemLabel ?bggId WHERE {
   FILTER(CONTAINS(LCASE(?itemLabel), "${escaped}"))
   FILTER(LANG(?itemLabel) IN ("en", "de"))
 }
-LIMIT 20
+LIMIT 40
 `.trim();
 }
 
@@ -163,8 +163,30 @@ async function bggXmlSearch(q: string): Promise<{ bgg_id: number; name: string; 
   }
 }
 
-type Hit = { bgg_id: number; name: string; thumbnail_url: string | null; localizedName?: string | null };
+type Source = "local" | "wikidata" | "bgg";
+type Hit = { bgg_id: number; name: string; thumbnail_url: string | null; localizedName?: string | null; source?: Source };
 type LocalHit = Hit & { year_published?: number | null };
+
+/** Score how well a game title matches the query — higher = more relevant.
+ *  Drives the final sort so titles that *start with* the query beat titles that
+ *  merely *contain* it somewhere in the middle.
+ *
+ *  Levels:
+ *   100 — exact match ("dune" → "Dune")
+ *    80 — starts-with + separator ("dune" → "Dune: Imperium", "Dune – …")
+ *    70 — starts-with, no separator ("dune" → "Dunecraft")
+ *    50 — a word inside the title starts with the query ("dune" → "… Dune …")
+ *    10 — query appears anywhere else (substring)
+ */
+function relevanceScore(name: string, q: string): number {
+  const nl = name.toLowerCase();
+  const ql = q.toLowerCase();
+  if (nl === ql) return 100;
+  if (/^[\s\-:,(!]/.test(nl.slice(ql.length)) && nl.startsWith(ql)) return 80;
+  if (nl.startsWith(ql)) return 70;
+  if (nl.split(/[\s\-:,()!]+/).some((w) => w.startsWith(ql))) return 50;
+  return 10;
+}
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim();
@@ -220,6 +242,7 @@ export async function GET(req: NextRequest) {
           name: g.name as string,
           thumbnail_url: (g.thumbnail_url as string | null) ?? null,
           year_published: (g.year as number | null) ?? null,
+          source: "local" as Source,
         }));
       } catch {
         return [];
@@ -244,15 +267,11 @@ export async function GET(req: NextRequest) {
     ...bggGeekdoSearches,
   ]);
 
-  // ── Local results (shown first — already have thumbnails) ─────────────────
+  // ── Local results ─────────────────────────────────────────────────────────
   const localHits: LocalHit[] = localSettled.status === "fulfilled" ? localSettled.value : [];
   const seenIds = new Set<number>(localHits.map((g) => g.bgg_id));
-  const TOTAL_LIMIT = 15;
+  const TOTAL_LIMIT = 30;
   const slots = Math.max(0, TOTAL_LIMIT - localHits.length);
-
-  if (slots === 0) {
-    return NextResponse.json({ results: localHits.slice(0, TOTAL_LIMIT), source: "local" });
-  }
 
   // ── Parse Wikidata (EN + DE, dedup by bgg_id, prefer EN label) ────────────
   // SPARQL JSON: language-tagged literals carry "xml:lang" on the binding.
@@ -304,6 +323,7 @@ export async function GET(req: NextRequest) {
             bgg_id: bggId,
             name: displayName,
             thumbnail_url: null as string | null,
+            source: "wikidata" as Source,
             ...(otherName ? { localizedName: otherName } : {}),
           };
         })
@@ -325,7 +345,7 @@ export async function GET(req: NextRequest) {
   for (const g of [...xmlHits, ...scrape1, ...scrape2, ...geekdoHits]) {
     if (!bggSeen.has(g.bgg_id)) {
       bggSeen.add(g.bgg_id);
-      bggHits.push(g);
+      bggHits.push({ ...g, source: "bgg" as Source });
     }
   }
 
@@ -356,7 +376,18 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({
-    results: ([...localHits, ...enriched] as (Hit & { year_published?: number | null })[]).slice(0, TOTAL_LIMIT),
+  // ── Sort combined results by relevance ────────────────────────────────────
+  // All sources merged — now rank by how well each title matches the query so
+  // that "Dune: A Game of …" beats "Terraforming Mars: … Dune …" for query "dune".
+  // Within the same score tier, local DB results win the tiebreak (they already
+  // have thumbnails and confirmed BGG IDs), then Wikidata, then BGG.
+  const combined = ([...localHits, ...enriched] as (Hit & { year_published?: number | null })[]);
+  const sourceOrder: Record<string, number> = { local: 0, wikidata: 1, bgg: 2 };
+  combined.sort((a, b) => {
+    const scoreDiff = relevanceScore(b.name, q) - relevanceScore(a.name, q);
+    if (scoreDiff !== 0) return scoreDiff;
+    return (sourceOrder[a.source ?? "bgg"] ?? 2) - (sourceOrder[b.source ?? "bgg"] ?? 2);
   });
+
+  return NextResponse.json({ results: combined.slice(0, TOTAL_LIMIT) });
 }
