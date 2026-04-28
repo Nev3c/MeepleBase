@@ -14,6 +14,8 @@ interface SearchResult {
   name: string;
   year_published: number | null;
   thumbnail_url?: string | null;
+  /** German alternate name carried from Wikidata when `name` is the EN primary title */
+  localizedName?: string | null;
 }
 
 interface LookupResult extends SearchResult {
@@ -159,10 +161,19 @@ export function AddGameSheet({ open, onClose, onSuccess, bggUsername, initialTab
       const data = await res.json();
       if (res.ok && !data.error) {
         const canonicalName: string = data.name; // BGG primary (English) name
-        if (searchResultName && searchResultName !== canonicalName) {
-          // User found the game via a localized name — offer both options.
-          // Default to the localized name so they don't have to switch manually.
-          setSelected({ ...data, name: searchResultName, localizedName: searchResultName, canonicalName });
+        // Determine if there's a localized (non-English) name to offer a toggle for:
+        // 1. The name the user clicked differs from canonical (they searched in German).
+        // 2. OR the search result carries a Wikidata DE label even though the user
+        //    searched in English (game.localizedName from the search API).
+        const localizedName =
+          searchResultName !== canonicalName
+            ? searchResultName
+            : (game.localizedName && game.localizedName !== canonicalName
+                ? game.localizedName
+                : null);
+        if (localizedName) {
+          // Default to the German title — user can switch via the DE/EN toggle.
+          setSelected({ ...data, name: localizedName, localizedName, canonicalName });
         } else {
           setSelected(data);
         }
@@ -504,6 +515,11 @@ function SearchTab({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm leading-tight truncate">{game.name}</p>
+                    {/* Show the alternate-language title as a subtitle for discoverability
+                        e.g. searching "dune" shows EN title + DE title underneath */}
+                    {game.localizedName && (
+                      <p className="text-xs text-amber-700/70 truncate leading-tight">{game.localizedName}</p>
+                    )}
                     {game.year_published && <p className="text-muted-foreground text-xs mt-0.5">{game.year_published}</p>}
                   </div>
                   <span className="text-muted-foreground text-xs flex-shrink-0">#{game.bgg_id}</span>

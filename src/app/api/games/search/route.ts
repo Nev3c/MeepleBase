@@ -163,7 +163,7 @@ async function bggXmlSearch(q: string): Promise<{ bgg_id: number; name: string; 
   }
 }
 
-type Hit = { bgg_id: number; name: string; thumbnail_url: string | null };
+type Hit = { bgg_id: number; name: string; thumbnail_url: string | null; localizedName?: string | null };
 type LocalHit = Hit & { year_published?: number | null };
 
 export async function GET(req: NextRequest) {
@@ -256,6 +256,16 @@ export async function GET(req: NextRequest) {
 
   // ── Parse Wikidata (EN + DE, dedup by bgg_id, prefer EN label) ────────────
   // SPARQL JSON: language-tagged literals carry "xml:lang" on the binding.
+  //
+  // Key design: track BOTH EN and DE names per item so we can:
+  //   a) display the name in the language the user actually searched in, and
+  //   b) include the other-language name as `localizedName` (shown as subtitle
+  //      in the search list + offered as a toggle in the add-game confirm step).
+  //
+  // Example — query "dune":
+  //   EN label "Dune: A Game of Conquest and Diplomacy" matches → display name
+  //   DE label "Dune – Ein Spiel um Macht und Intrigen" also matches → localizedName
+  // The user sees both titles in the result row and gets a DE/EN toggle after clicking.
   let wikidataHits: Hit[] = [];
   if (wikidataSettled.status === "fulfilled" && wikidataSettled.value.ok) {
     try {
@@ -265,18 +275,38 @@ export async function GET(req: NextRequest) {
         bggId: { value: string };
       };
       const bindings: Binding[] = data.results?.bindings ?? [];
-      const byId = new Map<number, { name: string; isEn: boolean }>();
+      // Collect both EN and DE label per bgg_id.
+      const byId = new Map<number, { enName?: string; deName?: string }>();
       for (const b of bindings) {
         const bggId = Number(b.bggId.value);
         if (!bggId) continue;
-        const isEn = (b.itemLabel["xml:lang"] ?? "") === "en";
-        const existing = byId.get(bggId);
-        if (!existing || (!existing.isEn && isEn)) {
-          byId.set(bggId, { name: b.itemLabel.value, isEn });
-        }
+        const lang = b.itemLabel["xml:lang"] ?? "";
+        const entry = byId.get(bggId) ?? {};
+        if (lang === "en") entry.enName = b.itemLabel.value;
+        else if (lang === "de") entry.deName = b.itemLabel.value;
+        byId.set(bggId, entry);
       }
+      const qLower = q.toLowerCase();
       wikidataHits = Array.from(byId.entries())
-        .map(([bggId, { name }]) => ({ bgg_id: bggId, name, thumbnail_url: null as string | null }))
+        .map(([bggId, { enName, deName }]) => {
+          const enMatches = enName ? enName.toLowerCase().includes(qLower) : false;
+          const deMatches = deName ? deName.toLowerCase().includes(qLower) : false;
+          // If only the DE label matches (user typed in German), show DE as primary.
+          // Otherwise show EN as primary (EN-first default).
+          const displayName = (!enMatches && deMatches && deName) ? deName : (enName ?? deName!);
+          // Expose the other-language name as `localizedName` so the UI can show
+          // both titles in the search result row (discoverability) and pre-fill
+          // the DE/EN toggle in the confirm sheet.
+          const otherName = enName && deName && enName !== deName
+            ? (displayName === enName ? deName : enName)
+            : undefined;
+          return {
+            bgg_id: bggId,
+            name: displayName,
+            thumbnail_url: null as string | null,
+            ...(otherName ? { localizedName: otherName } : {}),
+          };
+        })
         .filter((r) => !seenIds.has(r.bgg_id));
     } catch { /* parse error → treat as empty */ }
   }
