@@ -20,6 +20,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.1",
+    date: "2026-04-28",
+    title: "Import-Fixes & Spielsuche",
+    changes: [
+      { type: "fix", text: "BGStats-Import: Timeout behoben — 700+ Partien werden jetzt vollständig importiert (vorher Abbruch nach ~50). Import läuft in Blöcken mit Fortschrittsbalken" },
+      { type: "fix", text: "BGG CSV-Import: Timeout behoben — 500+ Spiele werden jetzt vollständig importiert (vorher Abbruch nach ~1 Spiel wegen BGG-API-Timeout)" },
+      { type: "feat", text: "BGStats-Import: Fortschrittsbalken zeigt wie viele Partien bereits importiert wurden" },
+      { type: "improve", text: "CSV-Import: Hinweis erklärt, dass Spielbilder danach über Einstellungen → BGG-Daten aktualisieren geladen werden" },
+      { type: "feat", text: "Spielsuche: Lokalisierte Spieltitel wählbar — bei deutschem Namen (z.B. 'Dune: Ein Spiel um Macht') erscheint ein DE/EN-Toggle im Bestätigungs-Sheet" },
+      { type: "improve", text: "Spielsuche: Ergebnisse nach Relevanz sortiert (Exakt-Match zuerst), Limit auf 30 erhöht" },
+      { type: "feat", text: "Spielsuche: Quellanzeige (Lokal / Wikidata / BGG) pro Suchergebnis" },
+    ],
+  },
+  {
     version: "v0.7.0",
     date: "2026-04-27",
     title: "Spieler & Partien verbessert",
@@ -120,4 +134,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.0
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.1
