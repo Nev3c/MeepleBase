@@ -338,10 +338,16 @@ function SearchTab({
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           )}
           {searching && (
-            <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+            // Wrapper handles positioning; SVG handles animation separately.
+            // Combining -translate-y-1/2 and animate-spin on the same element
+            // causes the CSS keyframes (transform: rotate) to overwrite the
+            // translateY at every animation frame → spinner bounces up and down.
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg className="animate-spin h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
           )}
           {query && !searching && (
             <button
