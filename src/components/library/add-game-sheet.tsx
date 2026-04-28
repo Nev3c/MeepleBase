@@ -28,7 +28,7 @@ interface LookupResult extends SearchResult {
    *  localized alternate name so the confirm step can offer both options. */
   canonicalName?: string;
   /** The localized name the user actually found the game by (e.g. German title). */
-  localizedName?: string;
+  localizedName?: string | null;
 }
 
 type Step = "search" | "confirm";
