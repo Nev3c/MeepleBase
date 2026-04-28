@@ -188,11 +188,16 @@ export function PlaysClient({
   // Called when the user saves plays from the session score-entry flow.
   // IMPORTANT: This does NOT complete the session — completion is a dedicated action.
   // The session stays in the Geplant list until the user explicitly clicks "Abschließen".
+  //
+  // NOTE: Do NOT call router.refresh() here. The new plays are already added to local
+  // state via setPlays(). Calling router.refresh() would trigger a Next.js server
+  // re-render which (via the Suspense boundary) remounts PlaysClient and reinitialises
+  // sessions from the server — causing the session to vanish from the Geplant list
+  // even though no "Abschließen" action was taken.
   function handleSessionPlayCreated(newPlays: Play[]) {
     setPlays((prev) => [...newPlays, ...prev]);
     setCompletingSession(null);
     setPastSheetOpen(false);
-    router.refresh();
   }
 
   const pendingInviteCount = sessions.filter(

@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.2",
+    date: "2026-04-28",
+    title: "Spielerabend-Fix",
+    changes: [
+      { type: "fix", text: "Spielerabend: 'Scores & Fotos erfassen' schloss die Session nicht mehr ab — sie bleibt jetzt zuverlässig in den geplanten Partien bis du explizit 'Spielabend abschließen' klickst" },
+    ],
+  },
+  {
     version: "v0.7.1",
     date: "2026-04-28",
     title: "Import-Fixes & Spielsuche",
@@ -134,4 +142,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.1
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.2
