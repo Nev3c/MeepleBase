@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.3",
+    date: "2026-04-28",
+    title: "Doppelte Partien-Fix",
+    changes: [
+      { type: "fix", text: "Spielerabend abschließen: Doppelte Einträge unter 'Vergangen' behoben — beim Abschließen wurden jetzt keine Partien mehr angelegt, wenn sie per 'Scores & Fotos erfassen' bereits vorhanden waren" },
+      { type: "fix", text: "Spielerabend abschließen: Bereits abgeschlossene Sessions können nicht mehr ein zweites Mal abgeschlossen werden (409-Schutz)" },
+    ],
+  },
+  {
     version: "v0.7.2",
     date: "2026-04-28",
     title: "Spielerabend-Fix",
@@ -142,4 +151,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.2
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.3
