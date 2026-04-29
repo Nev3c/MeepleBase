@@ -20,6 +20,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.5",
+    date: "2026-04-29",
+    title: "Scores als Entwurf — kein Doppel mehr",
+    changes: [
+      { type: "fix", text: "Spielerabend: 'Scores & Fotos erfassen' legt Partien jetzt als Entwurf (incomplete=true) an — sie erscheinen nicht in 'Vergangen'. Erst 'Spielabend abschließen' macht sie sichtbar." },
+      { type: "fix", text: "Spielerabend abschließen: Entwurfspartien werden jetzt auf incomplete=false gesetzt statt dupliziert. Neue Partien nur noch für Teilnehmer ohne bestehende Partie." },
+      { type: "fix", text: "Partien-Seite: Server-Query filtert incomplete=false — Entwürfe aus dem Session-Flow erscheinen nie in 'Vergangen'." },
+    ],
+  },
+  {
     version: "v0.7.4",
     date: "2026-04-29",
     title: "Spielerabend-Flow Fix",
@@ -161,4 +171,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.4
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.5

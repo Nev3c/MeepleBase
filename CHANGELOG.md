@@ -8,6 +8,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [0.7.5] — 2026-04-29
+
+### Fixed
+- Spielerabend: „Scores & Fotos erfassen" legt Partien jetzt als Entwurf (`incomplete=true`) an — sie erscheinen nicht in „Vergangen". Erst „Spielabend abschließen" markiert sie als abgeschlossen und macht sie sichtbar.
+- Spielerabend: `complete/route.ts` erkennt jetzt Entwurfspartien (`incomplete=true`) und setzt sie auf `incomplete=false`, statt doppelte Einträge zu erstellen. Neue Partien werden nur noch für Teilnehmer angelegt, die noch gar keine Partie haben.
+- Partien-Seite: Server-Query filtert jetzt `incomplete=false` — Entwurfspartien aus dem Session-Flow werden nie an den Client geliefert.
+
+---
+
+## [0.7.4] — 2026-04-29
+
 ### Fixed
 - Spielerabend: Doppelte Einträge + Session erscheint sofort in „Vergangen" nach Scores erfassen — zwei Grundursachen behoben: (1) `complete/route.ts` verglich `played_at` mit `session_date` per `.eq()`, aber `session_date` ist `timestamptz` (z.B. `2026-04-30T19:00:00+00:00`) während Plays nur `2026-04-30` als Datum speichern — kein Match → Dedup schlug immer fehl. Fix: Datumsbereich-Query (`.gte`/`.lt` auf Tagesgranularität). (2) „Scores & Fotos erfassen" und „Spielabend abschließen" waren zwei unabhängige Aktionen die beide Plays erstellten. Fix: „Scores & Fotos erfassen" schließt jetzt die Session automatisch ab (ruft nach dem Speichern der Plays auch den complete-Endpoint auf). Plays erscheinen damit erst nach dem Abschließen in „Vergangen".
 - Spielerabend: Doppelte Einträge unter „Vergangen" nach Abschließen — `complete/route.ts` erstellte Partien für alle Teilnehmer ohne zu prüfen ob bereits Partien für dieselbe Kombination aus Nutzer + Spiel + Datum existieren. Wurden Scores zuerst über „Scores & Fotos erfassen" erfasst (POST /api/plays), entstand beim Klick auf „Spielabend abschließen" eine zweite identische Partie. Fix: Vor dem Insert prüft die Route jetzt bestehende Plays (user_id + game_id + played_at) und überspringt Kombinationen die schon vorhanden sind. Zusätzlich: Bereits abgeschlossene Sessions (status = "completed") geben jetzt 409 zurück statt erneut Partien anzulegen.

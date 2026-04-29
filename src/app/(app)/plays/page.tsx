@@ -24,6 +24,7 @@ export default async function PlaysPage() {
       .from("plays")
       .select("*, game:games(id, name, thumbnail_url, bgg_id), players:play_players(*)")
       .eq("user_id", user.id)
+      .eq("incomplete", false)
       .order("played_at", { ascending: false })
       .limit(50),
     supabase

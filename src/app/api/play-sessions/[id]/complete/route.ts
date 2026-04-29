@@ -119,26 +119,51 @@ export async function POST(
 
   const { data: existingPlays } = await admin
     .from("plays")
-    .select("id, user_id, game_id")
+    .select("id, user_id, game_id, incomplete")
     .in("user_id", participantIds)
     .in("game_id", gameIds)
     .gte("played_at", sessionDateOnly)
     .lt("played_at", nextDayStr);
 
-  const existingSet = new Set(
-    (existingPlays ?? []).map((p) => `${p.user_id}:${p.game_id}`)
-  );
+  // Separate existing plays into:
+  // - drafts (incomplete=true): created by "Scores & Fotos erfassen" → UPDATE to complete
+  // - complete (incomplete=false): already finalised → skip
+  const incompleteMap = new Map<string, string>(); // "userId:gameId" → play.id
+  const completeSet = new Set<string>();            // "userId:gameId" → already done
 
-  // Build play insert rows: one per participant per game, skipping existing combinations
+  for (const p of existingPlays ?? []) {
+    const key = `${p.user_id}:${p.game_id}`;
+    if (p.incomplete) {
+      incompleteMap.set(key, p.id);
+    } else {
+      completeSet.add(key);
+    }
+  }
+
+  // 1. Promote draft plays → complete (these already have play_players from scoring)
+  const idsToPromote = Array.from(incompleteMap.values());
+  if (idsToPromote.length > 0) {
+    const { error: promoteErr } = await admin
+      .from("plays")
+      .update({ incomplete: false })
+      .in("id", idsToPromote);
+    if (promoteErr) console.error("promote incomplete plays error:", promoteErr.message);
+  }
+
+  // 2. INSERT new plays only for participants who have NO play at all for this game/date
   const playsToInsert = participantIds.flatMap((participantId) =>
     gameIds
-      .filter((gameId) => !existingSet.has(`${participantId}:${gameId}`))
+      .filter((gameId) => {
+        const key = `${participantId}:${gameId}`;
+        return !incompleteMap.has(key) && !completeSet.has(key);
+      })
       .map((gameId) => ({
         user_id: participantId,
         game_id: gameId,
         played_at: s.session_date,
         location: s.location,
         cooperative: false,
+        incomplete: false,
       }))
   );
 
@@ -157,7 +182,7 @@ export async function POST(
     createdPlays = data ?? [];
   }
 
-  // Build play_players: for each newly created play, add all participants
+  // Build play_players only for newly inserted plays (promoted ones already have players)
   const playPlayersToInsert = createdPlays.flatMap((play) =>
     participantIds.map((participantId) => ({
       play_id: play.id,
@@ -176,5 +201,5 @@ export async function POST(
   // Mark session as completed
   await admin.from("play_sessions").update({ status: "completed" }).eq("id", sessionId);
 
-  return NextResponse.json({ ok: true, plays_created: playsToInsert.length });
+  return NextResponse.json({ ok: true, plays_created: playsToInsert.length, plays_promoted: idsToPromote.length });
 }

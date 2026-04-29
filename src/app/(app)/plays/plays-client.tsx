@@ -47,6 +47,7 @@ interface Play {
   location: string | null;
   notes: string | null;
   cooperative: boolean;
+  incomplete?: boolean;
   image_url?: string | null;
   game?: LibraryGame | null;
   players?: PlayPlayer[];
@@ -146,7 +147,10 @@ export function PlaysClient({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [sortOpen]);
 
-  const sortedPlays = [...plays].sort((a, b) => {
+  // Exclude draft plays (incomplete=true) — they are session buffers, not finished plays
+  const completedPlays = plays.filter((p) => !p.incomplete);
+
+  const sortedPlays = [...completedPlays].sort((a, b) => {
     switch (sortKey) {
       case "date_desc": return new Date(b.played_at).getTime() - new Date(a.played_at).getTime();
       case "date_asc":  return new Date(a.played_at).getTime() - new Date(b.played_at).getTime();
@@ -206,7 +210,7 @@ export function PlaysClient({
             <div>
               <h1 className="font-display text-2xl font-semibold text-foreground">Partien</h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {sessions.length} geplant · {plays.length} gespielt
+                {sessions.length} geplant · {completedPlays.length} gespielt
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1193,7 +1197,7 @@ function PastPlaySheet({
       const res = await fetch("/api/plays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ game_id, played_at: playedAt, duration_minutes: duration ? Number(duration) : null, location: location.trim() || null, notes: notes.trim() || null, cooperative, players: validPlayers, image_url }),
+        body: JSON.stringify({ game_id, played_at: playedAt, duration_minutes: duration ? Number(duration) : null, location: location.trim() || null, notes: notes.trim() || null, cooperative, players: validPlayers, image_url, incomplete: sessionPrefill ? true : false }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Fehler"); setSaving(false); return; }

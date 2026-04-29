@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
   const body = await req.json();
-  const { game_id, played_at, duration_minutes, location, notes, cooperative, players, image_url } = body;
+  const { game_id, played_at, duration_minutes, location, notes, cooperative, players, image_url, incomplete } = body;
 
   if (!game_id || !played_at) {
     return NextResponse.json({ error: "game_id und played_at sind erforderlich" }, { status: 400 });
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       location: location ?? null,
       notes: notes ?? null,
       cooperative: cooperative ?? false,
-      incomplete: false,
+      incomplete: incomplete === true,
       image_url: image_url ?? null,
     })
     .select("*, game:games(id, name, thumbnail_url, bgg_id)")
