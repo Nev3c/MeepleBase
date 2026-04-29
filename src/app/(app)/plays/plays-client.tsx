@@ -185,29 +185,12 @@ export function PlaysClient({
     router.refresh(); // reload plays list to show the newly created plays
   }
 
-  // Called when the user saves plays via "Scores & Fotos erfassen" on a planned session.
-  // After saving scores, we ALSO complete the session server-side so it leaves the Geplant
-  // list immediately — no separate "Spielabend abschließen" click needed.
-  // The complete route deduplicates: plays already created here are skipped (date-range
-  // check), plays for other participants who don't have an entry yet are created automatically.
-  async function handleSessionPlayCreated(newPlays: Play[]) {
-    // Capture session ID before any state changes (async closure safety)
-    const sessionId = completingSession?.id;
-
-    // Close the sheet and optimistically show the new plays right away
+  // Called when the user saves scores/photos via "Scores & Fotos erfassen" on a planned session.
+  // NOTE: does NOT complete the session — it stays in Geplant. Only "Spielabend abschließen"
+  // removes it from Geplant and creates the final plays for all participants.
+  function handleSessionPlayCreated() {
     setCompletingSession(null);
     setPastSheetOpen(false);
-    setPlays((prev) => [...newPlays, ...prev]);
-
-    if (sessionId) {
-      // Complete the session server-side (idempotent via dedup in complete route)
-      await fetch(`/api/play-sessions/${sessionId}/complete`, { method: "POST" });
-      // Remove the session from the local Geplant list
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-    }
-
-    // Reload server state to show plays created for other participants
-    router.refresh();
   }
 
   const pendingInviteCount = sessions.filter(
@@ -362,13 +345,13 @@ export function PlaysClient({
           onSavedSingle={handlePlayUpdated}
         />
       )}
-      {/* ── Complete session with scores ─────────────────────────────────────── */}
+      {/* ── Edit session scores/photos (does NOT complete session) ─────────────── */}
       {completingSession && (
         <PastPlaySheet
           libraryGames={libraryGames}
           sessionPrefill={completingSession}
           onClose={() => setCompletingSession(null)}
-          onSaved={handleSessionPlayCreated}
+          onSaved={() => handleSessionPlayCreated()}
         />
       )}
 
@@ -782,19 +765,19 @@ function SessionCard({ session, onCompleted, onRecordScores }: {
             >
               <Edit2 size={14} /> Scores &amp; Fotos erfassen
             </button>
-            {/* Quick-complete without scores */}
+            {/* Complete the session */}
             {!confirmComplete && (
               <button
                 onClick={() => setConfirmComplete(true)}
                 className="w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 size={13} /> Ohne Scores abschließen
+                <CheckCircle2 size={13} /> Spielabend abschließen
               </button>
             )}
             {confirmComplete && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
                 <p className="text-xs text-green-800 font-medium leading-snug">
-                  Abschließen ohne Scores? Für alle {accepted + 1} Teilnehmer werden Partien ohne Scores eingetragen. Mit &quot;Scores &amp; Fotos erfassen&quot; kannst du stattdessen Scores eingeben und abschließen.
+                  Spielabend abschließen? Partien werden für alle {accepted + 1} Teilnehmer eingetragen.
                 </p>
                 <div className="flex gap-2">
                   <button
