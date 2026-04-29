@@ -90,6 +90,9 @@ export function PlaysClient({
   // Session complete via play sheet — holds the session being completed
   const [completingSession, setCompletingSession] = useState<PlannedSession | null>(null);
 
+  // Score-tracker → planned session: scores waiting to be assigned to a session
+  const [pendingScorePrefill, setPendingScorePrefill] = useState<DraftPlayer[] | null>(null);
+
   // Planned-session sheet
   const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
 
@@ -113,8 +116,34 @@ export function PlaysClient({
       return;
     }
 
-    // ?prefill=... — from score-tracker
     const prefill = searchParams.get("prefill");
+    const pickSession = searchParams.get("pick_session");
+
+    // ?prefill=...&pick_session=1 — from score-tracker "In geplante Partie"
+    // Parse the scores but DON'T open PastPlaySheet yet — show the session picker instead
+    if (prefill && pickSession === "1") {
+      try {
+        const params = new URLSearchParams(decodeURIComponent(prefill));
+        const trackerPlayers: DraftPlayer[] = [];
+        let i = 0;
+        while (params.has(`player_${i}_name`)) {
+          trackerPlayers.push({
+            display_name: params.get(`player_${i}_name`) ?? "",
+            score: params.get(`player_${i}_score`) ?? "",
+            winner: false,
+          });
+          i++;
+        }
+        if (trackerPlayers.length > 0) {
+          setPendingScorePrefill(trackerPlayers);
+        }
+      } catch { /* ignore */ }
+      setActiveTab("geplant");
+      router.replace("/plays", { scroll: false });
+      return;
+    }
+
+    // ?prefill=... — from score-tracker "Neue Partie" (Use Case A)
     if (!prefill) return;
     try {
       const params = new URLSearchParams(decodeURIComponent(prefill));
@@ -194,6 +223,7 @@ export function PlaysClient({
   // removes it from Geplant and creates the final plays for all participants.
   function handleSessionPlayCreated() {
     setCompletingSession(null);
+    setPendingScorePrefill(null);
     setPastSheetOpen(false);
   }
 
@@ -296,20 +326,41 @@ export function PlaysClient({
         {/* ── Tab content ────────────────────────────────────────────────────── */}
         <div className="px-4 py-4 max-w-2xl mx-auto w-full">
           {activeTab === "geplant" ? (
-            sessions.length === 0 ? (
-              <EmptyStateGeplant onAdd={() => setPlannedSheetOpen(true)} />
-            ) : (
-              <div className="flex flex-col gap-3">
-                {sessions.map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    onCompleted={handleSessionCompleted}
-                    onRecordScores={(s) => setCompletingSession(s)}
-                  />
-                ))}
-              </div>
-            )
+            <>
+              {/* Score-tracker banner: shown when tracker scores are waiting to be assigned */}
+              {pendingScorePrefill !== null && (
+                <div className="mb-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                  <Dices size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-800">Tracker-Scores bereit</p>
+                    <p className="text-xs text-amber-700 mt-0.5 leading-snug">
+                      Tippe bei einem Spielerabend auf &bdquo;Scores erfassen&ldquo; um die Punkte zu übertragen.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setPendingScorePrefill(null)}
+                    className="text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
+                    aria-label="Abbrechen"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+              {sessions.length === 0 ? (
+                <EmptyStateGeplant onAdd={() => setPlannedSheetOpen(true)} />
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {sessions.map((session) => (
+                    <SessionCard
+                      key={session.id}
+                      session={session}
+                      onCompleted={handleSessionCompleted}
+                      onRecordScores={(s) => setCompletingSession(s)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             sortedPlays.length === 0 ? (
               <EmptyStatePast onAdd={() => setPastSheetOpen(true)} />
@@ -354,7 +405,8 @@ export function PlaysClient({
         <PastPlaySheet
           libraryGames={libraryGames}
           sessionPrefill={completingSession}
-          onClose={() => setCompletingSession(null)}
+          prefillPlayers={pendingScorePrefill ?? undefined}
+          onClose={() => { setCompletingSession(null); setPendingScorePrefill(null); }}
           onSaved={() => handleSessionPlayCreated()}
         />
       )}
@@ -1025,15 +1077,17 @@ function PastPlaySheet({
   const [notes, setNotes] = useState(editPlay?.notes ?? "");
   const [cooperative, setCooperative] = useState(editPlay?.cooperative ?? false);
 
-  // Players: edit > session invitees (accepted) > prefillPlayers > empty
+  // Players: edit > prefillPlayers (if set, e.g. from score tracker) > session invitees (accepted) > empty
+  // Note: when coming from the score tracker → session flow, prefillPlayers carries the tracker
+  // scores and should take priority over session invitees so names+scores are pre-populated.
   const sessionAccepted = sessionPrefill?.invitees.filter((i) => i.status === "accepted") ?? [];
   const [players, setPlayers] = useState<DraftPlayer[]>(
     editPlay?.players && editPlay.players.length > 0
       ? editPlay.players.map((p) => ({ display_name: p.display_name, score: p.score?.toString() ?? "", winner: p.winner }))
-      : sessionAccepted.length > 0
-      ? sessionAccepted.map((i) => ({ display_name: i.display_name ?? i.username, score: "", winner: false }))
       : prefillPlayers && prefillPlayers.length > 0
       ? prefillPlayers
+      : sessionAccepted.length > 0
+      ? sessionAccepted.map((i) => ({ display_name: i.display_name ?? i.username, score: "", winner: false }))
       : [{ display_name: "", score: "", winner: false }]
   );
   const [saving, setSaving] = useState(false);

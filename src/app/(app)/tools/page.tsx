@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Minus, RotateCcw, Dices, ArrowRight,
+  Plus, Minus, RotateCcw, Dices, ArrowRight, Calendar,
   X, Trophy, Undo2, Crown, Hash, Volume2, Pencil, StopCircle, Clock,
   // Soundboard icon picker — nur Dinge mit Klang
   Music, Music2, Radio, Mic, Headphones, Speaker, Bell, Podcast,
@@ -79,13 +79,21 @@ function ScoreTracker() {
   const maxScore = Math.max(...players.map((p) => p.score));
   const winners = players.filter((p) => p.score === maxScore && maxScore > 0);
 
-  function handleTransferToPlay() {
+  function buildPrefillParams() {
     const params = new URLSearchParams();
     players.forEach((p, i) => {
       params.set(`player_${i}_name`, p.name);
       params.set(`player_${i}_score`, p.score.toString());
     });
-    router.push(`/plays?prefill=${encodeURIComponent(params.toString())}`);
+    return params.toString();
+  }
+
+  function handleTransferToPlay() {
+    router.push(`/plays?prefill=${encodeURIComponent(buildPrefillParams())}`);
+  }
+
+  function handleTransferToSession() {
+    router.push(`/plays?prefill=${encodeURIComponent(buildPrefillParams())}&pick_session=1`);
   }
 
   const active = players.find((p) => p.id === activePlayer);
@@ -182,9 +190,20 @@ function ScoreTracker() {
         </div>
       )}
 
-      <button onClick={handleTransferToPlay} className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-[#1E2A3A] text-white text-sm font-semibold hover:bg-[#253347] active:scale-[0.98] transition-all shadow-sm">
-        <Dices size={15} />Als Partie erfassen<ArrowRight size={14} />
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={handleTransferToPlay}
+          className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-[#1E2A3A] text-white text-sm font-semibold hover:bg-[#253347] active:scale-[0.98] transition-all shadow-sm"
+        >
+          <Dices size={14} />Neue Partie
+        </button>
+        <button
+          onClick={handleTransferToSession}
+          className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 active:scale-[0.98] transition-all shadow-sm"
+        >
+          <Calendar size={14} />Geplante Partie
+        </button>
+      </div>
     </section>
   );
 }

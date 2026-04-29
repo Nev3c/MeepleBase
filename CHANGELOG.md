@@ -10,6 +10,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.7.7] — 2026-04-29
+
+### Added
+- Punkte-Tracker: zweiter Transfer-Button „Geplante Partie" — Scores aus dem Tracker lassen sich direkt in einen geplanten Spielerabend übertragen (statt nur als neue abgeschlossene Partie)
+- Plays-Seite: Hinweis-Banner im Geplant-Tab wenn Tracker-Scores auf Zuweisung warten; beim Antippen von „Scores erfassen" an einem Spielerabend werden die Scores automatisch vorausgefüllt
+
+---
+
 ## [0.7.6] — 2026-04-29
 
 ### Fixed

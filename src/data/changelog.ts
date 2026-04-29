@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.7",
+    date: "2026-04-29",
+    title: "Tracker → geplante Partie",
+    changes: [
+      { type: "feat", text: "Punkte-Tracker: zweiter Button 'Geplante Partie' — Scores direkt in einen geplanten Spielerabend übertragen, nicht nur als neue Partie" },
+      { type: "feat", text: "Plays-Seite: Hinweis-Banner im Geplant-Tab wenn Tracker-Scores warten; 'Scores erfassen' füllt Namen + Punkte automatisch vor" },
+    ],
+  },
+  {
     version: "v0.7.6",
     date: "2026-04-29",
     title: "Registrierungs-Fehler behoben",
@@ -180,4 +189,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.6
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.7
