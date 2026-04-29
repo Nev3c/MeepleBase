@@ -20,6 +20,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.4",
+    date: "2026-04-29",
+    title: "Spielerabend-Flow Fix",
+    changes: [
+      { type: "fix", text: "Spielerabend: 'Scores & Fotos erfassen' schließt die Session jetzt automatisch ab — kein separater 'Spielabend abschließen'-Klick mehr nötig, und Partien erscheinen erst nach dem Speichern in 'Vergangen'" },
+      { type: "fix", text: "Spielerabend: Doppelte Partien nach Abschließen behoben — Datumsvergleich war wegen timestamptz vs. date-only fehlerhaft (session_date hatte Uhrzeit, played_at nicht)" },
+      { type: "improve", text: "Spielerabend: 'Spielabend abschließen' heißt jetzt 'Ohne Scores abschließen' — klarer getrennt vom Score-Erfassen-Flow" },
+    ],
+  },
+  {
     version: "v0.7.3",
     date: "2026-04-28",
     title: "Doppelte Partien-Fix",
@@ -151,4 +161,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.3
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.4

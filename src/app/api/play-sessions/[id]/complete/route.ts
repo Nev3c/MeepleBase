@@ -106,14 +106,24 @@ export async function POST(
     return NextResponse.json({ ok: true, plays_created: 0 });
   }
 
-  // Check for already-existing plays (same user + game + date) to skip duplicates.
+  // Check for already-existing plays (same user + game + calendar date) to skip duplicates.
   // This prevents double entries when "Scores & Fotos erfassen" was used before completing.
+  //
+  // IMPORTANT: session_date is timestamptz (e.g. "2026-04-30T19:00:00+00:00"), but plays
+  // created via POST /api/plays use only the date portion (e.g. "2026-04-30"), stored at
+  // midnight UTC. A strict .eq() would never match. Use a date-range query instead.
+  const sessionDateOnly = s.session_date.slice(0, 10); // "YYYY-MM-DD"
+  const nextDayDate = new Date(sessionDateOnly + "T00:00:00.000Z");
+  nextDayDate.setUTCDate(nextDayDate.getUTCDate() + 1);
+  const nextDayStr = nextDayDate.toISOString().slice(0, 10); // "YYYY-MM-DD" of next day
+
   const { data: existingPlays } = await admin
     .from("plays")
     .select("id, user_id, game_id")
     .in("user_id", participantIds)
     .in("game_id", gameIds)
-    .eq("played_at", s.session_date);
+    .gte("played_at", sessionDateOnly)
+    .lt("played_at", nextDayStr);
 
   const existingSet = new Set(
     (existingPlays ?? []).map((p) => `${p.user_id}:${p.game_id}`)

@@ -185,19 +185,29 @@ export function PlaysClient({
     router.refresh(); // reload plays list to show the newly created plays
   }
 
-  // Called when the user saves plays from the session score-entry flow.
-  // IMPORTANT: This does NOT complete the session — completion is a dedicated action.
-  // The session stays in the Geplant list until the user explicitly clicks "Abschließen".
-  //
-  // NOTE: Do NOT call router.refresh() here. The new plays are already added to local
-  // state via setPlays(). Calling router.refresh() would trigger a Next.js server
-  // re-render which (via the Suspense boundary) remounts PlaysClient and reinitialises
-  // sessions from the server — causing the session to vanish from the Geplant list
-  // even though no "Abschließen" action was taken.
-  function handleSessionPlayCreated(newPlays: Play[]) {
-    setPlays((prev) => [...newPlays, ...prev]);
+  // Called when the user saves plays via "Scores & Fotos erfassen" on a planned session.
+  // After saving scores, we ALSO complete the session server-side so it leaves the Geplant
+  // list immediately — no separate "Spielabend abschließen" click needed.
+  // The complete route deduplicates: plays already created here are skipped (date-range
+  // check), plays for other participants who don't have an entry yet are created automatically.
+  async function handleSessionPlayCreated(newPlays: Play[]) {
+    // Capture session ID before any state changes (async closure safety)
+    const sessionId = completingSession?.id;
+
+    // Close the sheet and optimistically show the new plays right away
     setCompletingSession(null);
     setPastSheetOpen(false);
+    setPlays((prev) => [...newPlays, ...prev]);
+
+    if (sessionId) {
+      // Complete the session server-side (idempotent via dedup in complete route)
+      await fetch(`/api/play-sessions/${sessionId}/complete`, { method: "POST" });
+      // Remove the session from the local Geplant list
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    }
+
+    // Reload server state to show plays created for other participants
+    router.refresh();
   }
 
   const pendingInviteCount = sessions.filter(
@@ -765,26 +775,26 @@ function SessionCard({ session, onCompleted, onRecordScores }: {
         {/* Aktionen — organizer only */}
         {session.is_organizer && (
           <div className="mt-3 flex flex-col gap-2">
-            {/* Primary edit: record scores/photos — does NOT complete the session */}
+            {/* Primary action: record scores/photos AND complete the session in one step */}
             <button
               onClick={() => onRecordScores(session)}
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
             >
               <Edit2 size={14} /> Scores &amp; Fotos erfassen
             </button>
-            {/* Dedicated complete action */}
+            {/* Quick-complete without scores */}
             {!confirmComplete && (
               <button
                 onClick={() => setConfirmComplete(true)}
                 className="w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-semibold hover:bg-green-100 transition-colors flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 size={13} /> Spielabend abschließen
+                <CheckCircle2 size={13} /> Ohne Scores abschließen
               </button>
             )}
             {confirmComplete && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
                 <p className="text-xs text-green-800 font-medium leading-snug">
-                  Spielabend abschließen? Falls noch keine Scores erfasst sind, werden Partien für alle {accepted + 1} Teilnehmer ohne Scores eingetragen.
+                  Abschließen ohne Scores? Für alle {accepted + 1} Teilnehmer werden Partien ohne Scores eingetragen. Mit „Scores &amp; Fotos erfassen" kannst du stattdessen Scores eingeben und abschließen.
                 </p>
                 <div className="flex gap-2">
                   <button
