@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus, Minus, RotateCcw, Dices, ArrowRight, Calendar,
+  Plus, Minus, RotateCcw, Dices, Calendar,
   X, Trophy, Undo2, Crown, Hash, Volume2, Pencil, StopCircle, Clock,
   // Soundboard icon picker — nur Dinge mit Klang
   Music, Music2, Radio, Mic, Headphones, Speaker, Bell, Podcast,
