@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v0.7.6",
+    date: "2026-04-29",
+    title: "Registrierungs-Fehler behoben",
+    changes: [
+      { type: "fix", text: "Registrierung: 'Database error saving new user' erscheint nicht mehr — Benutzername wird jetzt vor dem Signup geprüft und bei Konflikt sofort auf Deutsch gemeldet." },
+      { type: "improve", text: "Registrierung: Alle Fehlermeldungen auf Deutsch mit konkretem Hinweis was zu tun ist." },
+    ],
+  },
+  {
     version: "v0.7.5",
     date: "2026-04-29",
     title: "Scores als Entwurf — kein Doppel mehr",
@@ -171,4 +180,4 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.5
+export const CURRENT_VERSION = CHANGELOG[0].version; // v0.7.6

@@ -29,6 +29,28 @@ export function RegisterForm() {
       return;
     }
 
+    // ── Username-Verfügbarkeit prüfen, bevor signUp() aufgerufen wird ─────────
+    // Hintergrund: Der Supabase-Trigger auf auth.users legt automatisch eine
+    // profiles-Zeile an. Ist der Benutzername bereits vergeben (UNIQUE-Constraint),
+    // schlägt der Trigger fehl → Supabase gibt "Database error saving new user" zurück.
+    // Durch den Pre-Check hier wird das abgefangen und eine verständliche Meldung gezeigt.
+    try {
+      const checkRes = await fetch(
+        `/api/auth/check-username?u=${encodeURIComponent(username)}`,
+        { method: "GET" }
+      );
+      if (checkRes.ok) {
+        const { available } = await checkRes.json() as { available: boolean };
+        if (!available) {
+          setError("Dieser Benutzername ist bereits vergeben – bitte wähle einen anderen.");
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // Netzwerkfehler beim Pre-Check: weiter zu signUp(), dort kommt ggf. eine Fehlermeldung
+    }
+
     const supabase = createClient();
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -49,8 +71,12 @@ export function RegisterForm() {
         setError("Ungültige E-Mail-Adresse.");
       } else if (msg.includes("weak password") || msg.includes("password should")) {
         setError("Passwort zu schwach – mindestens 8 Zeichen.");
+      } else if (msg.includes("database error") || msg.includes("saving new user")) {
+        // Trigger-Fehler: häufigste Ursache ist ein bereits belegter Benutzername,
+        // der zwischen Pre-Check und signUp() vergeben wurde (Race Condition).
+        setError("Registrierung fehlgeschlagen – der Benutzername ist möglicherweise bereits vergeben. Bitte versuche einen anderen.");
       } else {
-        setError(`Registrierung fehlgeschlagen: ${error.message}`);
+        setError("Registrierung fehlgeschlagen – bitte versuche es erneut oder kontaktiere den Support.");
       }
       setLoading(false);
       return;

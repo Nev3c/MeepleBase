@@ -10,6 +10,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.7.6] — 2026-04-29
+
+### Fixed
+- Registrierung: Fehlermeldung „Database error saving new user" tritt auf wenn der Benutzername bereits vergeben ist (Supabase-Trigger auf auth.users schlägt bei UNIQUE-Constraint-Verletzung fehl). Fix: Username-Verfügbarkeit wird jetzt vor signUp() geprüft (`/api/auth/check-username`); bei Konflikt erscheint sofort „Dieser Benutzername ist bereits vergeben".
+- Registrierung: Alle Fehlermeldungen jetzt auf Deutsch und mit konkretem Hinweis was zu tun ist (statt generischem englischen Supabase-Fehlertext).
+
+### Added
+- Neuer API-Endpoint `GET /api/auth/check-username?u=<name>` — prüft Benutzername-Verfügbarkeit ohne Auth (Admin-Client), wird beim Registrieren als Pre-Check aufgerufen.
+
+---
+
 ## [0.7.5] — 2026-04-29
 
 ### Fixed
