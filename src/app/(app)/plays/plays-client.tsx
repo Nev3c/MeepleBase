@@ -794,7 +794,7 @@ function SessionCard({ session, onCompleted, onRecordScores }: {
             {confirmComplete && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex flex-col gap-2">
                 <p className="text-xs text-green-800 font-medium leading-snug">
-                  Abschließen ohne Scores? Für alle {accepted + 1} Teilnehmer werden Partien ohne Scores eingetragen. Mit „Scores &amp; Fotos erfassen" kannst du stattdessen Scores eingeben und abschließen.
+                  Abschließen ohne Scores? Für alle {accepted + 1} Teilnehmer werden Partien ohne Scores eingetragen. Mit &quot;Scores &amp; Fotos erfassen&quot; kannst du stattdessen Scores eingeben und abschließen.
                 </p>
                 <div className="flex gap-2">
                   <button
