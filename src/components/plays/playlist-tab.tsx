@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import {
   ChevronUp, ChevronDown, Trash2, Plus, X, ListOrdered,
-  Users, Clock, ChevronDown as DropDown,
+  Users, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlaylistEntry } from "@/types";
@@ -367,10 +367,7 @@ function AddToPlaylistSheet({
         const res = await fetch(`/api/games/search?q=${encodeURIComponent(trimmed)}`);
         if (res.ok) {
           const data = await res.json() as { results: { bgg_id: number; name: string; thumbnail_url: string | null }[] };
-          setGlobalResults((data.results ?? []).filter((g) => {
-            // Filter out games already in library (by name match since we don't have game_id for BGG results here)
-            return true;
-          }));
+          setGlobalResults(data.results ?? []);
         }
       } finally {
         setGlobalSearching(false);
@@ -498,7 +495,7 @@ function AddToPlaylistSheet({
           )}
           {search && !globalSearching && filteredLibrary.length === 0 && globalResults.length === 0 && (
             <div className="flex flex-col items-center py-10 text-center">
-              <p className="text-sm text-muted-foreground">Nichts gefunden für „{search}"</p>
+              <p className="text-sm text-muted-foreground">Nichts gefunden für &bdquo;{search}&ldquo;</p>
             </div>
           )}
         </div>

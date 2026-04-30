@@ -3,7 +3,6 @@
 import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { X, Users, RefreshCw } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { PlannedSession } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
