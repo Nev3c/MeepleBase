@@ -8,11 +8,13 @@ import {
   Plus, X, Check, Trash2, Users, Clock, MapPin,
   Edit2, SlidersHorizontal, Camera, Calendar, Gamepad2,
   UserPlus, CheckCircle2, XCircle, ChevronDown, Share2, Copy, CheckCheck,
-  Dices,
+  Dices, ListOrdered,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
-import type { PlannedSession } from "@/types";
+import type { PlannedSession, PlaylistEntry } from "@/types";
+import { PlaylistTab } from "@/components/plays/playlist-tab";
+import { LotterySheet } from "@/components/plays/lottery-sheet";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ interface DraftPlayer {
   winner: boolean;
 }
 
-type PlaysTab = "geplant" | "vergangen";
+type PlaysTab = "geplant" | "playlist" | "vergangen";
 type PlaySortKey = "date_desc" | "date_asc" | "game_asc";
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -69,11 +71,13 @@ export function PlaysClient({
   libraryGames,
   plannedSessions: initialSessions,
   friends,
+  initialPlaylist,
 }: {
   initialPlays: Play[];
   libraryGames: LibraryGame[];
   plannedSessions: PlannedSession[];
   friends: FriendProfile[];
+  initialPlaylist: PlaylistEntry[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -92,6 +96,9 @@ export function PlaysClient({
 
   // Score-tracker → planned session: scores waiting to be assigned to a session
   const [pendingScorePrefill, setPendingScorePrefill] = useState<DraftPlayer[] | null>(null);
+
+  // Lottery
+  const [lotterySession, setLotterySession] = useState<PlannedSession | null>(null);
 
   // Planned-session sheet
   const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
@@ -218,6 +225,14 @@ export function PlaysClient({
     router.refresh(); // reload plays list to show the newly created plays
   }
 
+  function handleGameAddedToSession(sessionId: string, game: { id: string; name: string; thumbnail_url: string | null }) {
+    setSessions((prev) => prev.map((s) =>
+      s.id === sessionId
+        ? { ...s, games: [...s.games, { id: game.id, name: game.name, thumbnail_url: game.thumbnail_url }] }
+        : s
+    ));
+  }
+
   // Called when the user saves scores/photos via "Scores & Fotos erfassen" on a planned session.
   // NOTE: does NOT complete the session — it stays in Geplant. Only "Spielabend abschließen"
   // removes it from Geplant and creates the final plays for all participants.
@@ -278,8 +293,15 @@ export function PlaysClient({
                 </div>
               )}
               <button
-                onClick={() => activeTab === "geplant" ? setPlannedSheetOpen(true) : setPastSheetOpen(true)}
-                className="w-9 h-9 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-colors"
+                onClick={() => {
+                  if (activeTab === "geplant") setPlannedSheetOpen(true);
+                  else if (activeTab === "vergangen") setPastSheetOpen(true);
+                  // playlist tab: the PlaylistTab manages its own add sheet
+                }}
+                className={cn(
+                  "w-9 h-9 rounded-full text-white flex items-center justify-center shadow-sm transition-colors",
+                  activeTab === "playlist" ? "opacity-0 pointer-events-none" : "bg-amber-500 hover:bg-amber-600"
+                )}
                 aria-label={activeTab === "geplant" ? "Spieleabend anlegen" : "Partie erfassen"}
               >
                 <Plus size={18} strokeWidth={2.5} />
@@ -293,14 +315,14 @@ export function PlaysClient({
               <button
                 onClick={() => setActiveTab("geplant")}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                  "flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
                   activeTab === "geplant"
                     ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Calendar size={14} />
-                Geplant
+                <Calendar size={13} />
+                <span>Geplant</span>
                 {pendingInviteCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
                     {pendingInviteCount}
@@ -308,16 +330,28 @@ export function PlaysClient({
                 )}
               </button>
               <button
+                onClick={() => setActiveTab("playlist")}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  activeTab === "playlist"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <ListOrdered size={13} />
+                <span>Playlist</span>
+              </button>
+              <button
                 onClick={() => setActiveTab("vergangen")}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  "flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   activeTab === "vergangen"
                     ? "bg-white dark:bg-zinc-800 text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Clock size={14} />
-                Vergangen
+                <Clock size={13} />
+                <span>Vergangen</span>
               </button>
             </div>
           </div>
@@ -325,7 +359,12 @@ export function PlaysClient({
 
         {/* ── Tab content ────────────────────────────────────────────────────── */}
         <div className="px-4 py-4 max-w-2xl mx-auto w-full">
-          {activeTab === "geplant" ? (
+          {activeTab === "playlist" ? (
+            <PlaylistTab
+              initialEntries={initialPlaylist}
+              libraryGames={libraryGames}
+            />
+          ) : activeTab === "geplant" ? (
             <>
               {/* Score-tracker banner: shown when tracker scores are waiting to be assigned */}
               {pendingScorePrefill !== null && (
@@ -356,6 +395,7 @@ export function PlaysClient({
                       session={session}
                       onCompleted={handleSessionCompleted}
                       onRecordScores={(s) => setCompletingSession(s)}
+                      onLottery={(s) => setLotterySession(s)}
                     />
                   ))}
                 </div>
@@ -418,6 +458,18 @@ export function PlaysClient({
           friends={friends}
           onClose={() => setPlannedSheetOpen(false)}
           onSaved={handleSessionCreated}
+        />
+      )}
+
+      {/* ── Lottery sheet ────────────────────────────────────────────────────── */}
+      {lotterySession && (
+        <LotterySheet
+          session={lotterySession}
+          onClose={() => setLotterySession(null)}
+          onGameAdded={(game) => {
+            handleGameAddedToSession(lotterySession.id, game);
+            setLotterySession(null);
+          }}
         />
       )}
     </>
@@ -637,10 +689,11 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted, onRecordScores }: {
+function SessionCard({ session, onCompleted, onRecordScores, onLottery }: {
   session: PlannedSession;
   onCompleted: (id: string) => void;
   onRecordScores: (session: PlannedSession) => void;
+  onLottery: (session: PlannedSession) => void;
 }) {
   const date = new Date(session.session_date);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
@@ -820,6 +873,13 @@ function SessionCard({ session, onCompleted, onRecordScores }: {
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
             >
               <Edit2 size={14} /> Scores &amp; Fotos erfassen
+            </button>
+            {/* Lottery button */}
+            <button
+              onClick={() => onLottery(session)}
+              className="w-full py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Dices size={13} /> Spiel auslosen
             </button>
             {/* Complete the session */}
             {!confirmComplete && (

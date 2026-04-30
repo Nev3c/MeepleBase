@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { PlaysClient } from "./plays-client";
-import type { PlannedSession, InviteStatus, PlaySessionStatus } from "@/types";
+import type { PlannedSession, InviteStatus, PlaySessionStatus, PlaylistEntry } from "@/types";
 
 export const metadata: Metadata = { title: "Partien" };
 
@@ -18,8 +18,8 @@ export default async function PlaysPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // ── Parallel: plays + library games + accepted friendships + planned sessions ─
-  const [playsResult, gamesResult, friendshipsResult, sessionsResult] = await Promise.all([
+  // ── Parallel: plays + library games + accepted friendships + planned sessions + playlist ─
+  const [playsResult, gamesResult, friendshipsResult, sessionsResult, playlistResult] = await Promise.all([
     supabase
       .from("plays")
       .select("*, game:games(id, name, thumbnail_url, bgg_id), players:play_players(*)")
@@ -46,6 +46,11 @@ export default async function PlaysPage() {
       `)
       .in("status", ["planned", "confirmed"])
       .order("session_date", { ascending: true }),
+    supabase
+      .from("game_playlist")
+      .select("*, game:games(id, name, thumbnail_url, min_players, max_players, min_playtime, max_playtime)")
+      .eq("user_id", user.id)
+      .order("rank", { ascending: true }),
   ]);
 
   // ── Library games ─────────────────────────────────────────────────────────────
@@ -119,12 +124,15 @@ export default async function PlaysPage() {
     };
   });
 
+  const initialPlaylist: PlaylistEntry[] = (playlistResult.data ?? []) as unknown as PlaylistEntry[];
+
   return (
     <Suspense>
       <PlaysClient
         initialPlays={playsResult.data ?? []}
         libraryGames={libraryGames}
         plannedSessions={plannedSessions}
+        initialPlaylist={initialPlaylist}
         friends={friendProfiles.map((p) => ({
           id: p.id,
           username: p.username,

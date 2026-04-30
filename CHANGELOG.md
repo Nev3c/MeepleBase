@@ -10,6 +10,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.0] — 2026-04-30
+
+### Added
+- **Spielliste (Playlist-Tab):** Neuer Tab „Playlist" unter Partien — jeder Nutzer kann bis zu 10 Spiele in eine priorisierte Wunschliste einpflegen. Spiele lassen sich per Rang-Pfeilen umordnen, via Bibliotheks- oder BGG-Suche hinzufügen und per Trash-Button entfernen. Optimistic UI-Updates für flüssiges Umsortieren.
+- **Gewichtete Lotterie:** Algorithmus pooled die Playlisten aller Teilnehmer eines Spielerabends und zieht gewichtet ein Spiel (Rang 1 = 10 Tickets, Rang 2 = 9 Tickets, …). Nur Spiele, die zur Teilnehmerzahl passen (`min_players ≤ n ≤ max_players`), sind ziehbar. API-Endpoint: `POST /api/play-sessions/[id]/lottery`.
+- **Lotterie-Animation-Sheet:** Vollbild-Bottomsheet mit Gacha-Kapselmaschinen-Ästhetik — farbige Bälle schweben in der Kammer, eine Kugel öffnet sich und enthüllt Cover + Name des Gewinners, gefolgt von Konfetti-Burst. CSS-only-Animationen (keine Canvas). CTA „Ziehen!" auf Deutsch. Nach der Enthüllung: „Zur Session hinzufügen"-Button.
+- **Neuer API-Endpoint** `POST /api/play-sessions/[id]/games` — fügt ein Spiel einer bestehenden geplanten Session hinzu (nur Organisator).
+- **Neuer API-Endpoint** `GET/POST /api/playlist` und `PATCH/DELETE /api/playlist/[id]` — vollständiges CRUD für die persönliche Spielliste.
+- **Datenbank:** `game_playlist`-Tabelle mit RLS (SELECT/INSERT/UPDATE/DELETE nur eigene Rows). Admin-Client für Cross-User-Lesezugriff im Lotterie-Algorithmus.
+
+---
+
 ## [0.7.7] — 2026-04-29
 
 ### Added

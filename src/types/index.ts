@@ -309,6 +309,29 @@ export interface PlannedSession {
   invitees: SessionInvitee[];
 }
 
+// ============================================================
+// Playlist types (ranked "want to play" list, max 10 per user)
+// ============================================================
+
+export interface PlaylistGame {
+  id: string;
+  name: string;
+  thumbnail_url: string | null;
+  min_players: number | null;
+  max_players: number | null;
+  min_playtime: number | null;
+  max_playtime: number | null;
+}
+
+export interface PlaylistEntry {
+  id: string;
+  user_id: string;
+  game_id: string;
+  rank: number;
+  created_at: string;
+  game?: PlaylistGame;
+}
+
 /** An incoming invite — used in /players Einladungen tab */
 export interface SessionInviteForPlayer {
   invite_id: string;
