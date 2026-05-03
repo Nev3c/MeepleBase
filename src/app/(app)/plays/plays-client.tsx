@@ -429,6 +429,7 @@ export function PlaysClient({
                       session={session}
                       onCompleted={handleSessionCompleted}
                       onEdit={(s) => setEditingSession(s)}
+                      onRecordScores={(s) => setCompletingSession(s)}
                       onLottery={(s) => setLotterySession(s)}
                       onVoting={(s) => setVotingSession(s)}
                       onPropose={(s) => setProposalSession(s)}
@@ -765,10 +766,11 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted, onEdit, onLottery, onVoting, onPropose }: {
+function SessionCard({ session, onCompleted, onEdit, onRecordScores, onLottery, onVoting, onPropose }: {
   session: PlannedSession;
   onCompleted: (id: string) => void;
   onEdit: (session: PlannedSession) => void;
+  onRecordScores: (session: PlannedSession) => void;
   onLottery: (session: PlannedSession) => void;
   onVoting: (session: PlannedSession) => void;
   onPropose: (session: PlannedSession) => void;
@@ -1036,16 +1038,34 @@ function SessionCard({ session, onCompleted, onEdit, onLottery, onVoting, onProp
           </div>
         )}
 
+        {/* Lottery result banner — shown to guests when result is available */}
+        {!session.is_organizer && session.game_selection_mode === "lottery" && session.games.length > 0 && (
+          <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200">
+            <Dices size={13} className="text-amber-500 flex-shrink-0" />
+            <span className="text-xs text-amber-800 font-medium leading-snug">
+              Lotterie-Ergebnis: {session.games[0].name}
+            </span>
+          </div>
+        )}
+
         {/* Aktionen — organizer only */}
         {session.is_organizer && (
           <div className="mt-3 flex flex-col gap-2">
-            {/* Primary action: open edit sheet */}
-            <button
-              onClick={() => onEdit(session)}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
-            >
-              <Edit2 size={14} /> Bearbeiten
-            </button>
+            {/* Two side-by-side primary actions: edit metadata + direct score entry */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => onEdit(session)}
+                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Edit2 size={14} /> Bearbeiten
+              </button>
+              <button
+                onClick={() => onRecordScores(session)}
+                className="flex-1 py-2.5 rounded-xl border border-border bg-muted/40 hover:bg-muted text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 text-foreground"
+              >
+                <Camera size={14} /> Scores
+              </button>
+            </div>
             {/* Mode-specific secondary action */}
             {session.game_selection_mode === "lottery" && (
               <button
@@ -1161,7 +1181,9 @@ function MultiGamePicker({
   const filteredLibrary = libraryGames.filter(
     (g) => !selectedNames.has(g.name) &&
     (!search || g.name.toLowerCase().includes(search.toLowerCase())) &&
-    (maxDurationMinutes == null || (g.min_playtime ?? 0) <= maxDurationMinutes)
+    // Use max_playtime for the filter: only include games that can finish within budget.
+    // When maxDurationMinutes is null (fixed mode), no filter is applied.
+    (maxDurationMinutes == null || (g.max_playtime ?? g.min_playtime ?? 0) <= maxDurationMinutes)
   );
 
   useEffect(() => {
@@ -1770,12 +1792,13 @@ function PlannedSessionSheet({
 
   const durationMinutes = plannedDuration ? parseInt(plannedDuration, 10) : null;
 
-  // Playtime-aware: total min_playtime of selected games
-  const selectedTotalMinPlaytime = selectedGames.reduce((sum, g) => {
+  // Use max_playtime for budget estimate (conservative: assumes games go long)
+  const selectedTotalMaxPlaytime = selectedGames.reduce((sum, g) => {
     const lib = libraryGames.find((lg) => lg.id === g.id || lg.name === g.name);
-    return sum + (lib?.min_playtime ?? 0);
+    return sum + (lib?.max_playtime ?? lib?.min_playtime ?? 0);
   }, 0);
-  const remainingTime = durationMinutes != null ? durationMinutes - selectedTotalMinPlaytime : null;
+  const remainingTime = durationMinutes != null ? durationMinutes - selectedTotalMaxPlaytime : null;
+  const isOverBudget = remainingTime != null && remainingTime < 0;
 
   function toggleInvite(userId: string) {
     setInvitedIds((prev) => {
@@ -1969,9 +1992,10 @@ function PlannedSessionSheet({
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
                 <Gamepad2 size={11} className="inline mr-1" />
                 {mode === "fixed" ? "Spiele" : "Vorschläge zur Abstimmung"}
-                {remainingTime != null && remainingTime < 300 && (
+                {/* For voting modes: show remaining time hint */}
+                {mode !== "fixed" && remainingTime != null && remainingTime < 300 && !isOverBudget && (
                   <span className="ml-2 normal-case font-medium text-amber-600">
-                    noch ~{remainingTime} Min. verfügbar
+                    noch ~{remainingTime} Min.
                   </span>
                 )}
               </label>
@@ -1979,13 +2003,26 @@ function PlannedSessionSheet({
                 libraryGames={libraryGames}
                 selectedGames={selectedGames}
                 onAdd={(g) => {
-                  // Duplicate check
                   if (selectedGames.some((s) => s.id === g.id || s.name === g.name)) return;
                   setSelectedGames((prev) => [...prev, g]);
                 }}
                 onRemove={(name) => setSelectedGames((prev) => prev.filter((g) => g.name !== name))}
-                maxDurationMinutes={mode === "fixed" ? remainingTime : durationMinutes}
+                // fixed mode: no hard filter (organizer decides freely); only show warning below
+                // other modes: filter by max_playtime so only feasible games are proposed/voted
+                maxDurationMinutes={mode === "fixed" ? null : durationMinutes}
               />
+              {/* fixed mode: soft budget warning when over limit */}
+              {mode === "fixed" && isOverBudget && (
+                <p className="text-[10px] text-amber-600 mt-1.5 leading-snug">
+                  Geschätzte Spielzeit (~{selectedTotalMaxPlaytime} Min.) liegt über dem Budget von {durationMinutes} Min. — du kannst trotzdem weitere Spiele hinzufügen.
+                </p>
+              )}
+              {/* voting modes: filter hint */}
+              {mode !== "fixed" && durationMinutes && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Spiele, deren max. Dauer {durationMinutes} Min. überschreitet, werden ausgefiltert.
+                </p>
+              )}
             </div>
           )}
 

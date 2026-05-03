@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.5] — 2026-05-03
+
+### Changed
+- **Spielzeit-Filter auf `max_playtime` umgestellt:** MultiGamePicker filtert Spiele jetzt anhand ihrer maximalen Spieldauer statt der minimalen. So kommen nur Spiele in Vorschläge/Voting/Lotterie, die realistisch ins Zeitfenster passen.
+- **Modus „Fest": kein Hard-Filter mehr:** Im Fest-Modus werden Spiele nicht mehr ausgefiltert — der Gastgeber kann immer alle Spiele hinzufügen. Stattdessen erscheint ein Hinweistext wenn die geschätzte Gesamtspielzeit das Budget überschreitet.
+- **SessionCard: direkte Scores-Schaltfläche:** Neben „Bearbeiten" gibt es jetzt direkt einen „Scores"-Button auf der Karte — kein Extra-Klick über EditSessionSheet mehr nötig.
+- **Lotterie-Ergebnis für Gäste:** Wenn das Lotterie-Los gezogen wurde, sehen Gäste jetzt einen Amber-Banner auf der Karte mit dem Ergebnis.
+
+---
+
 ## [0.9.4] — 2026-05-03
 
 ### Added
