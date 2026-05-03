@@ -499,7 +499,6 @@ export function PlaysClient({
         <EditSessionSheet
           session={editingSession}
           friends={friends}
-          libraryGames={libraryGames}
           onClose={() => setEditingSession(null)}
           onSaved={handleSessionEdited}
           onRecordScores={(s) => {
@@ -2046,14 +2045,12 @@ function PlannedSessionSheet({
 function EditSessionSheet({
   session,
   friends,
-  libraryGames,
   onClose,
   onSaved,
   onRecordScores,
 }: {
   session: PlannedSession;
   friends: FriendProfile[];
-  libraryGames: LibraryGame[];
   onClose: () => void;
   onSaved: (updated: PlannedSession) => void;
   onRecordScores: (session: PlannedSession) => void;
