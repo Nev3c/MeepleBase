@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { PlaysClient } from "./plays-client";
-import type { PlannedSession, InviteStatus, PlaySessionStatus, PlaylistEntry } from "@/types";
+import type { PlannedSession, InviteStatus, PlaySessionStatus, PlaylistEntry, GameSelectionMode } from "@/types";
 
 export const metadata: Metadata = { title: "Partien" };
 
@@ -29,7 +29,7 @@ export default async function PlaysPage() {
       .limit(50),
     supabase
       .from("user_games")
-      .select("game:games(id, name, thumbnail_url, bgg_id)")
+      .select("game:games(id, name, thumbnail_url, bgg_id, min_playtime, max_playtime)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
@@ -41,7 +41,8 @@ export default async function PlaysPage() {
       .from("play_sessions")
       .select(`
         id, title, session_date, location, notes, status, created_by,
-        session_games:play_session_games(game:games(id, name, thumbnail_url)),
+        game_selection_mode, voting_closed, planned_duration_minutes,
+        session_games:play_session_games(game:games(id, name, thumbnail_url, min_playtime, max_playtime)),
         invites:play_session_invites(invited_user_id, status)
       `)
       .in("status", ["planned", "confirmed"])
@@ -54,7 +55,7 @@ export default async function PlaysPage() {
   ]);
 
   // ── Library games ─────────────────────────────────────────────────────────────
-  type LG = { id: string; name: string; thumbnail_url: string | null; bgg_id: number };
+  type LG = { id: string; name: string; thumbnail_url: string | null; bgg_id: number; min_playtime?: number | null; max_playtime?: number | null };
   const libraryGames: LG[] = (gamesResult.data ?? []).flatMap((ug) => {
     const g = ug.game as unknown as LG | LG[] | null;
     if (!g) return [];
@@ -97,7 +98,7 @@ export default async function PlaysPage() {
   const plannedSessions: PlannedSession[] = rawSessions.map((s) => {
     const invites = (s.invites as { invited_user_id: string; status: string }[]) ?? [];
     const myInvite = invites.find((i) => i.invited_user_id === user.id);
-    type RawSG = { game: { id: string; name: string; thumbnail_url: string | null } };
+    type RawSG = { game: { id: string; name: string; thumbnail_url: string | null; min_playtime?: number | null; max_playtime?: number | null } };
     const rawGames = (s.session_games as unknown as RawSG[]) ?? [];
 
     return {
@@ -110,6 +111,9 @@ export default async function PlaysPage() {
       created_by: s.created_by,
       is_organizer: s.created_by === user.id,
       my_invite_status: myInvite ? (myInvite.status as InviteStatus) : null,
+      game_selection_mode: (s.game_selection_mode ?? "fixed") as GameSelectionMode,
+      voting_closed: s.voting_closed ?? false,
+      planned_duration_minutes: s.planned_duration_minutes ?? null,
       games: rawGames.map((sg) => sg.game),
       invitees: invites.map((inv) => {
         const p = profileMap.get(inv.invited_user_id);
@@ -133,6 +137,7 @@ export default async function PlaysPage() {
         libraryGames={libraryGames}
         plannedSessions={plannedSessions}
         initialPlaylist={initialPlaylist}
+        userId={user.id}
         friends={friendProfiles.map((p) => ({
           id: p.id,
           username: p.username,

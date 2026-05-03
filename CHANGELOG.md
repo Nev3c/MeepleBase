@@ -10,6 +10,33 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.0] — 2026-05-03
+
+### Added
+- **4 Spielauswahl-Modi für Spielerabende:** Direkt im Erstell-Sheet wählbar (2×2-Gitter mit Icon, Name, Beschreibung):
+  - **Fest** – Organisator wählt ein oder mehrere Spiele direkt; verhindert Duplikate; berücksichtigt Spielzeit-Budget.
+  - **Gastgeber schlägt vor** (`vote_organizer`) – Organisator legt die Auswahl zur Abstimmung vor; Gäste ranken Spiele per Klick-Reihenfolge (Borda-Count); Organisator schließt Abstimmung → Gewinner automatisch in Session-Spiele übernommen.
+  - **Freie Wahl** (`vote_free`) – Alle Teilnehmer können Spiele aus der Gastgeber-Bibliothek vorschlagen und per Ranking abstimmen; nur Spiele, die zur geplanten Spielzeit passen, sind vorschlagbar.
+  - **Lotterie** (`lottery`) – Gewichtete Zufallsziehung aus Teilnehmer-Playlisten (bestehender Mechanismus, jetzt als formaler Modus).
+- **Geplante Spielzeit** (`planned_duration_minutes`) – neues Feld im Erstell-Sheet (30–600 Min., Schritt 30); alle Modi filtern Spiele anhand dieser Zeitangabe.
+- **Voting-Sheet** (`VotingSheet`) – Bottomsheet zum Abstimmen: Tap-to-rank-UI (Klick-Reihenfolge = Rang), Ergebnis-Balkenchart (Borda-Punkte), Button zum Schließen der Abstimmung für Organisator.
+- **Proposal-Adder-Sheet** (`ProposalAdderSheet`) – Bottomsheet zum Vorschlagen von Spielen aus der Gastgeber-Bibliothek (gefiltert nach Spielzeit und bereits vorgeschlagenen Spielen).
+- **Neue API-Endpunkte:**
+  - `GET/POST/DELETE /api/play-sessions/[id]/proposals` – Vorschläge verwalten (Modus-Check, Spielzeit-Check, Duplicate-Guard via UNIQUE-Constraint).
+  - `GET/POST /api/play-sessions/[id]/votes` – Stimmen einreichen und Borda-Aggregation abrufen.
+  - `POST /api/play-sessions/[id]/votes/close` – Abstimmung schließen, Gewinner berechnen und in Session-Spiele einfügen.
+- **Modus-Badges** auf Session-Cards (blau = Gastgeber wählt, lila = Freie Wahl, amber = Lotterie).
+- **Gast-Abstimmungsbutton** auf Session-Cards für angenommene Eingeladene in Abstimmungs-Modi.
+- **Duplikat-Prävention** beim Hinzufügen von Spielen im Fest-Modus (client-seitig + server-seitig via UNIQUE-Constraint).
+- **Spielzeit-Filter** in `MultiGamePicker`: Spiele, deren `min_playtime` das verfügbare Budget überschreitet, werden ausgefiltert.
+
+### Changed
+- Sessions-Query in `page.tsx` und API-Route erweitert um `game_selection_mode`, `voting_closed`, `planned_duration_minutes`, `min_playtime`, `max_playtime`.
+- `PlaysClient` erhält `userId`-Prop für Voting-Kontexte.
+- Bibliotheks-Query jetzt mit `min_playtime`, `max_playtime` für Spielzeit-Filterung.
+
+---
+
 ## [0.8.0] — 2026-04-30
 
 ### Added

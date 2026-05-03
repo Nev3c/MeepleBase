@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
-import type { PlannedSession, InviteStatus, PlaySessionStatus } from "@/types";
+import type { PlannedSession, InviteStatus, PlaySessionStatus, GameSelectionMode } from "@/types";
 
 function makeClient() {
   const cookieStore = cookies();
@@ -40,8 +40,9 @@ export async function GET() {
     .from("play_sessions")
     .select(`
       id, title, session_date, location, notes, status, created_by,
+      game_selection_mode, voting_closed, planned_duration_minutes,
       session_games:play_session_games(
-        game:games(id, name, thumbnail_url)
+        game:games(id, name, thumbnail_url, min_playtime, max_playtime)
       ),
       invites:play_session_invites(invited_user_id, status)
     `)
@@ -101,6 +102,9 @@ export async function GET() {
       created_by: s.created_by,
       is_organizer: s.created_by === user.id,
       my_invite_status: myInvite ? (myInvite.status as InviteStatus) : null,
+      game_selection_mode: (s.game_selection_mode ?? "fixed") as GameSelectionMode,
+      voting_closed: s.voting_closed ?? false,
+      planned_duration_minutes: s.planned_duration_minutes ?? null,
       games,
       invitees,
     };
@@ -127,6 +131,8 @@ export async function POST(req: NextRequest) {
     notes?: string;
     game_ids?: string[];
     invited_user_ids?: string[];
+    game_selection_mode?: string;
+    planned_duration_minutes?: number | null;
   };
 
   if (!body.session_date) {
@@ -144,6 +150,8 @@ export async function POST(req: NextRequest) {
       location: body.location?.trim() || null,
       notes: body.notes?.trim() || null,
       status: "planned",
+      game_selection_mode: body.game_selection_mode ?? "fixed",
+      planned_duration_minutes: body.planned_duration_minutes ?? null,
     })
     .select("id")
     .single();

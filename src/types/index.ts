@@ -279,11 +279,14 @@ export interface ConversationSummary {
 
 export type PlaySessionStatus = "planned" | "confirmed" | "completed" | "cancelled";
 export type InviteStatus = "invited" | "accepted" | "declined";
+export type GameSelectionMode = "fixed" | "vote_organizer" | "vote_free" | "lottery";
 
 export interface SessionGame {
   id: string;
   name: string;
   thumbnail_url: string | null;
+  min_playtime?: number | null;
+  max_playtime?: number | null;
 }
 
 export interface SessionInvitee {
@@ -292,6 +295,28 @@ export interface SessionInvitee {
   display_name: string | null;
   avatar_url: string | null;
   status: InviteStatus;
+}
+
+export interface SessionProposal {
+  id: string;
+  session_id: string;
+  game_id: string;
+  proposed_by: string;
+  created_at: string;
+  game: SessionGame;
+}
+
+export interface SessionVote {
+  session_id: string;
+  user_id: string;
+  game_id: string;
+  rank: number;
+}
+
+export interface BordaResult {
+  game: SessionGame;
+  points: number;
+  voter_count: number;
 }
 
 /** A planned (or confirmed) game session — used in /plays Geplant tab */
@@ -307,6 +332,14 @@ export interface PlannedSession {
   my_invite_status: InviteStatus | null; // null = I am organizer
   games: SessionGame[];
   invitees: SessionInvitee[];
+  // New fields for game selection modes
+  game_selection_mode: GameSelectionMode;
+  voting_closed: boolean;
+  planned_duration_minutes: number | null;
+  // Loaded separately for vote modes
+  proposals?: SessionProposal[];
+  my_votes?: SessionVote[];
+  borda_results?: BordaResult[];
 }
 
 // ============================================================

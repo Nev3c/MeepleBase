@@ -8,13 +8,14 @@ import {
   Plus, X, Check, Trash2, Users, Clock, MapPin,
   Edit2, SlidersHorizontal, Camera, Calendar, Gamepad2,
   UserPlus, CheckCircle2, XCircle, ChevronDown, Share2, Copy, CheckCheck,
-  Dices, ListOrdered,
+  Dices, ListOrdered, Vote, Lock, Shuffle,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
-import type { PlannedSession, PlaylistEntry } from "@/types";
+import type { PlannedSession, PlaylistEntry, GameSelectionMode } from "@/types";
 import { PlaylistTab } from "@/components/plays/playlist-tab";
 import { LotterySheet } from "@/components/plays/lottery-sheet";
+import { VotingSheet, ProposalAdderSheet } from "@/components/plays/voting-sheet";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -23,6 +24,8 @@ interface LibraryGame {
   name: string;
   thumbnail_url: string | null;
   bgg_id: number;
+  min_playtime?: number | null;
+  max_playtime?: number | null;
 }
 
 interface FriendProfile {
@@ -72,12 +75,14 @@ export function PlaysClient({
   plannedSessions: initialSessions,
   friends,
   initialPlaylist,
+  userId,
 }: {
   initialPlays: Play[];
   libraryGames: LibraryGame[];
   plannedSessions: PlannedSession[];
   friends: FriendProfile[];
   initialPlaylist: PlaylistEntry[];
+  userId: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -99,6 +104,9 @@ export function PlaysClient({
 
   // Lottery
   const [lotterySession, setLotterySession] = useState<PlannedSession | null>(null);
+
+  // Voting
+  const [votingSession, setVotingSession] = useState<PlannedSession | null>(null);
 
   // Planned-session sheet
   const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
@@ -229,6 +237,20 @@ export function PlaysClient({
     setSessions((prev) => prev.map((s) =>
       s.id === sessionId
         ? { ...s, games: [...s.games, { id: game.id, name: game.name, thumbnail_url: game.thumbnail_url }] }
+        : s
+    ));
+  }
+
+  function handleVotingClosed(sessionId: string, winner: { id: string; name: string; thumbnail_url: string | null }) {
+    setSessions((prev) => prev.map((s) =>
+      s.id === sessionId
+        ? {
+            ...s,
+            voting_closed: true,
+            games: s.games.some((g) => g.id === winner.id)
+              ? s.games
+              : [...s.games, { id: winner.id, name: winner.name, thumbnail_url: winner.thumbnail_url }],
+          }
         : s
     ));
   }
@@ -396,6 +418,7 @@ export function PlaysClient({
                       onCompleted={handleSessionCompleted}
                       onRecordScores={(s) => setCompletingSession(s)}
                       onLottery={(s) => setLotterySession(s)}
+                      onVoting={(s) => setVotingSession(s)}
                     />
                   ))}
                 </div>
@@ -469,6 +492,19 @@ export function PlaysClient({
           onGameAdded={(game) => {
             handleGameAddedToSession(lotterySession.id, game);
             setLotterySession(null);
+          }}
+        />
+      )}
+
+      {/* ── Voting sheet ─────────────────────────────────────────────────────── */}
+      {votingSession && (
+        <VotingSheet
+          session={votingSession}
+          userId={userId}
+          onClose={() => setVotingSession(null)}
+          onVotingClosed={(winner) => {
+            handleVotingClosed(votingSession.id, winner);
+            setVotingSession(null);
           }}
         />
       )}
@@ -689,11 +725,12 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted, onRecordScores, onLottery }: {
+function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting }: {
   session: PlannedSession;
   onCompleted: (id: string) => void;
   onRecordScores: (session: PlannedSession) => void;
   onLottery: (session: PlannedSession) => void;
+  onVoting: (session: PlannedSession) => void;
 }) {
   const date = new Date(session.session_date);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
@@ -864,6 +901,52 @@ function SessionCard({ session, onCompleted, onRecordScores, onLottery }: {
           </div>
         )}
 
+        {/* Guest voting button — for accepted invitees in vote modes */}
+        {!session.is_organizer && myStatus === "accepted" &&
+          (session.game_selection_mode === "vote_organizer" || session.game_selection_mode === "vote_free") && (
+          <div className="mt-3">
+            <button
+              onClick={() => onVoting(session)}
+              className={cn(
+                "w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5",
+                session.voting_closed
+                  ? "bg-slate-50 border border-slate-200 text-slate-600"
+                  : "bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+              )}
+            >
+              {session.voting_closed ? <Lock size={12} /> : <Vote size={13} />}
+              {session.voting_closed
+                ? "Abstimmungsergebnis ansehen"
+                : session.game_selection_mode === "vote_free"
+                  ? "Spiel vorschlagen &amp; abstimmen"
+                  : "Abstimmen"}
+            </button>
+          </div>
+        )}
+
+        {/* Mode badge */}
+        {session.game_selection_mode !== "fixed" && (
+          <div className="mt-2">
+            {session.game_selection_mode === "vote_organizer" && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                <Vote size={9} /> Abstimmung durch Gastgeber
+                {session.voting_closed && " · Geschlossen"}
+              </span>
+            )}
+            {session.game_selection_mode === "vote_free" && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
+                <Shuffle size={9} /> Freie Spielwahl &amp; Voting
+                {session.voting_closed && " · Geschlossen"}
+              </span>
+            )}
+            {session.game_selection_mode === "lottery" && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                <Dices size={9} /> Lotterie
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Aktionen — organizer only */}
         {session.is_organizer && (
           <div className="mt-3 flex flex-col gap-2">
@@ -874,13 +957,29 @@ function SessionCard({ session, onCompleted, onRecordScores, onLottery }: {
             >
               <Edit2 size={14} /> Scores &amp; Fotos erfassen
             </button>
-            {/* Lottery button */}
-            <button
-              onClick={() => onLottery(session)}
-              className="w-full py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5"
-            >
-              <Dices size={13} /> Spiel auslosen
-            </button>
+            {/* Mode-specific secondary action */}
+            {session.game_selection_mode === "lottery" && (
+              <button
+                onClick={() => onLottery(session)}
+                className="w-full py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Dices size={13} /> Spiel auslosen
+              </button>
+            )}
+            {(session.game_selection_mode === "vote_organizer" || session.game_selection_mode === "vote_free") && (
+              <button
+                onClick={() => onVoting(session)}
+                className={cn(
+                  "w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5",
+                  session.voting_closed
+                    ? "bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100"
+                    : "bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+                )}
+              >
+                {session.voting_closed ? <Lock size={12} /> : <Vote size={13} />}
+                {session.voting_closed ? "Abstimmungsergebnis" : "Abstimmung verwalten"}
+              </button>
+            )}
             {/* Complete the session */}
             {!confirmComplete && (
               <button
@@ -934,11 +1033,13 @@ function MultiGamePicker({
   selectedGames,
   onAdd,
   onRemove,
+  maxDurationMinutes,
 }: {
   libraryGames: LibraryGame[];
   selectedGames: SelectedGame[];
   onAdd: (game: SelectedGame) => void;
   onRemove: (name: string) => void;
+  maxDurationMinutes?: number | null;
 }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -959,7 +1060,8 @@ function MultiGamePicker({
   const selectedNames = new Set(selectedGames.map((g) => g.name));
   const filteredLibrary = libraryGames.filter(
     (g) => !selectedNames.has(g.name) &&
-    (!search || g.name.toLowerCase().includes(search.toLowerCase()))
+    (!search || g.name.toLowerCase().includes(search.toLowerCase())) &&
+    (maxDurationMinutes == null || (g.min_playtime ?? 0) <= maxDurationMinutes)
   );
 
   useEffect(() => {
@@ -1531,6 +1633,14 @@ function PastPlaySheet({
 
 // ── Planned Session Sheet ─────────────────────────────────────────────────────
 
+// ── Mode option config ────────────────────────────────────────────────────────
+const MODE_OPTIONS: { value: GameSelectionMode; label: string; desc: string; icon: React.ReactNode }[] = [
+  { value: "fixed",         label: "Fest",             desc: "Du legst die Spiele direkt fest",        icon: <Gamepad2 size={14} /> },
+  { value: "vote_organizer",label: "Gastgeber wählt",  desc: "Du schlägst vor, Gäste stimmen ab",      icon: <Vote size={14} /> },
+  { value: "vote_free",     label: "Freie Wahl",       desc: "Gäste schlagen Spiele vor &amp; voten",  icon: <Shuffle size={14} /> },
+  { value: "lottery",       label: "Lotterie",         desc: "Zufallsziehung aus Gäste-Playlisten",    icon: <Dices size={14} /> },
+];
+
 function PlannedSessionSheet({
   libraryGames,
   friends,
@@ -1553,8 +1663,19 @@ function PlannedSessionSheet({
   const [notes, setNotes] = useState("");
   const [selectedGames, setSelectedGames] = useState<SelectedGame[]>([]);
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<GameSelectionMode>("fixed");
+  const [plannedDuration, setPlannedDuration] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const durationMinutes = plannedDuration ? parseInt(plannedDuration, 10) : null;
+
+  // Playtime-aware: total min_playtime of selected games
+  const selectedTotalMinPlaytime = selectedGames.reduce((sum, g) => {
+    const lib = libraryGames.find((lg) => lg.id === g.id || lg.name === g.name);
+    return sum + (lib?.min_playtime ?? 0);
+  }, 0);
+  const remainingTime = durationMinutes != null ? durationMinutes - selectedTotalMinPlaytime : null;
 
   function toggleInvite(userId: string) {
     setInvitedIds((prev) => {
@@ -1582,12 +1703,14 @@ function PlannedSessionSheet({
     setSaving(true);
     setError(null);
 
-    // Ensure all selected games exist in DB
+    // For fixed/vote_organizer modes, ensure all selected games exist in DB
     const game_ids: string[] = [];
-    for (const game of selectedGames) {
-      const id = await ensureGame(game);
-      if (!id) { setError(`Spiel "${game.name}" konnte nicht gespeichert werden.`); setSaving(false); return; }
-      game_ids.push(id);
+    if (mode === "fixed" || mode === "vote_organizer") {
+      for (const game of selectedGames) {
+        const id = await ensureGame(game);
+        if (!id) { setError(`Spiel "${game.name}" konnte nicht gespeichert werden.`); setSaving(false); return; }
+        game_ids.push(id);
+      }
     }
 
     const session_date = `${sessionDate}T${sessionTime}:00`;
@@ -1602,13 +1725,14 @@ function PlannedSessionSheet({
         notes: notes.trim() || null,
         game_ids,
         invited_user_ids: Array.from(invitedIds),
+        game_selection_mode: mode,
+        planned_duration_minutes: durationMinutes,
       }),
     });
 
     const data = await res.json() as { session_id?: string; error?: string };
     if (!res.ok) { setError(data.error ?? "Fehler beim Speichern"); setSaving(false); return; }
 
-    // Build optimistic session object for immediate UI update
     const newSession: PlannedSession = {
       id: data.session_id!,
       title: title.trim() || null,
@@ -1616,7 +1740,7 @@ function PlannedSessionSheet({
       location: location.trim() || null,
       notes: notes.trim() || null,
       status: "planned",
-      created_by: "", // will be set by server
+      created_by: "",
       is_organizer: true,
       my_invite_status: null,
       games: selectedGames.map((g) => ({ id: g.id ?? "", name: g.name, thumbnail_url: g.thumbnail_url })),
@@ -1629,22 +1753,27 @@ function PlannedSessionSheet({
           avatar_url: f.avatar_url,
           status: "invited" as const,
         })),
+      game_selection_mode: mode,
+      voting_closed: false,
+      planned_duration_minutes: durationMinutes,
     };
 
     onSaved(newSession);
   }
 
+  const showGamePicker = mode === "fixed" || mode === "vote_organizer";
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col" style={{ maxHeight: "92dvh" }}>
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col" style={{ height: "min(92svh, 100dvh)", overflow: "hidden" }}>
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
           <div>
             <h2 className="font-display text-lg font-semibold">Spieleabend planen</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Lade Freunde ein und schlage Spiele vor</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Lade Freunde ein und wähle einen Spielmodus</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
@@ -1652,14 +1781,40 @@ function PlannedSessionSheet({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-          {/* Title */}
+
+          {/* ── Spielauswahl-Modus ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">Spielauswahl</label>
+            <div className="grid grid-cols-2 gap-2">
+              {MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setMode(opt.value)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all",
+                    mode === opt.value
+                      ? "border-amber-400 bg-amber-50"
+                      : "border-border hover:border-amber-200 hover:bg-muted/30"
+                  )}
+                >
+                  <div className={cn("flex items-center gap-1.5 font-semibold text-xs", mode === opt.value ? "text-amber-700" : "text-foreground")}>
+                    {opt.icon} {opt.label}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight" dangerouslySetInnerHTML={{ __html: opt.desc }} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Titel ── */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Name (optional)</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="z.B. Spieleabend bei Dennis"
               className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
           </div>
 
-          {/* Date + Time */}
+          {/* ── Datum + Uhrzeit ── */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Datum *</label>
@@ -1673,7 +1828,32 @@ function PlannedSessionSheet({
             </div>
           </div>
 
-          {/* Location */}
+          {/* ── Geplante Spielzeit ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              <Clock size={11} className="inline mr-1" />Geplante Spielzeit (optional)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="30"
+                max="600"
+                step="30"
+                value={plannedDuration}
+                onChange={(e) => setPlannedDuration(e.target.value)}
+                placeholder="z.B. 180"
+                className="flex-1 min-w-0 text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <span className="text-sm text-muted-foreground flex-shrink-0">Min.</span>
+            </div>
+            {durationMinutes && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Spiele über {durationMinutes} Min. werden automatisch ausgefiltert.
+              </p>
+            )}
+          </div>
+
+          {/* ── Ort ── */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
               <MapPin size={11} className="inline mr-1" />Ort (optional)
@@ -1682,20 +1862,51 @@ function PlannedSessionSheet({
               className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400" />
           </div>
 
-          {/* Games */}
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
-              <Gamepad2 size={11} className="inline mr-1" />Spielvorschläge
-            </label>
-            <MultiGamePicker
-              libraryGames={libraryGames}
-              selectedGames={selectedGames}
-              onAdd={(g) => setSelectedGames((prev) => [...prev, g])}
-              onRemove={(name) => setSelectedGames((prev) => prev.filter((g) => g.name !== name))}
-            />
-          </div>
+          {/* ── Spielauswahl (nur für fixed + vote_organizer) ── */}
+          {showGamePicker && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+                <Gamepad2 size={11} className="inline mr-1" />
+                {mode === "fixed" ? "Spiele" : "Vorschläge zur Abstimmung"}
+                {remainingTime != null && remainingTime < 300 && (
+                  <span className="ml-2 normal-case font-medium text-amber-600">
+                    noch ~{remainingTime} Min. verfügbar
+                  </span>
+                )}
+              </label>
+              <MultiGamePicker
+                libraryGames={libraryGames}
+                selectedGames={selectedGames}
+                onAdd={(g) => {
+                  // Duplicate check
+                  if (selectedGames.some((s) => s.id === g.id || s.name === g.name)) return;
+                  setSelectedGames((prev) => [...prev, g]);
+                }}
+                onRemove={(name) => setSelectedGames((prev) => prev.filter((g) => g.name !== name))}
+                maxDurationMinutes={mode === "fixed" ? remainingTime : durationMinutes}
+              />
+            </div>
+          )}
 
-          {/* Friends to invite */}
+          {/* Info for vote_free + lottery */}
+          {mode === "vote_free" && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-purple-50 border border-purple-100">
+              <Shuffle size={14} className="text-purple-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-purple-700">
+                Gäste können nach der Einladung Spiele aus deiner Bibliothek vorschlagen und gemeinsam abstimmen. Du schließt die Abstimmung manuell.
+              </p>
+            </div>
+          )}
+          {mode === "lottery" && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
+              <Dices size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                Beim Start wird ein Spiel gewichtet aus den Playlisten aller Teilnehmer gezogen. Nur Spiele, die zur Spielzeit passen, kommen in die Ziehung.
+              </p>
+            </div>
+          )}
+
+          {/* ── Freunde ── */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
               <UserPlus size={11} className="inline mr-1" />Freunde einladen
@@ -1732,9 +1943,7 @@ function PlannedSessionSheet({
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {friend.display_name ?? friend.username}
-                        </p>
+                        <p className="text-sm font-medium text-foreground truncate">{friend.display_name ?? friend.username}</p>
                         <p className="text-xs text-muted-foreground">@{friend.username}</p>
                       </div>
                       <div className={cn(
@@ -1750,7 +1959,7 @@ function PlannedSessionSheet({
             )}
           </div>
 
-          {/* Notes */}
+          {/* ── Notizen ── */}
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notizen (optional)</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Hinweise für Gäste, Snacks mitbringen…"
