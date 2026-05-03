@@ -988,18 +988,29 @@ function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting
               </button>
             )}
             {(session.game_selection_mode === "vote_organizer" || session.game_selection_mode === "vote_free") && (
-              <button
-                onClick={() => onVoting(session)}
-                className={cn(
-                  "w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5",
-                  session.voting_closed
-                    ? "bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100"
-                    : "bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+              <>
+                {/* vote_free + open: organizer can also propose games */}
+                {session.game_selection_mode === "vote_free" && !session.voting_closed && (
+                  <button
+                    onClick={() => onPropose(session)}
+                    className="w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100"
+                  >
+                    <Shuffle size={13} /> Spiel vorschlagen
+                  </button>
                 )}
-              >
-                {session.voting_closed ? <Lock size={12} /> : <Vote size={13} />}
-                {session.voting_closed ? "Abstimmungsergebnis" : "Abstimmung verwalten"}
-              </button>
+                <button
+                  onClick={() => onVoting(session)}
+                  className={cn(
+                    "w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5",
+                    session.voting_closed
+                      ? "bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      : "bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+                  )}
+                >
+                  {session.voting_closed ? <Lock size={12} /> : <Vote size={13} />}
+                  {session.voting_closed ? "Abstimmungsergebnis" : "Abstimmung verwalten"}
+                </button>
+              </>
             )}
             {/* Complete the session */}
             {!confirmComplete && (
@@ -1764,7 +1775,8 @@ function PlannedSessionSheet({
       created_by: "",
       is_organizer: true,
       my_invite_status: null,
-      games: selectedGames.map((g) => ({ id: g.id ?? "", name: g.name, thumbnail_url: g.thumbnail_url })),
+      // vote_organizer: selected games become proposals, not session_games
+      games: mode === "vote_organizer" ? [] : selectedGames.map((g) => ({ id: g.id ?? "", name: g.name, thumbnail_url: g.thumbnail_url })),
       invitees: friends
         .filter((f) => invitedIds.has(f.id))
         .map((f) => ({

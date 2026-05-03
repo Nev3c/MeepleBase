@@ -160,16 +160,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: sessionErr?.message ?? "Fehler" }, { status: 500 });
   }
 
-  // Insert games
+  // Insert games — for vote_organizer mode: games become proposals (for voting)
+  // For fixed mode: games go directly to session_games
   if (body.game_ids && body.game_ids.length > 0) {
-    const { error: gamesErr } = await admin.from("play_session_games").insert(
-      body.game_ids.map((game_id, i) => ({
-        session_id: session.id,
-        game_id,
-        sort_order: i,
-      }))
-    );
-    if (gamesErr) console.error("play_session_games insert error:", gamesErr.message);
+    if (body.game_selection_mode === "vote_organizer") {
+      const { error: propErr } = await admin.from("play_session_proposals").insert(
+        body.game_ids.map((game_id) => ({
+          session_id: session.id,
+          game_id,
+          proposed_by: user.id,
+        }))
+      );
+      if (propErr) console.error("play_session_proposals insert error:", propErr.message);
+    } else {
+      const { error: gamesErr } = await admin.from("play_session_games").insert(
+        body.game_ids.map((game_id, i) => ({
+          session_id: session.id,
+          game_id,
+          sort_order: i,
+        }))
+      );
+      if (gamesErr) console.error("play_session_games insert error:", gamesErr.message);
+    }
   }
 
   // Insert invites — also via admin to avoid the circular RLS with play_sessions

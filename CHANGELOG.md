@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.2] — 2026-05-03
+
+### Fixed
+- **Proposals-Bug (vote_organizer):** Proposals-API und Votes-API nutzen jetzt den Admin-Client statt den User-Client — RLS blockierte vorher cross-user Reads, weshalb Vorschläge nicht angezeigt wurden.
+- **vote_organizer Erstellung:** Spiele die beim Erstellen einer Session im Modus „Gastgeber wählt" ausgewählt werden, landen jetzt korrekt in `play_session_proposals` statt in `play_session_games`. Die optimistische Session zeigt keine falschen Games an.
+- **Votes persistieren nicht:** VotingSheet stellt beim ersten Öffnen die gespeicherten Votes aus dem Server wieder her (`ranking` + `submitted`-State). Beim erneuten Öffnen sind die eigenen Stimmen wieder sichtbar.
+- **Zwischenstand ohne eigene Stimme:** Toggle zwischen „Meine Wahl" und „Zwischenstand" ist jetzt immer sichtbar sobald Vorschläge existieren — kein Voting mehr nötig.
+- **Gastgeber kann in vote_free nicht vorschlagen:** Neuer „Spiel vorschlagen"-Button (lila) für Gastgeber im vote_free-Modus, sowohl auf der Session-Card als auch im VotingSheet-Footer.
+- **Organizer in VotingSheet:** „Spiel hinzufügen"-Button im Footer öffnet ProposalAdderSheet direkt über dem VotingSheet (kein extra Tap nötig).
+- **Emoji 🎰 in Lotterie-Button:** Ersetzt durch `Dices`-SVG-Icon.
+- **Emoji 🎲 als Spielbild-Fallback:** In VotingSheet und ProposalAdderSheet ersetzt durch `Gamepad2`-SVG-Icon.
+
+---
+
 ## [0.9.1] — 2026-05-03
 
 ### Added

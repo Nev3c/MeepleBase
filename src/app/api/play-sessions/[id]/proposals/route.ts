@@ -26,17 +26,19 @@ function makeAdmin() {
 }
 
 // ── GET /api/play-sessions/[id]/proposals ────────────────────────────────────
-// Returns all proposals for a session with game details
+// Returns all proposals for a session with game details.
+// Uses admin client to bypass RLS so all participants can read.
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const supabase = makeClient();
+  const admin = makeAdmin();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("play_session_proposals")
     .select("*, game:games(id, name, thumbnail_url, min_playtime, max_playtime)")
     .eq("session_id", params.id)

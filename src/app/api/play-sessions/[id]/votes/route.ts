@@ -33,11 +33,12 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const supabase = makeClient();
+  const admin = makeAdmin();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
 
-  // All votes for this session (RLS allows participants to read all)
-  const { data: votes, error } = await supabase
+  // All votes + proposals — use admin client to bypass RLS
+  const { data: votes, error } = await admin
     .from("play_session_votes")
     .select("session_id, user_id, game_id, rank")
     .eq("session_id", params.id);
@@ -49,7 +50,7 @@ export async function GET(
 
   // Borda count: for each user, N proposals → rank 1 gets N pts, rank 2 gets N-1, ...
   // We need proposals to know N for each user
-  const { data: proposals } = await supabase
+  const { data: proposals } = await admin
     .from("play_session_proposals")
     .select("game_id, game:games(id, name, thumbnail_url, min_playtime, max_playtime)")
     .eq("session_id", params.id);

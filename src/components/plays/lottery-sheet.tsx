@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
-import { X, Users, RefreshCw } from "lucide-react";
+import { X, Users, RefreshCw, Dices } from "lucide-react";
 import type { PlannedSession } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ export function LotterySheet({
               }}
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
-                🎰 {animState === "no_result" ? "Nochmal ziehen" : "Ziehen!"}
+                <Dices size={20} /> {animState === "no_result" ? "Nochmal ziehen" : "Ziehen!"}
               </span>
             </button>
           )}

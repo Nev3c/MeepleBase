@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { X, Trophy, CheckCircle2, RotateCcw, Vote } from "lucide-react";
+import { X, Trophy, CheckCircle2, RotateCcw, Vote, Plus, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PlannedSession, SessionProposal, BordaResult } from "@/types";
+import type { PlannedSession, SessionProposal, BordaResult, SessionVote } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,18 +27,17 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
   const [view, setView] = useState<SheetView>(isClosed ? "results" : "vote");
   const [proposals, setProposals] = useState<SessionProposal[]>(session.proposals ?? []);
   const [bordaResults, setBordaResults] = useState<BordaResult[]>(session.borda_results ?? []);
+  const [showProposalAdder, setShowProposalAdder] = useState(false);
 
   // Ordered list of game_ids: index 0 = rank 1
-  const [ranking, setRanking] = useState<string[]>(
-    () => (session.my_votes ?? [])
-      .sort((a, b) => a.rank - b.rank)
-      .map((v) => v.game_id)
-  );
-
+  const [ranking, setRanking] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [submitted, setSubmitted] = useState((session.my_votes ?? []).length > 0);
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Only restore ranking from server on the very first load (not on subsequent reloads)
+  const firstLoadDone = useRef(false);
 
   const reload = useCallback(async () => {
     const [propRes, voteRes] = await Promise.all([
@@ -50,8 +49,17 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
       setProposals(d.proposals);
     }
     if (voteRes.ok) {
-      const d = await voteRes.json() as { borda_results: BordaResult[] };
-      setBordaResults(d.borda_results);
+      const d = await voteRes.json() as { my_votes: SessionVote[]; borda_results: BordaResult[] };
+      setBordaResults(d.borda_results ?? []);
+      // On first load: restore saved ranking so the user sees their previous votes
+      if (!firstLoadDone.current) {
+        const myV = d.my_votes ?? [];
+        if (myV.length > 0) {
+          setRanking(myV.sort((a, b) => a.rank - b.rank).map((v) => v.game_id));
+          setSubmitted(true);
+        }
+        firstLoadDone.current = true;
+      }
     }
   }, [session.id]);
 
@@ -145,8 +153,8 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
           </button>
         </div>
 
-        {/* View toggle — only show when results are available */}
-        {!isClosed && (submitted || isOrganizer) && proposals.length > 0 && (
+        {/* View toggle — always show when there are proposals */}
+        {!isClosed && proposals.length > 0 && (
           <div className="flex gap-1 px-4 pt-3 flex-shrink-0">
             <button
               onClick={() => setView("vote")}
@@ -217,7 +225,7 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
                             {proposal.game.thumbnail_url ? (
                               <Image src={proposal.game.thumbnail_url} alt={proposal.game.name} width={40} height={40} className="object-cover w-full h-full" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-lg">🎲</div>
+                              <div className="w-full h-full flex items-center justify-center text-amber-300"><Gamepad2 size={20} /></div>
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -277,7 +285,7 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
                           {result.game.thumbnail_url ? (
                             <Image src={result.game.thumbnail_url} alt={result.game.name} width={40} height={40} className="object-cover w-full h-full" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-lg">🎲</div>
+                            <div className="w-full h-full flex items-center justify-center text-amber-300"><Gamepad2 size={20} /></div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -329,6 +337,15 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
               {submitted ? "Abstimmung aktualisieren" : `Abstimmen (${ranking.length} von ${proposals.length})`}
             </button>
           )}
+          {/* Organizer: add proposals from own library */}
+          {!isClosed && isOrganizer && (
+            <button
+              onClick={() => setShowProposalAdder(true)}
+              className="w-full py-2.5 rounded-2xl border border-border text-sm font-semibold text-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus size={15} /> Spiel hinzufügen
+            </button>
+          )}
           {!isClosed && isOrganizer && (
             <button
               onClick={handleCloseVoting}
@@ -346,6 +363,17 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
           )}
         </div>
       </div>
+
+      {/* Organizer proposal adder — stacked on top of VotingSheet */}
+      {showProposalAdder && (
+        <ProposalAdderSheet
+          sessionId={session.id}
+          organizerUserId={session.created_by}
+          plannedDurationMinutes={session.planned_duration_minutes ?? null}
+          onClose={() => setShowProposalAdder(false)}
+          onProposed={() => { reload(); }}
+        />
+      )}
     </>
   );
 }
@@ -495,7 +523,7 @@ export function ProposalAdderSheet({
                 {game.thumbnail_url ? (
                   <Image src={game.thumbnail_url} alt={game.name} width={40} height={40} className="object-cover w-full h-full" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-lg">🎲</div>
+                  <div className="w-full h-full flex items-center justify-center text-amber-300"><Gamepad2 size={20} /></div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
