@@ -403,9 +403,9 @@ export function PlaysClient({
                 <div className="mb-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-start gap-3">
                   <Dices size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-800">Tracker-Scores bereit</p>
+                    <p className="text-sm font-semibold text-amber-800">Tracker-Punkte bereit</p>
                     <p className="text-xs text-amber-700 mt-0.5 leading-snug">
-                      Tippe bei einem Spielerabend auf &bdquo;Scores erfassen&ldquo; um die Punkte zu übertragen.
+                      Tippe bei einem Spielerabend auf &bdquo;Punkte erfassen&ldquo; um die Punkte zu übertragen.
                     </p>
                   </div>
                   <button
@@ -1063,7 +1063,7 @@ function SessionCard({ session, onCompleted, onEdit, onRecordScores, onLottery, 
                 onClick={() => onRecordScores(session)}
                 className="flex-1 py-2.5 rounded-xl border border-border bg-muted/40 hover:bg-muted text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 text-foreground"
               >
-                <Camera size={14} /> Scores
+                <Camera size={14} /> Punkte
               </button>
             </div>
             {/* Mode-specific secondary action */}
@@ -1560,7 +1560,7 @@ function PastPlaySheet({
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
           <h2 className="font-display text-lg font-semibold">
-            {isEdit ? "Partie bearbeiten" : sessionPrefill ? "Scores & Fotos erfassen" : "Partie(n) erfassen"}
+            {isEdit ? "Partie bearbeiten" : sessionPrefill ? "Punkte & Fotos erfassen" : "Partie(n) erfassen"}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
@@ -2502,12 +2502,12 @@ function EditSessionSheet({
 
         {/* Footer */}
         <div className="px-4 py-4 border-t border-border flex-shrink-0 flex flex-col gap-2">
-          {/* Scores & Fotos section */}
+          {/* Punkte & Fotos section */}
           <button
             onClick={() => onRecordScores(session)}
             className="w-full py-2.5 rounded-xl border border-border bg-muted/40 hover:bg-muted text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 text-foreground"
           >
-            <Camera size={14} /> Scores &amp; Fotos erfassen
+            <Camera size={14} /> Punkte &amp; Fotos erfassen
           </button>
 
           <button

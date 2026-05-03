@@ -68,7 +68,12 @@ export function LibraryClient({ initialGames, user, profile, playCounts }: Libra
 
     if (deferredSearch) {
       const q = deferredSearch.toLowerCase();
-      games = games.filter((g) => g.game?.name.toLowerCase().includes(q));
+      games = games.filter((g) => {
+        const bggName = (g.game?.name ?? "").toLowerCase();
+        // Also search user-defined custom name (e.g. German name override)
+        const customName = ((g.custom_fields?.name as string | undefined) ?? "").toLowerCase();
+        return bggName.includes(q) || customName.includes(q);
+      });
     }
 
     if (filter.playerCount) {

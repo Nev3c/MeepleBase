@@ -79,12 +79,16 @@ export default async function PlayerProfilePage({ params }: Props) {
   const canSeeLibrary =
     visibility === "public" || (visibility === "friends" && isFriend);
 
-  // Fetch library if visible
+  // Fetch library, play counts, playlist and unread in parallel
   let library: FriendGame[] = [];
   const playCountMap: Record<string, number> = {};
+  type PlaylistEntry = { rank: number; game: { id: string; name: string; thumbnail_url: string | null; min_playtime: number | null; max_playtime: number | null; min_players: number | null; max_players: number | null } };
+  let playlist: PlaylistEntry[] = [];
+  const playlistHidden = !canSeeLibrary;
+  let unreadCount = 0;
 
   if (canSeeLibrary) {
-    const [{ data: games }, { data: plays }] = await Promise.all([
+    const [gamesRes, playsRes, playlistRes, unreadRes] = await Promise.all([
       supabase
         .from("user_games")
         .select("id, game_id, status, sale_price, game:games(id, name, thumbnail_url)")
@@ -95,22 +99,40 @@ export default async function PlayerProfilePage({ params }: Props) {
         .from("plays")
         .select("game_id")
         .eq("user_id", userId),
+      admin
+        .from("game_playlist")
+        .select("game_id, rank, game:games(id, name, thumbnail_url, min_playtime, max_playtime, min_players, max_players)")
+        .eq("user_id", userId)
+        .order("rank", { ascending: true }),
+      supabase
+        .from("messages")
+        .select("id")
+        .eq("from_id", userId)
+        .eq("to_id", user.id)
+        .is("read_at", null),
     ]);
 
-    library = ((games ?? []) as unknown as FriendGame[]).filter((g) => g.game !== null);
+    library = ((gamesRes.data ?? []) as unknown as FriendGame[]).filter((g) => g.game !== null);
 
-    for (const p of plays ?? []) {
+    for (const p of playsRes.data ?? []) {
       playCountMap[p.game_id] = (playCountMap[p.game_id] ?? 0) + 1;
     }
-  }
 
-  // Unread messages from this user
-  const { data: unread } = await supabase
-    .from("messages")
-    .select("id")
-    .eq("from_id", userId)
-    .eq("to_id", user.id)
-    .is("read_at", null);
+    type RawPlaylist = { game_id: string; rank: number; game: PlaylistEntry["game"] | null };
+    playlist = ((playlistRes.data ?? []) as unknown as RawPlaylist[])
+      .filter((e) => e.game !== null)
+      .map((e) => ({ rank: e.rank, game: e.game! }));
+
+    unreadCount = (unreadRes.data ?? []).length;
+  } else {
+    const { data: unread } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("from_id", userId)
+      .eq("to_id", user.id)
+      .is("read_at", null);
+    unreadCount = (unread ?? []).length;
+  }
 
   return (
     <PlayerProfileClient
@@ -128,7 +150,9 @@ export default async function PlayerProfilePage({ params }: Props) {
       library={library}
       playCountMap={playCountMap}
       canSeeLibrary={canSeeLibrary}
-      unreadFromUser={(unread ?? []).length}
+      playlist={playlist}
+      playlistHidden={playlistHidden}
+      unreadFromUser={unreadCount}
     />
   );
 }

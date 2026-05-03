@@ -20,7 +20,7 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 type NearbyStatus = "idle" | "locating" | "loading" | "done" | "denied" | "error";
 type SortMode = "az" | "entfernung" | "neu";
-type PlayersTab = "chats" | "freunde" | "einladungen" | "markt" | "suche";
+type PlayersTab = "chats" | "freunde" | "gruppen" | "markt" | "suche";
 
 interface SearchPlayer {
   id: string;
@@ -78,12 +78,12 @@ export function PlayersClient({
 }: Props) {
   const router = useRouter();
 
-  const [pendingInvites, setPendingInvites] = useState<SessionInviteForPlayer[]>(initialPendingInvites);
-  const actionableInvites = pendingInvites.filter((i) => i.status === "invited");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_pendingInvites, _setPendingInvites] = useState<SessionInviteForPlayer[]>(initialPendingInvites);
 
   // Active tab — default to chats if unread messages, einladungen if pending invites
   const [activeTab, setActiveTab] = useState<PlayersTab>(
-    totalUnread > 0 ? "chats" : actionableInvites.length > 0 ? "einladungen" : "freunde"
+    totalUnread > 0 ? "chats" : "freunde"
   );
 
   // Friend state
@@ -282,12 +282,11 @@ export function PlayersClient({
               Freunde
             </TabButton>
             <TabButton
-              active={activeTab === "einladungen"}
-              onClick={() => setActiveTab("einladungen")}
-              badge={actionableInvites.length > 0 ? actionableInvites.length : undefined}
-              icon={<Calendar size={18} />}
+              active={activeTab === "gruppen"}
+              onClick={() => setActiveTab("gruppen")}
+              icon={<Users size={18} />}
             >
-              Termine
+              Gruppen
             </TabButton>
             <TabButton
               active={activeTab === "markt"}
@@ -330,20 +329,8 @@ export function PlayersClient({
             onOpenSheet={openSheet}
           />
         )}
-        {activeTab === "einladungen" && (
-          <EinladungenTab
-            invites={pendingInvites}
-            onRespond={(inviteId, sessionId, status) => {
-              setPendingInvites((prev) =>
-                prev.map((i) => i.invite_id === inviteId ? { ...i, status } : i)
-              );
-              fetch(`/api/play-sessions/${sessionId}/respond`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status }),
-              });
-            }}
-          />
+        {activeTab === "gruppen" && (
+          <GruppenTab />
         )}
         {activeTab === "markt" && (
           <MarktTab forSaleGames={forSaleGames} currentUserId={currentUserId} />
@@ -1057,6 +1044,29 @@ function ForSaleCard({ item, isOwn = false }: { item: ForSaleGame; isOwn?: boole
 }
 
 // ── Suche Tab ─────────────────────────────────────────────────────────────────
+
+// ── Gruppen Tab ───────────────────────────────────────────────────────────────
+
+function GruppenTab() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+      <div className="w-20 h-20 rounded-3xl bg-amber-50 flex items-center justify-center mb-4 shadow-sm">
+        <Users size={36} className="text-amber-400" />
+      </div>
+      <h3 className="font-display text-xl font-semibold text-foreground mb-2">Gruppen</h3>
+      <p className="text-muted-foreground text-sm max-w-xs leading-relaxed">
+        Temporäre Chatgruppen für geplante Spieleabende — kommt bald!
+      </p>
+      <p className="text-xs text-muted-foreground/60 mt-3">
+        Einladungen zu Spieleabenden findest du unter{" "}
+        <Link href="/plays" className="text-amber-600 font-medium underline underline-offset-2">
+          Geplante Partien
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
 
 // ── Einladungen Tab ───────────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageSquare, UserPlus, UserCheck, UserX, Clock,
-  BookOpen, Lock, Globe, Users, Eye,
+  BookOpen, Lock, Globe, Users, Eye, ListOrdered,
 } from "lucide-react";
 import { PlayerAvatar } from "../players-client";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,19 @@ interface FriendGame {
   } | null;
 }
 
+interface PlaylistEntry {
+  rank: number;
+  game: {
+    id: string;
+    name: string;
+    thumbnail_url: string | null;
+    min_playtime: number | null;
+    max_playtime: number | null;
+    min_players: number | null;
+    max_players: number | null;
+  };
+}
+
 interface Props {
   currentUserId: string;
   targetProfile: {
@@ -39,6 +52,8 @@ interface Props {
   library: FriendGame[];
   playCountMap: Record<string, number>;
   canSeeLibrary: boolean;
+  playlist: PlaylistEntry[];
+  playlistHidden: boolean;
   unreadFromUser: number;
 }
 
@@ -54,11 +69,14 @@ export function PlayerProfileClient({
   library,
   playCountMap,
   canSeeLibrary,
+  playlist,
+  playlistHidden,
   unreadFromUser,
 }: Props) {
   const router = useRouter();
   const [localFriendData, setLocalFriendData] = useState(friendData);
   const [actionLoading, setActionLoading] = useState(false);
+  const [profileTab, setProfileTab] = useState<"bibliothek" | "playlist">("bibliothek");
 
   const fp = localFriendData;
   const p = targetProfile;
@@ -227,109 +245,218 @@ export function PlayerProfileClient({
           )}
         </div>
 
-        {/* Library */}
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <BookOpen size={15} className="text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">Bibliothek</h2>
-            {/* Visibility info — only shown to the viewer, not the owner */}
-            <span className={cn(
-              "ml-auto flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full",
-              p.library_visibility === "public"
-                ? "bg-green-50 text-green-700"
-                : p.library_visibility === "friends"
-                ? "bg-blue-50 text-blue-700"
-                : "bg-muted text-muted-foreground"
-            )}>
-              {VISIBILITY_LABELS[p.library_visibility].icon}
-              {VISIBILITY_LABELS[p.library_visibility].label}
-            </span>
-          </div>
+        {/* Tab bar: Bibliothek / Playlist */}
+        <div className="flex items-end border-b border-border -mx-4 px-4">
+          <ProfileTabButton
+            active={profileTab === "bibliothek"}
+            onClick={() => setProfileTab("bibliothek")}
+            icon={<BookOpen size={14} />}
+          >
+            Bibliothek
+          </ProfileTabButton>
+          <ProfileTabButton
+            active={profileTab === "playlist"}
+            onClick={() => setProfileTab("playlist")}
+            icon={<ListOrdered size={14} />}
+          >
+            Playlist
+          </ProfileTabButton>
+          {/* Visibility badge */}
+          <span className={cn(
+            "ml-auto mb-2 flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0",
+            p.library_visibility === "public"
+              ? "bg-green-50 text-green-700"
+              : p.library_visibility === "friends"
+              ? "bg-blue-50 text-blue-700"
+              : "bg-muted text-muted-foreground"
+          )}>
+            {VISIBILITY_LABELS[p.library_visibility].icon}
+            {VISIBILITY_LABELS[p.library_visibility].label}
+          </span>
+        </div>
 
-          {!canSeeLibrary ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
-              <Lock size={24} className="text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-foreground">Bibliothek nicht sichtbar</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {p.library_visibility === "private"
-                  ? "Diese Bibliothek ist privat."
-                  : "Werde Freund, um die Bibliothek zu sehen."}
-              </p>
-            </div>
-          ) : library.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">Noch keine Spiele in der Bibliothek.</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground mb-3 font-medium">
-                {library.filter((g) => g.status === "owned").length} im Besitz
-                {library.filter((g) => g.status === "wishlist").length > 0 && ` · ${library.filter((g) => g.status === "wishlist").length} Wunschliste`}
-                {library.filter((g) => g.status === "for_sale").length > 0 && ` · ${library.filter((g) => g.status === "for_sale").length} zu verkaufen`}
-              </p>
-              {/* Library transparency note */}
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5 mb-3">
-                <Eye size={10} className="flex-shrink-0" />
-                <span>Du siehst: Cover, Spielname und Anzahl Partien</span>
+        {/* Bibliothek Tab */}
+        {profileTab === "bibliothek" && (
+          <section>
+            {!canSeeLibrary ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+                <Lock size={24} className="text-muted-foreground mb-2" />
+                <p className="text-sm font-medium text-foreground">Bibliothek nicht sichtbar</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {p.library_visibility === "private"
+                    ? "Diese Bibliothek ist privat."
+                    : "Werde Freund, um die Bibliothek zu sehen."}
+                </p>
               </div>
-              <div className="flex flex-col gap-2">
-                {library.map((ug) => {
-                  if (!ug.game) return null;
-                  const g = ug.game;
-                  const plays = playCountMap[ug.game_id] ?? 0;
-                  const isWishlist = ug.status === "wishlist";
-                  const isForSale = ug.status === "for_sale";
-                  return (
-                    <div
-                      key={ug.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 bg-card rounded-xl border shadow-card",
-                        isForSale ? "border-green-200" : "border-border"
-                      )}
-                    >
-                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                        {g.thumbnail_url ? (
-                          <Image
-                            src={g.thumbnail_url}
-                            alt={g.name}
-                            fill
-                            className="object-cover"
-                            sizes="48px"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-amber-100">
-                            <span className="text-amber-600 font-bold text-base">{g.name[0]}</span>
-                          </div>
+            ) : library.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">Noch keine Spiele in der Bibliothek.</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mb-3 font-medium">
+                  {library.filter((g) => g.status === "owned").length} im Besitz
+                  {library.filter((g) => g.status === "wishlist").length > 0 && ` · ${library.filter((g) => g.status === "wishlist").length} Wunschliste`}
+                  {library.filter((g) => g.status === "for_sale").length > 0 && ` · ${library.filter((g) => g.status === "for_sale").length} zu verkaufen`}
+                </p>
+                {/* Library transparency note */}
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5 mb-3">
+                  <Eye size={10} className="flex-shrink-0" />
+                  <span>Du siehst: Cover, Spielname und Anzahl Partien</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {library.map((ug) => {
+                    if (!ug.game) return null;
+                    const g = ug.game;
+                    const plays = playCountMap[ug.game_id] ?? 0;
+                    const isWishlist = ug.status === "wishlist";
+                    const isForSale = ug.status === "for_sale";
+                    return (
+                      <div
+                        key={ug.id}
+                        className={cn(
+                          "flex items-center gap-3 p-3 bg-card rounded-xl border shadow-card",
+                          isForSale ? "border-green-200" : "border-border"
+                        )}
+                      >
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                          {g.thumbnail_url ? (
+                            <Image
+                              src={g.thumbnail_url}
+                              alt={g.name}
+                              fill
+                              className="object-cover"
+                              sizes="48px"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-amber-100">
+                              <span className="text-amber-600 font-bold text-base">{g.name[0]}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
+                          {plays > 0 && (
+                            <p className="text-xs text-amber-600 font-medium">{plays}× gespielt</p>
+                          )}
+                        </div>
+                        {/* Status badge */}
+                        {isWishlist && (
+                          <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                            Wunschliste
+                          </span>
+                        )}
+                        {isForSale && (
+                          <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                            {ug.sale_price != null
+                              ? `€ ${ug.sale_price.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                              : "Zu verk."}
+                          </span>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{g.name}</p>
-                        {plays > 0 && (
-                          <p className="text-xs text-amber-600 font-medium">{plays}× gespielt</p>
-                        )}
-                      </div>
-                      {/* Status badge */}
-                      {isWishlist && (
-                        <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                          Wunschliste
-                        </span>
-                      )}
-                      {isForSale && (
-                        <span className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                          {ug.sale_price != null
-                            ? `€\u202f${ug.sale_price.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
-                            : "Zu verk."}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {/* Playlist Tab */}
+        {profileTab === "playlist" && (
+          <section>
+            {playlistHidden ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center bg-muted/30 rounded-2xl border border-dashed border-border">
+                <Lock size={24} className="text-muted-foreground mb-2" />
+                <p className="text-sm font-medium text-foreground">Playlist nicht sichtbar</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {p.library_visibility === "private"
+                    ? "Diese Playlist ist privat."
+                    : "Werde Freund, um die Playlist zu sehen."}
+                </p>
               </div>
-            </>
-          )}
-        </section>
+            ) : playlist.length === 0 ? (
+              <div className="py-10 text-center">
+                <ListOrdered size={28} className="text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Noch keine Spiele auf der Playlist.</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mb-3 font-medium">
+                  {playlist.length} {playlist.length === 1 ? "Spiel" : "Spiele"} auf der Wunschspielliste
+                </p>
+                <div className="flex flex-col gap-2">
+                  {playlist.map((entry) => {
+                    const g = entry.game;
+                    const playtimeLabel = g.max_playtime
+                      ? `${g.min_playtime ?? g.max_playtime}–${g.max_playtime} Min.`
+                      : g.min_playtime
+                      ? `${g.min_playtime} Min.`
+                      : null;
+                    return (
+                      <div key={g.id} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border shadow-card">
+                        {/* Rank badge */}
+                        <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-bold text-amber-700">#{entry.rank}</span>
+                        </div>
+                        {/* Cover */}
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                          {g.thumbnail_url ? (
+                            <Image
+                              src={g.thumbnail_url}
+                              alt={g.name}
+                              fill
+                              className="object-cover"
+                              sizes="48px"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-amber-100">
+                              <span className="text-amber-600 font-bold text-base">{g.name[0]}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate leading-tight">{g.name}</p>
+                          {playtimeLabel && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{playtimeLabel}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+        )}
       </div>
     </div>
+  );
+}
+
+// ── Profile Tab Button ─────────────────────────────────────────────────────────
+
+function ProfileTabButton({
+  active, onClick, children, icon,
+}: {
+  active: boolean; onClick: () => void; children: React.ReactNode; icon: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "relative flex items-center gap-1.5 py-2.5 pr-5 text-sm font-medium transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
+      )}
+    >
+      {icon}
+      {children}
+      <span className={cn(
+        "absolute bottom-0 left-0 right-0 h-0.5 rounded-full transition-all duration-200",
+        active ? "bg-amber-500 opacity-100" : "opacity-0"
+      )} />
+    </button>
   );
 }

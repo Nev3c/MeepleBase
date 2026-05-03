@@ -10,6 +10,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.6] — 2026-05-03
+
+### Added
+- **Spieler-Profil: Playlist-Tab:** Profilseite eines anderen Spielers zeigt jetzt zwei Tabs — „Bibliothek" und „Playlist". Playlist zeigt die rankte Wunschspielliste (max. 10 Spiele) mit Rang-Badge, Cover und Spielzeit. Sichtbarkeit folgt `library_visibility` (public/friends/private).
+- **GET /api/users/[id]/playlist:** Neuer Endpoint der die Playlist eines anderen Nutzers zurückgibt, mit Sichtbarkeitsprüfung.
+- **Spieler-Menü: „Gruppen"-Tab:** Ersetzt den bisherigen „Termine"-Tab (Einladungen sind bereits unter /plays). Zeigt Platzhalter für zukünftige Chatgruppen-Funktion.
+
+### Changed
+- **„Scores" → „Punkte" (überall):** Button-Label, Titel im Sheet und Tracker-Banner verwenden jetzt einheitlich „Punkte" statt „Scores".
+- **Bibliothekssuche:** Sucht jetzt auch im nutzerdefinierten Namen (`custom_fields.name`), z.B. wenn ein Spiel mit deutschem Titel überschrieben wurde. Behebt den Bug, bei dem nur der englische BGG-Name durchsucht wurde.
+
+---
+
 ## [0.9.5] — 2026-05-03
 
 ### Changed
