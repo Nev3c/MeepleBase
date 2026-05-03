@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { sendPushToUser } from "@/lib/push";
 
 type PlaylistGame = {
   id: string;
@@ -137,6 +138,23 @@ export async function POST(
       break;
     }
   }
+
+  // Push all non-organizer participants (fire-and-forget)
+  try {
+    const guestIds = invites
+      .filter((i) => i.status !== "declined")
+      .map((i) => i.invited_user_id);
+
+    const payload = {
+      title: "Das Los hat gesprochen!",
+      body: selected.game?.name
+        ? `Heute Abend wird „${selected.game.name}" gespielt`
+        : "Das Lotterie-Ergebnis steht fest",
+      url: "/plays",
+    };
+
+    void Promise.allSettled(guestIds.map((id) => sendPushToUser(id, payload)));
+  } catch { /* push errors must never break the response */ }
 
   return NextResponse.json({
     game: selected.game,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { sendPushToUser } from "@/lib/push";
 
 function makeClient() {
   const cookieStore = cookies();
@@ -57,5 +58,34 @@ export async function POST(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Push notification to organizer (fire-and-forget)
+  try {
+    const { data: session } = await admin
+      .from("play_sessions")
+      .select("created_by, title")
+      .eq("id", params.id)
+      .single();
+
+    if (session && session.created_by !== user.id) {
+      const { data: responder } = await admin
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", user.id)
+        .single();
+
+      const name = responder?.display_name ?? responder?.username ?? "Jemand";
+      const sessionLabel = session.title ? `„${session.title}"` : "deinen Spieleabend";
+
+      void sendPushToUser(session.created_by, {
+        title: body.status === "accepted" ? "Zusage erhalten!" : "Absage erhalten",
+        body: body.status === "accepted"
+          ? `${name} hat für ${sessionLabel} zugesagt`
+          : `${name} hat für ${sessionLabel} abgesagt`,
+        url: "/plays",
+      });
+    }
+  } catch { /* push errors must never break the response */ }
+
   return NextResponse.json(data);
 }

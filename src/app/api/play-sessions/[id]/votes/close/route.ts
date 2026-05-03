@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { sendPushToUser } from "@/lib/push";
 
 function makeClient() {
   const cookieStore = cookies();
@@ -117,6 +118,29 @@ export async function POST(
       sort_order: (maxOrder?.sort_order ?? -1) + 1,
     });
   }
+
+  // Push all participants (fire-and-forget)
+  try {
+    const { data: invites } = await admin
+      .from("play_session_invites")
+      .select("invited_user_id, status")
+      .eq("session_id", params.id);
+
+    const participantIds = [
+      // Guests who didn't decline
+      ...((invites ?? []).filter((i) => i.status !== "declined").map((i) => i.invited_user_id)),
+    ];
+
+    const payload = {
+      title: "Abstimmungsergebnis steht fest!",
+      body: winnerGame?.name
+        ? `„${winnerGame.name}" hat die Abstimmung gewonnen`
+        : "Die Abstimmung ist abgeschlossen",
+      url: "/plays",
+    };
+
+    void Promise.allSettled(participantIds.map((id) => sendPushToUser(id, payload)));
+  } catch { /* push errors must never break the response */ }
 
   return NextResponse.json({
     winner: winnerGame,

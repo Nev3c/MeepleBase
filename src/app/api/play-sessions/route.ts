@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import type { PlannedSession, InviteStatus, PlaySessionStatus, GameSelectionMode } from "@/types";
+import { sendPushToUser } from "@/lib/push";
 
 function makeClient() {
   const cookieStore = cookies();
@@ -194,6 +195,28 @@ export async function POST(req: NextRequest) {
       }))
     );
     if (invitesErr) console.error("play_session_invites insert error:", invitesErr.message);
+
+    // Push invited users (fire-and-forget)
+    try {
+      const { data: organizer } = await admin
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", user.id)
+        .single();
+
+      const organizerName = organizer?.display_name ?? organizer?.username ?? "Jemand";
+      const sessionLabel = body.title?.trim() ? `„${body.title.trim()}"` : "einen Spieleabend";
+
+      void Promise.allSettled(
+        body.invited_user_ids.map((invitedId) =>
+          sendPushToUser(invitedId, {
+            title: "Neue Einladung!",
+            body: `${organizerName} lädt dich zu ${sessionLabel} ein`,
+            url: "/plays",
+          })
+        )
+      );
+    } catch { /* push errors must never break the response */ }
   }
 
   return NextResponse.json({ session_id: session.id }, { status: 201 });

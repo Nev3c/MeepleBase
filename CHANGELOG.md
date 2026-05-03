@@ -10,6 +10,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.4] — 2026-05-03
+
+### Added
+- **Web Push Notifications aktiviert:** Spielerabend-Einladung, Zu-/Absage des Gastes, Abstimmungsergebnis, Lotterie-Ergebnis — alle Ereignisse lösen jetzt Push-Notifications aus (fire-and-forget, blockieren nie die API-Response).
+- **Push-Permission-Banner:** Subtiler Hinweis-Banner im Geplant-Tab wenn Push noch nicht erlaubt. Einmalig schließbar, kein aggressives Popup.
+
+### Changed
+- **SessionCard Gäste-Anzeige (Organisator-Ansicht):** Ersetzt den kompakten Avatar-Stack durch eine farbkodierte Namensliste — Grün + Haken für Zugesagt, Rot + Durchgestrichen für Abgesagt, Amber-Badge für Ausstehend. Max. 5 Personen sichtbar, dann "+N weitere".
+- Guests sehen weiterhin den Avatar-Stack (für sie ist nur der eigene Status relevant).
+
+---
+
 ## [0.9.3] — 2026-05-03
 
 ### Added

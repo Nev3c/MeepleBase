@@ -8,7 +8,7 @@ import {
   Plus, X, Check, Trash2, Users, Clock, MapPin,
   Edit2, SlidersHorizontal, Camera, Calendar, Gamepad2,
   UserPlus, CheckCircle2, XCircle, ChevronDown, Share2, Copy, CheckCheck,
-  Dices, ListOrdered, Vote, Lock, Shuffle,
+  Dices, ListOrdered, Vote, Lock, Shuffle, Bell,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import type { PlannedSession, PlaylistEntry, GameSelectionMode } from "@/types";
 import { PlaylistTab } from "@/components/plays/playlist-tab";
 import { LotterySheet } from "@/components/plays/lottery-sheet";
 import { VotingSheet, ProposalAdderSheet } from "@/components/plays/voting-sheet";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -416,6 +417,8 @@ export function PlaysClient({
                   </button>
                 </div>
               )}
+              <PushPermissionBanner />
+
               {sessions.length === 0 ? (
                 <EmptyStateGeplant onAdd={() => setPlannedSheetOpen(true)} />
               ) : (
@@ -878,25 +881,69 @@ function SessionCard({ session, onCompleted, onEdit, onLottery, onVoting, onProp
           </p>
         )}
 
-        {/* Location + invitee count */}
-        <div className="flex flex-wrap items-center gap-x-3 mt-1.5">
-          {session.location && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin size={10} />{session.location}
-            </span>
-          )}
-          {session.invitees.length > 0 && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users size={10} />
-              {accepted > 0 && `${accepted} Zusage${accepted !== 1 ? "n" : ""}`}
-              {accepted > 0 && pending > 0 && " · "}
-              {pending > 0 && `${pending} offen`}
-            </span>
-          )}
-        </div>
+        {/* Location */}
+        {session.location && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
+            <MapPin size={10} />{session.location}
+          </div>
+        )}
 
-        {/* Invitee avatars */}
-        {session.invitees.length > 0 && (
+        {/* Invitee list — color-coded for organizer; compact avatars for guests */}
+        {session.invitees.length > 0 && session.is_organizer ? (
+          <div className="mt-2 flex flex-col gap-1">
+            {session.invitees.slice(0, 5).map((inv) => {
+              const isDeclined = inv.status === "declined";
+              const isAccepted = inv.status === "accepted";
+              return (
+                <div key={inv.user_id} className={cn(
+                  "flex items-center gap-2",
+                  isDeclined && "opacity-50"
+                )}>
+                  {/* Avatar */}
+                  <div className={cn(
+                    "w-6 h-6 rounded-full overflow-hidden flex-shrink-0 border-2",
+                    isAccepted ? "border-green-400" : isDeclined ? "border-red-300" : "border-border"
+                  )}>
+                    {inv.avatar_url ? (
+                      <Image src={inv.avatar_url} alt={inv.username} width={24} height={24} className="object-cover" />
+                    ) : (
+                      <div className={cn(
+                        "w-full h-full flex items-center justify-center",
+                        isAccepted ? "bg-green-100" : isDeclined ? "bg-red-100" : "bg-amber-100"
+                      )}>
+                        <span className={cn(
+                          "font-bold text-[9px]",
+                          isAccepted ? "text-green-700" : isDeclined ? "text-red-500" : "text-amber-700"
+                        )}>{inv.username[0].toUpperCase()}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Name */}
+                  <span className={cn(
+                    "text-xs flex-1 min-w-0 truncate",
+                    isAccepted ? "text-green-700 font-medium" : isDeclined ? "text-red-500 line-through" : "text-muted-foreground"
+                  )}>
+                    {inv.display_name ?? inv.username}
+                  </span>
+                  {/* Status dot/icon */}
+                  {isAccepted && <CheckCircle2 size={12} className="text-green-500 flex-shrink-0" />}
+                  {isDeclined && <XCircle size={12} className="text-red-400 flex-shrink-0" />}
+                  {!isAccepted && !isDeclined && (
+                    <span className="text-[9px] text-amber-600 font-semibold flex-shrink-0 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200">
+                      Offen
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            {session.invitees.length > 5 && (
+              <p className="text-[10px] text-muted-foreground pl-8">
+                +{session.invitees.length - 5} weitere
+              </p>
+            )}
+          </div>
+        ) : session.invitees.length > 0 ? (
+          /* Guest view: compact avatar stack */
           <div className="flex -space-x-2 mt-2">
             {session.invitees.slice(0, 6).map((inv) => (
               <div
@@ -917,7 +964,7 @@ function SessionCard({ session, onCompleted, onEdit, onLottery, onVoting, onProp
               </div>
             ))}
           </div>
-        )}
+        ) : null}
 
         {/* Respond buttons (for invitees with pending status) */}
         {isPending && myStatus === "invited" && (
@@ -2443,6 +2490,43 @@ function EditSessionSheet({
         </div>
       </div>
     </>
+  );
+}
+
+// ── Push Permission Banner ────────────────────────────────────────────────────
+
+function PushPermissionBanner() {
+  const { state, loading, subscribe } = usePushNotifications();
+  const [dismissed, setDismissed] = useState(false);
+
+  // Only show if unsubscribed and user hasn't dismissed this session
+  if (dismissed || state !== "unsubscribed") return null;
+
+  return (
+    <div className="mb-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+      <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+        <Bell size={15} className="text-slate-500" />
+      </div>
+      <p className="text-xs text-slate-600 flex-1 min-w-0 leading-snug">
+        Benachrichtigungen für Einladungen &amp; Abstimmungsergebnisse?
+      </p>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <button
+          onClick={() => setDismissed(true)}
+          className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+          aria-label="Schließen"
+        >
+          <X size={14} />
+        </button>
+        <button
+          onClick={subscribe}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50"
+        >
+          {loading ? "…" : "Ja, gerne"}
+        </button>
+      </div>
+    </div>
   );
 }
 

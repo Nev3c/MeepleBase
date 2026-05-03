@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { sendPushToUser } from "@/lib/push";
 
 function makeClient() {
   const cookieStore = cookies();
@@ -104,6 +105,34 @@ export async function PATCH(
           status: "invited",
         }))
       );
+
+      // Push newly invited users (fire-and-forget)
+      try {
+        const { data: organizer } = await admin
+          .from("profiles")
+          .select("display_name, username")
+          .eq("id", user.id)
+          .single();
+
+        const { data: sessionMeta } = await admin
+          .from("play_sessions")
+          .select("title")
+          .eq("id", params.id)
+          .single();
+
+        const organizerName = organizer?.display_name ?? organizer?.username ?? "Jemand";
+        const sessionLabel = sessionMeta?.title ? `„${sessionMeta.title}"` : "einen Spieleabend";
+
+        void Promise.allSettled(
+          toInvite.map((invitedId) =>
+            sendPushToUser(invitedId, {
+              title: "Neue Einladung!",
+              body: `${organizerName} lädt dich zu ${sessionLabel} ein`,
+              url: "/plays",
+            })
+          )
+        );
+      } catch { /* push errors must never break the response */ }
     }
   }
 
