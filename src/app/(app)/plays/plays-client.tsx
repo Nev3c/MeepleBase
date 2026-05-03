@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { PlannedSession, PlaylistEntry, GameSelectionMode } from "@/types";
 import { PlaylistTab } from "@/components/plays/playlist-tab";
 import { LotterySheet } from "@/components/plays/lottery-sheet";
-import { VotingSheet } from "@/components/plays/voting-sheet";
+import { VotingSheet, ProposalAdderSheet } from "@/components/plays/voting-sheet";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 
@@ -107,6 +107,7 @@ export function PlaysClient({
 
   // Voting
   const [votingSession, setVotingSession] = useState<PlannedSession | null>(null);
+  const [proposalSession, setProposalSession] = useState<PlannedSession | null>(null);
 
   // Planned-session sheet
   const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
@@ -419,6 +420,7 @@ export function PlaysClient({
                       onRecordScores={(s) => setCompletingSession(s)}
                       onLottery={(s) => setLotterySession(s)}
                       onVoting={(s) => setVotingSession(s)}
+                      onPropose={(s) => setProposalSession(s)}
                     />
                   ))}
                 </div>
@@ -505,6 +507,19 @@ export function PlaysClient({
           onVotingClosed={(winner) => {
             handleVotingClosed(votingSession.id, winner);
             setVotingSession(null);
+          }}
+        />
+      )}
+
+      {/* ── Proposal adder (vote_free: guests suggest games) ─────────────────── */}
+      {proposalSession && (
+        <ProposalAdderSheet
+          sessionId={proposalSession.id}
+          organizerUserId={proposalSession.created_by}
+          plannedDurationMinutes={proposalSession.planned_duration_minutes ?? null}
+          onClose={() => setProposalSession(null)}
+          onProposed={() => {
+            // Sheet stays open so guest can add multiple games; they close manually
           }}
         />
       )}
@@ -725,12 +740,13 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting }: {
+function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting, onPropose }: {
   session: PlannedSession;
   onCompleted: (id: string) => void;
   onRecordScores: (session: PlannedSession) => void;
   onLottery: (session: PlannedSession) => void;
   onVoting: (session: PlannedSession) => void;
+  onPropose: (session: PlannedSession) => void;
 }) {
   const date = new Date(session.session_date);
   const dateStr = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "short" });
@@ -901,10 +917,19 @@ function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting
           </div>
         )}
 
-        {/* Guest voting button — for accepted invitees in vote modes */}
+        {/* Guest action buttons — for accepted invitees in vote modes */}
         {!session.is_organizer && myStatus === "accepted" &&
           (session.game_selection_mode === "vote_organizer" || session.game_selection_mode === "vote_free") && (
-          <div className="mt-3">
+          <div className="mt-3 flex flex-col gap-2">
+            {/* vote_free + open: two buttons (Vorschlagen + Abstimmen) */}
+            {session.game_selection_mode === "vote_free" && !session.voting_closed && (
+              <button
+                onClick={() => onPropose(session)}
+                className="w-full py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100"
+              >
+                <Shuffle size={13} /> Spiel vorschlagen
+              </button>
+            )}
             <button
               onClick={() => onVoting(session)}
               className={cn(
@@ -915,11 +940,7 @@ function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting
               )}
             >
               {session.voting_closed ? <Lock size={12} /> : <Vote size={13} />}
-              {session.voting_closed
-                ? "Abstimmungsergebnis ansehen"
-                : session.game_selection_mode === "vote_free"
-                  ? "Spiel vorschlagen &amp; abstimmen"
-                  : "Abstimmen"}
+              {session.voting_closed ? "Abstimmungsergebnis ansehen" : "Abstimmen"}
             </button>
           </div>
         )}

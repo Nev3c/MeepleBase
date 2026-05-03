@@ -8,6 +8,7 @@ type PlaylistGame = {
   thumbnail_url: string | null;
   min_players: number | null;
   max_players: number | null;
+  min_playtime: number | null;
 };
 
 type PlaylistRow = {
@@ -45,10 +46,10 @@ export async function POST(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Load session + invites
+  // Load session + invites + planned duration
   const { data: session } = await admin
     .from("play_sessions")
-    .select("id, created_by, invites:play_session_invites(invited_user_id, status)")
+    .select("id, created_by, planned_duration_minutes, invites:play_session_invites(invited_user_id, status)")
     .eq("id", params.id)
     .single();
 
@@ -70,7 +71,7 @@ export async function POST(
   // Fetch all participants' playlists (admin client bypasses RLS)
   const { data: rawPlaylists } = await admin
     .from("game_playlist")
-    .select("user_id, game_id, rank, game:games(id, name, thumbnail_url, min_players, max_players)")
+    .select("user_id, game_id, rank, game:games(id, name, thumbnail_url, min_players, max_players, min_playtime)")
     .in("user_id", participantIds)
     .order("rank", { ascending: true });
 
@@ -93,13 +94,16 @@ export async function POST(
   for (const userEntries of Array.from(byUser.values())) {
     const sorted = [...userEntries].sort((a, b) => a.rank - b.rank);
 
-    // Filter to eligible games (player count must fit)
+    // Filter to eligible games (player count must fit + playtime within budget)
+    const plannedDuration = (session as { planned_duration_minutes?: number | null }).planned_duration_minutes ?? null;
     const eligible = sorted.filter((entry) => {
       const g = entry.game;
       if (!g) return false;
       const minP = g.min_players ?? 1;
       const maxP = g.max_players ?? 99;
-      return participantCount >= minP && participantCount <= maxP;
+      if (participantCount < minP || participantCount > maxP) return false;
+      if (plannedDuration != null && (g.min_playtime ?? 0) > plannedDuration) return false;
+      return true;
     });
 
     // Assign tickets by position in eligible list

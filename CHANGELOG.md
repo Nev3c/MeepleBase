@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.1] — 2026-05-03
+
+### Added
+- **ProposalAdderSheet vollständig eingebunden:** Gäste in `vote_free`-Sessions sehen jetzt zwei separate Buttons — „Spiel vorschlagen" (öffnet ProposalAdderSheet) und „Abstimmen" (öffnet VotingSheet). Wenn die Abstimmung bereits geschlossen ist, bleibt nur der Ergebnis-Button.
+- **ProposalAdderSheet self-fetching:** Lädt Gastgeber-Bibliothek und bestehende Vorschläge selbstständig via `GET /api/users/[id]/library` + `GET /api/play-sessions/[id]/proposals`. Skeleton-Loading-State, optimistisches Hide nach Vorschlag (kann mehrere Spiele hintereinander vorschlagen ohne das Sheet zu schließen). Playtime-Filter integriert.
+- **Neuer API-Endpoint `GET /api/users/[id]/library`:** Gibt die Spielbibliothek (Status = owned) eines beliebigen Nutzers zurück (Admin-Client umgeht RLS). Wird von ProposalAdderSheet für `vote_free`-Vorschläge genutzt.
+- **Lotterie: Spielzeit-Filter:** Die Lotterie berücksichtigt jetzt `planned_duration_minutes` — Spiele, deren `min_playtime` das Budget überschreitet, kommen nicht mehr in die Ziehung.
+
+### Changed
+- `SessionCard` hat jetzt `onPropose`-Prop für den „Spiel vorschlagen"-Flow.
+- `ProposalAdderSheet` Props vereinfacht: statt `organizerLibrary[]` wird `organizerUserId` übergeben; Bibliothek-Fetch passiert intern.
+
+---
+
 ## [0.9.0] — 2026-05-03
 
 ### Added

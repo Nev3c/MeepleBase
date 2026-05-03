@@ -351,7 +351,8 @@ export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted 
 }
 
 // ── ProposalAdderSheet ────────────────────────────────────────────────────────
-// Used in vote_free mode so guests can suggest games from organizer's library
+// Used in vote_free mode so guests can suggest games from organizer's library.
+// Self-fetches the organizer's library via /api/users/[organizerUserId]/library.
 
 interface OrganizerGame {
   id: string;
@@ -363,17 +364,15 @@ interface OrganizerGame {
 
 interface ProposalAdderSheetProps {
   sessionId: string;
-  organizerLibrary: OrganizerGame[];
-  existingProposalGameIds: Set<string>;
+  organizerUserId: string;
   plannedDurationMinutes: number | null;
   onClose: () => void;
-  onProposed: (proposal: SessionProposal) => void;
+  onProposed: () => void;
 }
 
 export function ProposalAdderSheet({
   sessionId,
-  organizerLibrary,
-  existingProposalGameIds,
+  organizerUserId,
   plannedDurationMinutes,
   onClose,
   onProposed,
@@ -381,10 +380,37 @@ export function ProposalAdderSheet({
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [library, setLibrary] = useState<OrganizerGame[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [existingIds, setExistingIds] = useState<Set<string>>(new Set());
 
-  const filtered = organizerLibrary.filter((g) => {
-    if (existingProposalGameIds.has(g.id)) return false;
-    if (plannedDurationMinutes && (g.min_playtime ?? 0) > plannedDurationMinutes) return false;
+  // Fetch organizer library + existing proposals in parallel on mount
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const [libRes, propRes] = await Promise.all([
+          fetch(`/api/users/${organizerUserId}/library`),
+          fetch(`/api/play-sessions/${sessionId}/proposals`),
+        ]);
+        if (libRes.ok) {
+          const d = await libRes.json() as { games: OrganizerGame[] };
+          setLibrary(d.games ?? []);
+        }
+        if (propRes.ok) {
+          const d = await propRes.json() as { proposals: { game_id: string }[] };
+          setExistingIds(new Set((d.proposals ?? []).map((p) => p.game_id)));
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [organizerUserId, sessionId]);
+
+  const filtered = library.filter((g) => {
+    if (existingIds.has(g.id)) return false;
+    if (plannedDurationMinutes != null && (g.min_playtime ?? 0) > plannedDurationMinutes) return false;
     if (!search) return true;
     return g.name.toLowerCase().includes(search.toLowerCase());
   });
@@ -403,8 +429,9 @@ export function ProposalAdderSheet({
         setError(d.error ?? "Fehler");
         return;
       }
-      const d = await res.json() as { proposal: SessionProposal };
-      onProposed(d.proposal);
+      // Mark as already proposed so UI updates immediately
+      setExistingIds((prev) => { const next = new Set(Array.from(prev)); next.add(game.id); return next; });
+      onProposed();
     } finally {
       setAdding(null);
     }
@@ -421,7 +448,14 @@ export function ProposalAdderSheet({
           <div className="w-10 h-1 rounded-full bg-border" />
         </div>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
-          <h2 className="font-display text-lg font-semibold">Spiel vorschlagen</h2>
+          <div>
+            <h2 className="font-display text-lg font-semibold">Spiel vorschlagen</h2>
+            {plannedDurationMinutes && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Nur Spiele bis {plannedDurationMinutes} Min. Spielzeit
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
             <X size={20} />
           </button>
@@ -436,12 +470,21 @@ export function ProposalAdderSheet({
           />
         </div>
         <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col gap-2">
-          {filtered.length === 0 && (
+          {loading && (
+            <div className="flex flex-col gap-2 pt-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 rounded-2xl bg-muted animate-pulse" />
+              ))}
+            </div>
+          )}
+          {!loading && filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
-              {organizerLibrary.length === 0 ? "Gastgeber-Bibliothek nicht verfügbar." : "Kein passendes Spiel gefunden."}
+              {library.length === 0
+                ? "Gastgeber-Bibliothek nicht verfügbar."
+                : "Alle passenden Spiele wurden bereits vorgeschlagen."}
             </p>
           )}
-          {filtered.map((game) => (
+          {!loading && filtered.map((game) => (
             <button
               key={game.id}
               onClick={() => propose(game)}
@@ -469,11 +512,11 @@ export function ProposalAdderSheet({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               ) : (
-                <span className="text-xs text-amber-600 font-semibold flex-shrink-0">Vorschlagen</span>
+                <span className="text-xs text-amber-600 font-semibold flex-shrink-0">+ Vorschlagen</span>
               )}
             </button>
           ))}
-          {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2 mt-1">{error}</p>}
         </div>
       </div>
     </>
