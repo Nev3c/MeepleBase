@@ -778,7 +778,6 @@ function SessionCard({ session, onCompleted, onEdit, onLottery, onVoting, onProp
   const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 
   const accepted = session.invitees.filter((i) => i.status === "accepted").length;
-  const pending  = session.invitees.filter((i) => i.status === "invited").length;
 
   const isPending = !session.is_organizer && session.my_invite_status === "invited";
   const [responding, setResponding] = useState(false);
