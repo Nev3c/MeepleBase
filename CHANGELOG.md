@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.3] — 2026-05-03
+
+### Added
+- **EditSessionSheet:** Neues Bottom-Sheet zum Bearbeiten von Spielerabenden (nur Gastgeber). Enthält alle Metadaten (Titel, Datum, Uhrzeit, Ort, Notizen, Spielmodus, Spielzeit), eingeladene Gäste mit Status-Badge (read-only) und ein optionales Invite-Feld für noch nicht eingeladene Freunde. Modus-Wechsel zeigt Sicherheitsdialog mit expliziter Bestätigung (löscht Vorschläge + Stimmen). Sekundärer Button „Scores & Fotos erfassen" öffnet weiterhin den PastPlaySheet.
+- **PATCH /api/play-sessions/[id]:** Neuer Endpoint für Organizer-Edits — aktualisiert Session-Metadaten, fügt neue Invitees hinzu, resettet Votes/Proposals auf Wunsch.
+
+### Changed
+- **SessionCard Primär-Button:** „Scores & Fotos erfassen" ersetzt durch „Bearbeiten" (öffnet EditSessionSheet). Scores & Fotos bleibt als sekundäre Aktion im EditSessionSheet erreichbar.
+
+### Fixed
+- **Library-API Statusfilter:** `GET /api/users/[id]/library` filterte nur `status = "owned"` — entfernt, sodass alle Spiele des Nutzers zurückgegeben werden und Gastgeber-Vorschläge funktionieren.
+
+---
+
 ## [0.9.2] — 2026-05-03
 
 ### Fixed

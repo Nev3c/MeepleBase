@@ -36,12 +36,11 @@ export async function GET(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Fetch the target user's owned games (admin bypasses user_games RLS)
+  // Fetch the target user's library (all statuses — admin bypasses user_games RLS)
   const { data, error } = await admin
     .from("user_games")
     .select("game:games(id, name, thumbnail_url, min_playtime, max_playtime)")
     .eq("user_id", params.id)
-    .eq("status", "owned")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

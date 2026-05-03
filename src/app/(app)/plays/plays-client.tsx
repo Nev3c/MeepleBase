@@ -109,6 +109,9 @@ export function PlaysClient({
   const [votingSession, setVotingSession] = useState<PlannedSession | null>(null);
   const [proposalSession, setProposalSession] = useState<PlannedSession | null>(null);
 
+  // Edit session
+  const [editingSession, setEditingSession] = useState<PlannedSession | null>(null);
+
   // Planned-session sheet
   const [plannedSheetOpen, setPlannedSheetOpen] = useState(false);
 
@@ -254,6 +257,11 @@ export function PlaysClient({
           }
         : s
     ));
+  }
+
+  function handleSessionEdited(updated: PlannedSession) {
+    setSessions((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+    setEditingSession(null);
   }
 
   // Called when the user saves scores/photos via "Scores & Fotos erfassen" on a planned session.
@@ -417,7 +425,7 @@ export function PlaysClient({
                       key={session.id}
                       session={session}
                       onCompleted={handleSessionCompleted}
-                      onRecordScores={(s) => setCompletingSession(s)}
+                      onEdit={(s) => setEditingSession(s)}
                       onLottery={(s) => setLotterySession(s)}
                       onVoting={(s) => setVotingSession(s)}
                       onPropose={(s) => setProposalSession(s)}
@@ -483,6 +491,21 @@ export function PlaysClient({
           friends={friends}
           onClose={() => setPlannedSheetOpen(false)}
           onSaved={handleSessionCreated}
+        />
+      )}
+
+      {/* ── Edit session sheet ───────────────────────────────────────────────── */}
+      {editingSession && (
+        <EditSessionSheet
+          session={editingSession}
+          friends={friends}
+          libraryGames={libraryGames}
+          onClose={() => setEditingSession(null)}
+          onSaved={handleSessionEdited}
+          onRecordScores={(s) => {
+            setEditingSession(null);
+            setCompletingSession(s);
+          }}
         />
       )}
 
@@ -740,10 +763,10 @@ function PlayCard({
 
 // ── Session Card (planned) ────────────────────────────────────────────────────
 
-function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting, onPropose }: {
+function SessionCard({ session, onCompleted, onEdit, onLottery, onVoting, onPropose }: {
   session: PlannedSession;
   onCompleted: (id: string) => void;
-  onRecordScores: (session: PlannedSession) => void;
+  onEdit: (session: PlannedSession) => void;
   onLottery: (session: PlannedSession) => void;
   onVoting: (session: PlannedSession) => void;
   onPropose: (session: PlannedSession) => void;
@@ -971,12 +994,12 @@ function SessionCard({ session, onCompleted, onRecordScores, onLottery, onVoting
         {/* Aktionen — organizer only */}
         {session.is_organizer && (
           <div className="mt-3 flex flex-col gap-2">
-            {/* Primary action: record scores/photos AND complete the session in one step */}
+            {/* Primary action: open edit sheet */}
             <button
-              onClick={() => onRecordScores(session)}
+              onClick={() => onEdit(session)}
               className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
             >
-              <Edit2 size={14} /> Scores &amp; Fotos erfassen
+              <Edit2 size={14} /> Bearbeiten
             </button>
             {/* Mode-specific secondary action */}
             {session.game_selection_mode === "lottery" && (
@@ -2009,6 +2032,416 @@ function PlannedSessionSheet({
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
             ) : <Calendar size={15} />}
             {invitedIds.size > 0 ? `Einladungen senden (${invitedIds.size})` : "Spieleabend speichern"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Edit Session Sheet ────────────────────────────────────────────────────────
+// Organizer edits all session metadata, manages invitees, changes mode (with reset confirmation).
+// Also surfaces "Scores & Fotos erfassen" as a secondary action.
+
+function EditSessionSheet({
+  session,
+  friends,
+  libraryGames,
+  onClose,
+  onSaved,
+  onRecordScores,
+}: {
+  session: PlannedSession;
+  friends: FriendProfile[];
+  libraryGames: LibraryGame[];
+  onClose: () => void;
+  onSaved: (updated: PlannedSession) => void;
+  onRecordScores: (session: PlannedSession) => void;
+}) {
+  // Parse session_date → "2026-05-10" + "19:00"
+  const [title, setTitle] = useState(session.title ?? "");
+  const [sessionDate, setSessionDate] = useState(session.session_date.slice(0, 10));
+  const [sessionTime, setSessionTime] = useState(session.session_date.slice(11, 16));
+  const [location, setLocation] = useState(session.location ?? "");
+  const [notes, setNotes] = useState(session.notes ?? "");
+  const [mode, setMode] = useState<GameSelectionMode>(session.game_selection_mode);
+  const [plannedDuration, setPlannedDuration] = useState(
+    session.planned_duration_minutes ? String(session.planned_duration_minutes) : ""
+  );
+
+  // Mode change confirmation
+  const [pendingMode, setPendingMode] = useState<GameSelectionMode | null>(null);
+  const modeChanged = mode !== session.game_selection_mode;
+
+  // New invitees (friends not yet invited)
+  const alreadyInvitedIds = new Set(session.invitees.map((i) => i.user_id));
+  const [newInvitedIds, setNewInvitedIds] = useState<Set<string>>(new Set());
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const durationMinutes = plannedDuration ? parseInt(plannedDuration, 10) : null;
+
+  function handleModeClick(newMode: GameSelectionMode) {
+    if (newMode === mode) return;
+    // If there were already proposals/votes, confirm before switching
+    const hasVotingData = session.game_selection_mode !== "fixed" && session.game_selection_mode !== "lottery";
+    if (hasVotingData) {
+      setPendingMode(newMode);
+    } else {
+      setMode(newMode);
+    }
+  }
+
+  function confirmModeChange() {
+    if (pendingMode) {
+      setMode(pendingMode);
+      setPendingMode(null);
+    }
+  }
+
+  function toggleNewInvite(userId: string) {
+    setNewInvitedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+
+    const session_date = `${sessionDate}T${sessionTime}:00`;
+
+    const body: Record<string, unknown> = {
+      title: title.trim() || null,
+      session_date,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
+      game_selection_mode: mode,
+      planned_duration_minutes: durationMinutes,
+      new_invited_user_ids: Array.from(newInvitedIds),
+    };
+
+    if (modeChanged) {
+      body.reset_votes = true;
+    }
+
+    const res = await fetch(`/api/play-sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const data = await res.json() as { error?: string };
+      setError(data.error ?? "Fehler beim Speichern");
+      setSaving(false);
+      return;
+    }
+
+    // Build updated session object for optimistic UI
+    const newInviteeFriends = friends.filter((f) => newInvitedIds.has(f.id));
+    const updatedSession: PlannedSession = {
+      ...session,
+      title: title.trim() || null,
+      session_date,
+      location: location.trim() || null,
+      notes: notes.trim() || null,
+      game_selection_mode: mode,
+      planned_duration_minutes: durationMinutes,
+      voting_closed: modeChanged ? false : session.voting_closed,
+      invitees: [
+        ...session.invitees,
+        ...newInviteeFriends.map((f) => ({
+          user_id: f.id,
+          username: f.username,
+          display_name: f.display_name,
+          avatar_url: f.avatar_url,
+          status: "invited" as const,
+        })),
+      ],
+    };
+
+    onSaved(updatedSession);
+  }
+
+  // Uninvited friends = friends not already invited
+  const uninvitedFriends = friends.filter((f) => !alreadyInvitedIds.has(f.id));
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-3xl shadow-2xl flex flex-col"
+        style={{ height: "min(92svh, 100dvh)", overflow: "hidden" }}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-border" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Spieleabend bearbeiten</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Einstellungen und Einladungen anpassen</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+
+          {/* ── Spielauswahl-Modus ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">Spielauswahl</label>
+            <div className="grid grid-cols-2 gap-2">
+              {MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleModeClick(opt.value)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all",
+                    mode === opt.value
+                      ? "border-amber-400 bg-amber-50"
+                      : "border-border hover:border-amber-200 hover:bg-muted/30"
+                  )}
+                >
+                  <div className={cn("flex items-center gap-1.5 font-semibold text-xs", mode === opt.value ? "text-amber-700" : "text-foreground")}>
+                    {opt.icon} {opt.label}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight" dangerouslySetInnerHTML={{ __html: opt.desc }} />
+                </button>
+              ))}
+            </div>
+
+            {/* Mode change confirmation dialog */}
+            {pendingMode && (
+              <div className="mt-2 p-3 rounded-xl bg-red-50 border border-red-200">
+                <p className="text-xs text-red-800 font-medium leading-snug mb-2">
+                  Modus wechseln zu &ldquo;{MODE_OPTIONS.find((o) => o.value === pendingMode)?.label}&rdquo;?
+                  Das löscht alle bestehenden Vorschläge und Stimmen unwiderruflich.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPendingMode(null)}
+                    className="flex-1 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={confirmModeChange}
+                    className="flex-1 py-1.5 rounded-lg bg-red-500 text-white text-xs font-semibold"
+                  >
+                    Ja, Modus ändern
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Warning if mode already changed (before save) */}
+            {modeChanged && !pendingMode && (
+              <p className="mt-1.5 text-[10px] text-red-600 leading-snug">
+                Beim Speichern werden alle Vorschläge und Stimmen dieser Session zurückgesetzt.
+              </p>
+            )}
+          </div>
+
+          {/* ── Titel ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Name (optional)</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="z.B. Spieleabend bei Dennis"
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+
+          {/* ── Datum + Uhrzeit ── */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Datum *</label>
+              <input
+                type="date"
+                value={sessionDate}
+                onChange={(e) => setSessionDate(e.target.value)}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Uhrzeit</label>
+              <input
+                type="time"
+                value={sessionTime}
+                onChange={(e) => setSessionTime(e.target.value)}
+                className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+            </div>
+          </div>
+
+          {/* ── Geplante Spielzeit ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              <Clock size={11} className="inline mr-1" />Geplante Spielzeit (optional)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="30"
+                max="600"
+                step="30"
+                value={plannedDuration}
+                onChange={(e) => setPlannedDuration(e.target.value)}
+                placeholder="z.B. 180"
+                className="flex-1 min-w-0 text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <span className="text-sm text-muted-foreground flex-shrink-0">Min.</span>
+            </div>
+          </div>
+
+          {/* ── Ort ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+              <MapPin size={11} className="inline mr-1" />Ort (optional)
+            </label>
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="z.B. Bei mir zuhause, Spielcafé…"
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+
+          {/* ── Notizen ── */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notizen (optional)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Hinweise für Gäste, Snacks mitbringen…"
+              rows={2}
+              className="w-full text-sm px-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+            />
+          </div>
+
+          {/* ── Eingeladene Gäste (read-only mit Status) ── */}
+          {session.invitees.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
+                <Users size={11} className="inline mr-1" />Eingeladene Gäste
+              </label>
+              <div className="flex flex-col gap-1.5">
+                {session.invitees.map((inv) => (
+                  <div
+                    key={inv.user_id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-muted/30"
+                  >
+                    <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-amber-100">
+                      {inv.avatar_url ? (
+                        <Image src={inv.avatar_url} alt={inv.username} fill className="object-cover" sizes="32px" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <span className="text-amber-600 font-bold text-xs">{inv.username[0].toUpperCase()}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{inv.display_name ?? inv.username}</p>
+                      <p className="text-xs text-muted-foreground">@{inv.username}</p>
+                    </div>
+                    <span className={cn(
+                      "text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0",
+                      inv.status === "accepted" ? "bg-green-100 text-green-700" :
+                      inv.status === "declined" ? "bg-red-100 text-red-600" :
+                      "bg-muted text-muted-foreground"
+                    )}>
+                      {inv.status === "accepted" ? "Zugesagt" : inv.status === "declined" ? "Abgelehnt" : "Ausstehend"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Weitere Freunde einladen ── */}
+          {uninvitedFriends.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 block">
+                <UserPlus size={11} className="inline mr-1" />Weitere Freunde einladen
+                {newInvitedIds.size > 0 && (
+                  <span className="ml-2 text-amber-600 normal-case font-medium">{newInvitedIds.size} ausgewählt</span>
+                )}
+              </label>
+              <div className="flex flex-col gap-1.5">
+                {uninvitedFriends.map((friend) => {
+                  const selected = newInvitedIds.has(friend.id);
+                  return (
+                    <button
+                      key={friend.id}
+                      type="button"
+                      onClick={() => toggleNewInvite(friend.id)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all",
+                        selected ? "border-amber-400 bg-amber-50" : "border-border hover:bg-muted/50"
+                      )}
+                    >
+                      <div className="relative w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-amber-100">
+                        {friend.avatar_url ? (
+                          <Image src={friend.avatar_url} alt={friend.username} fill className="object-cover" sizes="36px" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-amber-600 font-bold text-sm">{friend.username[0].toUpperCase()}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{friend.display_name ?? friend.username}</p>
+                        <p className="text-xs text-muted-foreground">@{friend.username}</p>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        selected ? "border-amber-500 bg-amber-500" : "border-border"
+                      )}>
+                        {selected && <Check size={11} className="text-white" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-4 border-t border-border flex-shrink-0 flex flex-col gap-2">
+          {/* Scores & Fotos section */}
+          <button
+            onClick={() => onRecordScores(session)}
+            className="w-full py-2.5 rounded-xl border border-border bg-muted/40 hover:bg-muted text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 text-foreground"
+          >
+            <Camera size={14} /> Scores &amp; Fotos erfassen
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={saving || !sessionDate}
+            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+          >
+            {saving ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : <Check size={16} />}
+            {newInvitedIds.size > 0 ? `Speichern & ${newInvitedIds.size} einladen` : "Änderungen speichern"}
           </button>
         </div>
       </div>
