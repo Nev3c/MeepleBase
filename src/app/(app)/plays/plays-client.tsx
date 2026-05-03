@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { PlannedSession, PlaylistEntry, GameSelectionMode } from "@/types";
 import { PlaylistTab } from "@/components/plays/playlist-tab";
 import { LotterySheet } from "@/components/plays/lottery-sheet";
-import { VotingSheet, ProposalAdderSheet } from "@/components/plays/voting-sheet";
+import { VotingSheet } from "@/components/plays/voting-sheet";
 
 // ── Local types ───────────────────────────────────────────────────────────────
 

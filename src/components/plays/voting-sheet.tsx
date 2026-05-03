@@ -20,7 +20,7 @@ type SheetView = "vote" | "results";
 
 // ── VotingSheet ───────────────────────────────────────────────────────────────
 
-export function VotingSheet({ session, userId: _userId, onClose, onVotingClosed, onVoteSubmitted }: VotingSheetProps) {
+export function VotingSheet({ session, onClose, onVotingClosed, onVoteSubmitted }: VotingSheetProps) {
   const isOrganizer = session.is_organizer;
   const isClosed = session.voting_closed;
 
