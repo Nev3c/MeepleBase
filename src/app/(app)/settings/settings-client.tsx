@@ -1013,7 +1013,9 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
             <div>
               <p className="text-sm font-medium text-foreground mb-0.5">Spielekatalog aufbauen</p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Lädt ~600 populäre Spiele von BoardGameGeek in die lokale Datenbank — danach findet die Spielsuche viele Titel sofort ohne externe Anfragen.
+                Lädt ~600 der populärsten BGG-Spiele in die Suchdatenbank vor — danach findest du Spiele wie Catan, Wingspan oder Pandemic sofort beim Tippen, ohne dass eine externe Anfrage nötig ist.{" "}
+                <span className="font-medium text-foreground">Die Spiele werden dabei nicht deiner Bibliothek hinzugefügt</span>{" "}
+                — das machst du manuell über die Suche.
               </p>
             </div>
 

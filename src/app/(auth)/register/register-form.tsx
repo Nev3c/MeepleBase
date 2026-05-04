@@ -28,6 +28,11 @@ export function RegisterForm() {
       setLoading(false);
       return;
     }
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      setError("Das Passwort muss mindestens einen Buchstaben und eine Zahl enthalten.");
+      setLoading(false);
+      return;
+    }
 
     // ── Username-Verfügbarkeit prüfen, bevor signUp() aufgerufen wird ─────────
     // Hintergrund: Der Supabase-Trigger auf auth.users legt automatisch eine
@@ -191,7 +196,7 @@ export function RegisterForm() {
           <Input
             id="password"
             type="password"
-            placeholder="Mindestens 8 Zeichen"
+            placeholder="Mind. 8 Zeichen, 1 Buchstabe, 1 Zahl"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

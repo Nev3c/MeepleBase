@@ -10,6 +10,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.8] — 2026-05-04
+
+### Fixed
+- **Passwort zurücksetzen:** Seite `/forgot-password` existierte nicht — Klick auf „Vergessen?" landete ins Leere. Neue Seite erstellt mit `supabase.auth.resetPasswordForEmail()`, Success-Screen und Rate-Limit-Handling. E-Mail-Enumeration durch generische Erfolgsmeldung verhindert.
+- **Login-Text:** „Meld dich an und zu deiner Base." → „Melde dich zu deiner Base an."
+
+### Changed
+- **Passwort-Stärke bei Registrierung:** Schwache Passwörter wie „12345678" werden jetzt abgelehnt. Zusätzlich zur Mindestlänge von 8 Zeichen ist nun mind. 1 Buchstabe + 1 Zahl erforderlich. Placeholder-Text im Eingabefeld aktualisiert.
+- **Spielekatalog-Beschreibung:** Text erklärt jetzt klar, dass die Spiele in die Suchdatenbank (nicht in die Bibliothek) geladen werden. Beispiele (Catan, Wingspan) machen den Zweck greifbar.
+
+---
+
 ## [0.9.7] — 2026-05-04
 
 ### Fixed

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { LoginForm } from "./login-form";
+import { ForgotPasswordForm } from "./forgot-password-form";
 import { AppLogo } from "@/components/shared/app-logo";
 
-export const metadata: Metadata = { title: "Anmelden" };
+export const metadata: Metadata = { title: "Passwort zurücksetzen" };
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   return (
     <div className="flex flex-col gap-8 animate-slide-up">
       {/* Logo + Headline */}
@@ -12,24 +12,24 @@ export default function LoginPage() {
         <AppLogo size={64} />
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">
-            Willkommen zurück
+            Passwort vergessen?
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Melde dich zu deiner Base an.
+            Kein Problem — wir schicken dir einen Reset-Link.
           </p>
         </div>
       </div>
 
       {/* Form card */}
       <div className="bg-card rounded-2xl border border-border shadow-card p-6">
-        <LoginForm />
+        <ForgotPasswordForm />
       </div>
 
-      {/* Register link */}
+      {/* Back to login */}
       <p className="text-center text-sm text-muted-foreground">
-        Noch kein Account?{" "}
-        <a href="/register" className="text-amber-600 font-semibold hover:text-amber-700 underline-offset-4 hover:underline">
-          Jetzt registrieren
+        Wieder eingefallen?{" "}
+        <a href="/login" className="text-amber-600 font-semibold hover:text-amber-700 underline-offset-4 hover:underline">
+          Anmelden
         </a>
       </p>
     </div>
