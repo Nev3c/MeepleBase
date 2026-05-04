@@ -69,5 +69,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .select("*, game:games(id, name, thumbnail_url, bgg_id), players:play_players(*)")
     .eq("id", params.id)
     .single();
-  return NextResponse.json(fullPlay);
+
+  // Enrich with custom game name
+  const resolvedGameId = game_id ?? fullPlay?.game_id;
+  let customGameName: string | null = null;
+  if (resolvedGameId) {
+    const { data: ugRow } = await supabase
+      .from("user_games")
+      .select("custom_fields")
+      .eq("user_id", user.id)
+      .eq("game_id", resolvedGameId)
+      .maybeSingle();
+    customGameName = (ugRow?.custom_fields as { name?: string } | null)?.name ?? null;
+  }
+
+  return NextResponse.json({ ...fullPlay, custom_game_name: customGameName });
 }

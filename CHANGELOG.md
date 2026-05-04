@@ -10,6 +10,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.7] — 2026-05-04
+
+### Fixed
+- **Benutzerdefinierte Spielnamen überall anzeigen:** Überall wo Spielnamen angezeigt werden (Partien-Liste, Spieler-Markt) wird jetzt der benutzerdefinierte Name (`custom_fields.name`) bevorzugt, falls gesetzt. Vorher erschien immer der englische BGG-Originalname.
+  - `GET /api/plays` und `POST /api/plays`: Gibt jetzt `custom_game_name` zurück (aus `user_games.custom_fields.name`).
+  - `PATCH /api/plays/[id]`: Gibt ebenfalls `custom_game_name` zurück.
+  - Spieler-Markt: `custom_fields` wird beim Laden der Markt-Spiele mitgelesen, `ForSaleCard` zeigt den eigenen Aliasnamen.
+  - Partien-Sortierung „Spiel A–Z" sortiert jetzt nach dem benutzerdefinierten Namen.
+
+---
+
 ## [0.9.6] — 2026-05-03
 
 ### Added

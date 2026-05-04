@@ -90,6 +90,7 @@ export default async function PlayersPage() {
   };
   type RawFsGame = {
     id: string; user_id: string; sale_price: number | null;
+    custom_fields: { name?: string } | null;
     game: { id: string; name: string; thumbnail_url: string | null }
         | { id: string; name: string; thumbnail_url: string | null }[] | null;
   };
@@ -106,7 +107,7 @@ export default async function PlayersPage() {
       : Promise.resolve({ data: [] as ProfileRow[] }),
     admin
       .from("user_games")
-      .select("id, user_id, sale_price, game:games(id, name, thumbnail_url)")
+      .select("id, user_id, sale_price, custom_fields, game:games(id, name, thumbnail_url)")
       .in("user_id", fsUserIds)
       .eq("status", "for_sale"),
   ]);
@@ -165,12 +166,14 @@ export default async function PlayersPage() {
     const isMe = ug.user_id === user.id;
     const owner = isMe ? null : profileMap.get(ug.user_id);
     const game = Array.isArray(ug.game) ? ug.game[0] ?? null : ug.game;
+    const customFields = ug.custom_fields as { name?: string } | null;
     return {
       id: ug.id,
       user_id: ug.user_id,
       sale_price: ug.sale_price ?? null,
       owner_username: isMe ? (myProfile?.username ?? "Du") : (owner?.username ?? "?"),
       owner_display_name: isMe ? (myProfile?.display_name ?? null) : (owner?.display_name ?? null),
+      custom_game_name: customFields?.name ?? null,
       game: game as { id: string; name: string; thumbnail_url: string | null } | null,
     };
   });

@@ -32,7 +32,30 @@ export async function GET(req: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ plays: data ?? [], total: count ?? 0 });
+
+  const plays = data ?? [];
+
+  // Enrich with user's custom game names (from user_games.custom_fields.name)
+  const gameIds = Array.from(new Set(plays.map((p) => p.game_id as string)));
+  const customNameMap: Record<string, string | null> = {};
+  if (gameIds.length > 0) {
+    const { data: ugRows } = await supabase
+      .from("user_games")
+      .select("game_id, custom_fields")
+      .eq("user_id", user.id)
+      .in("game_id", gameIds);
+    for (const ug of ugRows ?? []) {
+      const name = (ug.custom_fields as { name?: string } | null)?.name ?? null;
+      customNameMap[ug.game_id as string] = name;
+    }
+  }
+
+  const enriched = plays.map((p) => ({
+    ...p,
+    custom_game_name: customNameMap[p.game_id as string] ?? null,
+  }));
+
+  return NextResponse.json({ plays: enriched, total: count ?? 0 });
 }
 
 export async function POST(req: NextRequest) {
@@ -85,5 +108,15 @@ export async function POST(req: NextRequest) {
     .select("*, game:games(id, name, thumbnail_url, bgg_id), players:play_players(*)")
     .eq("id", play.id)
     .single();
-  return NextResponse.json(fullPlay ?? play, { status: 201 });
+
+  // Enrich with custom game name
+  const { data: ugRow } = await supabase
+    .from("user_games")
+    .select("custom_fields")
+    .eq("user_id", user.id)
+    .eq("game_id", game_id)
+    .maybeSingle();
+  const customGameName = (ugRow?.custom_fields as { name?: string } | null)?.name ?? null;
+
+  return NextResponse.json({ ...(fullPlay ?? play), custom_game_name: customGameName }, { status: 201 });
 }

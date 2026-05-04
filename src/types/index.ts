@@ -106,6 +106,8 @@ export interface Play {
   bgg_play_id: number | null;
   created_at: string;
   updated_at: string;
+  /** User's custom name override (from user_games.custom_fields.name) */
+  custom_game_name?: string | null;
   // Joined
   game?: Game;
   players?: PlayPlayer[];
@@ -259,6 +261,8 @@ export interface ForSaleGame {
   sale_price: number | null;
   owner_username: string;
   owner_display_name: string | null;
+  /** User's custom name override (from user_games.custom_fields.name) */
+  custom_game_name?: string | null;
   game: { id: string; name: string; thumbnail_url: string | null } | null;
 }
 

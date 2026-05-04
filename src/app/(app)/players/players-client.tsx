@@ -1013,7 +1013,7 @@ function ForSaleCard({ item, isOwn = false }: { item: ForSaleGame; isOwn?: boole
     >
       <div className={cn("relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden", isOwn ? "bg-amber-50" : "bg-green-50")}>
         {item.game?.thumbnail_url ? (
-          <Image src={item.game.thumbnail_url} alt={item.game.name} fill className="object-cover" sizes="56px" loading="lazy" />
+          <Image src={item.game.thumbnail_url} alt={item.custom_game_name ?? item.game.name} fill className="object-cover" sizes="56px" loading="lazy" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Tag size={20} className={isOwn ? "text-amber-400" : "text-green-400"} />
@@ -1021,7 +1021,7 @@ function ForSaleCard({ item, isOwn = false }: { item: ForSaleGame; isOwn?: boole
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-semibold text-foreground text-sm leading-tight truncate">{item.game?.name ?? "Unbekanntes Spiel"}</h3>
+        <h3 className="font-semibold text-foreground text-sm leading-tight truncate">{item.custom_game_name ?? item.game?.name ?? "Unbekanntes Spiel"}</h3>
         <p className="text-xs text-muted-foreground mt-0.5 truncate">
           {isOwn ? "Dein Angebot" : `von ${ownerName}`}
         </p>

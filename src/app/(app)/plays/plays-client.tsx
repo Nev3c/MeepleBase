@@ -55,6 +55,8 @@ interface Play {
   cooperative: boolean;
   incomplete?: boolean;
   image_url?: string | null;
+  /** User's custom name override (from user_games.custom_fields.name) */
+  custom_game_name?: string | null;
   game?: LibraryGame | null;
   players?: PlayPlayer[];
 }
@@ -203,7 +205,7 @@ export function PlaysClient({
     switch (sortKey) {
       case "date_desc": return new Date(b.played_at).getTime() - new Date(a.played_at).getTime();
       case "date_asc":  return new Date(a.played_at).getTime() - new Date(b.played_at).getTime();
-      case "game_asc":  return (a.game?.name ?? "").localeCompare(b.game?.name ?? "", "de");
+      case "game_asc":  return (a.custom_game_name ?? a.game?.name ?? "").localeCompare(b.custom_game_name ?? b.game?.name ?? "", "de");
       default: return 0;
     }
   });
@@ -581,7 +583,7 @@ function PlayCard({
   // BGStats deep link — opens the BGStats app with this play pre-filled
   const bgStatsData = encodeURIComponent(JSON.stringify({
     game: {
-      name: play.game?.name ?? "Unbekannt",
+      name: play.custom_game_name ?? play.game?.name ?? "Unbekannt",
       ...(play.game?.bgg_id ? { bggId: play.game.bgg_id } : {}),
     },
     playDate: play.played_at.replace("T", " ").slice(0, 19),
@@ -606,17 +608,17 @@ function PlayCard({
       <Link href={`/plays/${play.id}`} className="flex items-start gap-3 p-3 hover:bg-muted/30 transition-colors active:bg-muted/50">
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
           {play.game?.thumbnail_url ? (
-            <Image src={play.game.thumbnail_url} alt={play.game?.name ?? ""} fill className="object-cover" sizes="56px" />
+            <Image src={play.game.thumbnail_url} alt={play.custom_game_name ?? play.game?.name ?? ""} fill className="object-cover" sizes="56px" />
           ) : (
             <div className="w-full h-full bg-amber-100 flex items-center justify-center">
-              <span className="text-amber-600 font-bold text-lg">{play.game?.name?.[0] ?? "?"}</span>
+              <span className="text-amber-600 font-bold text-lg">{(play.custom_game_name ?? play.game?.name)?.[0] ?? "?"}</span>
             </div>
           )}
         </div>
 
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-sm text-foreground leading-tight truncate">
-            {play.game?.name ?? "Unbekanntes Spiel"}
+            {play.custom_game_name ?? play.game?.name ?? "Unbekanntes Spiel"}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">{dateStr}</p>
 
