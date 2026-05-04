@@ -56,8 +56,6 @@ interface BGStatsPlay {
 // Returns: { imported, skipped_duplicates, skipped_no_game, errors, game_names,
 //            offset, total, done }
 
-const CHUNK_SIZE = 100;
-
 export async function POST(req: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

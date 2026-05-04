@@ -1139,7 +1139,7 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                     ))}
                   </div>
                   <p className="text-[11px] text-amber-600 mt-1">
-                    Spiele werden als „Besitze ich" in deine Bibliothek eingetragen. Bereits vorhandene Partien werden übersprungen.
+                    Spiele werden als &bdquo;Besitze ich&ldquo; in deine Bibliothek eingetragen. Bereits vorhandene Partien werden übersprungen.
                   </p>
                 </div>
                 <div className="flex gap-2">
