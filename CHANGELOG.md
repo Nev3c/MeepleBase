@@ -10,7 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.9.8] — 2026-05-04
+## [0.9.9] — 2026-05-04
+
+### Added
+- **BGStats-Import: Phase 1 — Spielebibliothek befüllen:** Neuer Endpoint `POST /api/import/bgstats/games` löst alle Spiele aus dem BGStats-Export auf (BGG-ID → Name → Neu anlegen) und trägt sie mit Status „owned" in die Bibliothek ein. Rückgabe: `game_map` (BGStats-ID → MeepleBase-UUID) für Phase 2.
+- **BGStats-Import: Phase 2 — Partien importieren:** Neuer Endpoint `POST /api/import/bgstats/plays` empfängt vorgeschnittene Chunks (max. 100 Partien) plus den `game_map` aus Phase 1. Importiert Partien inkl. Spieler, Punkte, Gewinner, Kooperativ-Flag, Dauer und Ort. Kein nochmaliger Game-Lookup nötig.
+- **BGStats-Import: Duplikatprüfung:** Plays werden anhand Game-ID + Tagesdatum dedupliziert (intra-chunk und gegen bestehende DB-Daten).
+
+### Changed
+- **BGStats-Import UI komplett überarbeitet:** Mehrstufige Progress-UI mit 6 Zuständen (idle → parsed → phase1 → phase2 → done → error). Datei-Auswahl zeigt Vorschau (Spielanzahl, Partienanzahl, Spieleranzahl). Phase-1-Ergebnis zeigt neue Spiele in der Bibliothek. Phase-2-Fortschrittsbalken mit Live-Counter. Abschluss-Screen mit 3-spaltigem Grid: „Spiele neu", „Partien importiert", „Übersprungen".
+- **BGStats-Import Architektur:** Client sendet vorgeschnittene Chunks statt des kompletten JSON-Blobs pro Request. Reduziert Request-Payload von ~500 KB auf ~35 KB. Spiele werden nur noch in Phase 1 aufgelöst, Phase 2 arbeitet rein mit dem `game_map`.
 
 ### Fixed
 - **Passwort zurücksetzen:** Seite `/forgot-password` existierte nicht — Klick auf „Vergessen?" landete ins Leere. Neue Seite erstellt mit `supabase.auth.resetPasswordForEmail()`, Success-Screen und Rate-Limit-Handling. E-Mail-Enumeration durch generische Erfolgsmeldung verhindert.

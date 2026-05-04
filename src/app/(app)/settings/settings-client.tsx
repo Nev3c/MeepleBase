@@ -9,6 +9,19 @@ import type { Profile, LibraryVisibility } from "@/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
+// ── Local BGStats types (mirrors server-side types in /api/import/bgstats/*) ──
+interface BgGame     { id: number; name: string; bggId?: number }
+interface BgPlayer   { id: number; name: string; isMe?: boolean }
+interface BgLocation { id: number; name: string }
+interface BgPlayerScore { playerRefId: number; score?: number | null; winner?: boolean }
+interface BgPlay {
+  id: number; gameRefId: number; date?: string; playDate?: string;
+  duration?: number; durationMin?: number; notes?: string;
+  locationRefId?: number; playerScores?: BgPlayerScore[];
+  incomplete?: boolean; cooperative?: boolean;
+}
+type BgStep = "idle" | "parsed" | "phase1" | "phase2" | "done" | "error";
+
 type BggStatus = "idle" | "checking" | "found" | "not_found" | "error";
 type LocationStatus = "idle" | "detecting" | "geocoding" | "detected" | "not-found" | "error";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -44,122 +57,143 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
   const [translateError, setTranslateError] = useState<string | null>(null);
   const translateAbort = useRef(false);
 
-  // ── BGStats Import state ───────────────────────────────────────────────────
-  type BgStatsPhase = "idle" | "parsed" | "importing" | "done" | "error";
-  const [bgStatsPhase, setBgStatsPhase] = useState<BgStatsPhase>("idle");
-  const [bgStatsPreview, setBgStatsPreview] = useState<{ plays: number; games: number; players: number } | null>(null);
-  const [bgStatsParsed, setBgStatsParsed] = useState<object | null>(null);
-  const [bgStatsResult, setBgStatsResult] = useState<{
-    imported: number; skipped_duplicates: number; skipped_no_game: number; errors: number; game_names: string[];
+  // ── BGStats Import state (3-phase rebuild) ────────────────────────────────
+  const [bgStep, setBgStep] = useState<BgStep>("idle");
+  const [bgPreview, setBgPreview] = useState<{ plays: number; games: number; players: number } | null>(null);
+  const [bgP1Result, setBgP1Result] = useState<{ created: number; existing: number; game_names: string[] } | null>(null);
+  const [bgP2Done, setBgP2Done] = useState(0);
+  const [bgP2Total, setBgP2Total] = useState(0);
+  const [bgFinal, setBgFinal] = useState<{ imported: number; skipped: number; errors: number } | null>(null);
+  const [bgError, setBgError] = useState<string | null>(null);
+  // Large parsed data stored in ref to avoid triggering re-renders on every chunk
+  const bgDataRef = useRef<{
+    games: BgGame[]; players: BgPlayer[]; locations: BgLocation[]; plays: BgPlay[];
+    gameMap: Record<string, string>;
   } | null>(null);
-  const [bgStatsError, setBgStatsError] = useState<string | null>(null);
-  const [bgStatsDone, setBgStatsDone] = useState(0);
-  const [bgStatsTotal, setBgStatsTotal] = useState(0);
-  const bgStatsInputRef = useRef<HTMLInputElement>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
 
-  function handleBgStatsFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleBgFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setBgStatsError(null);
-    setBgStatsResult(null);
+    setBgError(null);
 
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const json = JSON.parse(ev.target?.result as string) as {
-          games?: unknown[]; players?: unknown[]; plays?: unknown[];
+          games?: unknown[]; players?: unknown[]; locations?: unknown[]; plays?: unknown[];
         };
-        const playsCount = json.plays?.length ?? 0;
-        const gamesCount = json.games?.length ?? 0;
-        const playersCount = json.players?.length ?? 0;
+        const plays     = (json.plays     ?? []) as BgPlay[];
+        const games     = (json.games     ?? []) as BgGame[];
+        const players   = (json.players   ?? []) as BgPlayer[];
+        const locations = (json.locations ?? []) as BgLocation[];
 
-        if (playsCount === 0) {
-          setBgStatsError("Keine Partien in der Datei gefunden. Bitte wähle eine gültige BGStats-Exportdatei.");
-          setBgStatsPhase("error");
+        if (plays.length === 0) {
+          setBgError("Keine Partien in der Datei gefunden. Bitte wähle eine gültige BGStats-Exportdatei.");
+          setBgStep("error");
           return;
         }
 
-        setBgStatsPreview({ plays: playsCount, games: gamesCount, players: playersCount });
-        setBgStatsParsed(json);
-        setBgStatsPhase("parsed");
+        bgDataRef.current = { games, players, locations, plays, gameMap: {} };
+        setBgPreview({ plays: plays.length, games: games.length, players: players.length });
+        setBgStep("parsed");
       } catch {
-        setBgStatsError("Datei konnte nicht gelesen werden. Bitte wähle eine gültige BGStats-JSON-Exportdatei.");
-        setBgStatsPhase("error");
+        setBgError("Datei konnte nicht gelesen werden. Bitte wähle eine gültige BGStats-JSON-Exportdatei.");
+        setBgStep("error");
       }
     };
     reader.readAsText(file);
-    // reset so same file can be re-selected
     e.target.value = "";
   }
 
-  async function handleBgStatsImport() {
-    if (!bgStatsParsed) return;
-    setBgStatsPhase("importing");
-    setBgStatsError(null);
+  async function handleBgImport() {
+    const data = bgDataRef.current;
+    if (!data) return;
 
-    const total = bgStatsPreview?.plays ?? 0;
-    setBgStatsTotal(total);
-    setBgStatsDone(0);
-
-    let offset = 0;
-    let totalImported = 0;
-    let totalSkippedDuplicates = 0;
-    let totalSkippedNoGame = 0;
-    let totalErrors = 0;
-    const allGameNames: string[] = [];
+    // ── Phase 1: Import games → library ─────────────────────────────────────
+    setBgStep("phase1");
+    setBgError(null);
 
     try {
-      while (true) {
-        const res = await fetch("/api/import/bgstats", {
+      const p1Res = await fetch("/api/import/bgstats/games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ games: data.games }),
+      });
+      const p1Data = await p1Res.json() as {
+        game_map?: Record<string, string>; created?: number; existing?: number;
+        game_names?: string[]; error?: string;
+      };
+      if (!p1Res.ok) throw new Error(p1Data.error ?? "Phase 1 fehlgeschlagen");
+
+      const gameMap = p1Data.game_map ?? {};
+      data.gameMap = gameMap; // store for Phase 2
+      setBgP1Result({
+        created:    p1Data.created    ?? 0,
+        existing:   p1Data.existing   ?? 0,
+        game_names: p1Data.game_names ?? [],
+      });
+    } catch (err) {
+      setBgError(err instanceof Error ? err.message : "Phase 1 fehlgeschlagen");
+      setBgStep("error");
+      return;
+    }
+
+    // ── Phase 2: Import plays in chunks ──────────────────────────────────────
+    setBgStep("phase2");
+    const { gameMap, players, locations, plays } = data;
+    const total = plays.length;
+    setBgP2Total(total);
+    setBgP2Done(0);
+
+    const CHUNK = 100;
+    let offset = 0;
+    let totalImported = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+
+    try {
+      while (offset < total) {
+        const chunk = plays.slice(offset, offset + CHUNK);
+        const res = await fetch("/api/import/bgstats/plays", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...bgStatsParsed, offset }),
+          body: JSON.stringify({ game_map: gameMap, players, locations, plays: chunk, total, offset }),
         });
-        const data = await res.json() as {
+        const chunkData = await res.json() as {
           imported?: number; skipped_duplicates?: number; skipped_no_game?: number;
-          errors?: number; game_names?: string[]; error?: string;
-          total?: number; next_offset?: number; done?: boolean;
+          errors?: number; error?: string; offset?: number; done?: boolean;
         };
-        if (!res.ok) throw new Error(data.error ?? "Import fehlgeschlagen");
+        if (!res.ok) throw new Error(chunkData.error ?? "Phase 2 fehlgeschlagen");
 
-        totalImported += data.imported ?? 0;
-        totalSkippedDuplicates += data.skipped_duplicates ?? 0;
-        totalSkippedNoGame += data.skipped_no_game ?? 0;
-        totalErrors += data.errors ?? 0;
+        totalImported += chunkData.imported        ?? 0;
+        totalSkipped  += (chunkData.skipped_duplicates ?? 0) + (chunkData.skipped_no_game ?? 0);
+        totalErrors   += chunkData.errors           ?? 0;
 
-        for (const name of data.game_names ?? []) {
-          if (!allGameNames.includes(name)) allGameNames.push(name);
-        }
+        offset += chunk.length;
+        setBgP2Done(offset);
 
-        offset = data.next_offset ?? offset + 100;
-        setBgStatsDone(Math.min(offset, total));
-
-        if (data.done) break;
+        if (chunkData.done) break;
       }
 
-      setBgStatsResult({
-        imported: totalImported,
-        skipped_duplicates: totalSkippedDuplicates,
-        skipped_no_game: totalSkippedNoGame,
-        errors: totalErrors,
-        game_names: allGameNames.slice(0, 20),
-      });
-      setBgStatsPhase("done");
+      setBgFinal({ imported: totalImported, skipped: totalSkipped, errors: totalErrors });
+      setBgStep("done");
       router.refresh();
     } catch (err) {
-      setBgStatsError(err instanceof Error ? err.message : "Import fehlgeschlagen");
-      setBgStatsPhase("error");
+      setBgError(err instanceof Error ? err.message : "Phase 2 fehlgeschlagen");
+      setBgStep("error");
     }
   }
 
-  function handleBgStatsReset() {
-    setBgStatsPhase("idle");
-    setBgStatsParsed(null);
-    setBgStatsPreview(null);
-    setBgStatsResult(null);
-    setBgStatsError(null);
-    setBgStatsDone(0);
-    setBgStatsTotal(0);
+  function handleBgReset() {
+    setBgStep("idle");
+    setBgPreview(null);
+    setBgP1Result(null);
+    setBgP2Done(0);
+    setBgP2Total(0);
+    setBgFinal(null);
+    setBgError(null);
+    bgDataRef.current = null;
   }
 
   // ── BGG Catalog state ─────────────────────────────────────────────────────
@@ -1074,55 +1108,52 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
                 </a>
                 . Exportiere deine Daten dort unter{" "}
                 <span className="font-medium text-foreground">Einstellungen → Daten exportieren → JSON</span>{" "}
-                und lade die Datei hier hoch. Bereits vorhandene Partien werden automatisch übersprungen — du kannst den Import also problemlos mehrfach ausführen.
+                und lade die Datei hier hoch. Spiele werden deiner Bibliothek hinzugefügt, bereits vorhandene Partien übersprungen.
               </p>
             </div>
 
             {/* Idle — file picker */}
-            {bgStatsPhase === "idle" && (
+            {bgStep === "idle" && (
               <label className="flex items-center justify-center gap-2 h-10 rounded-xl border-2 border-dashed border-border bg-muted/30 text-sm text-muted-foreground hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50 transition-all cursor-pointer">
                 <FileJson size={15} />
                 JSON-Datei auswählen
-                <input
-                  ref={bgStatsInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  className="sr-only"
-                  onChange={handleBgStatsFile}
-                />
+                <input ref={bgInputRef} type="file" accept=".json,application/json" className="sr-only" onChange={handleBgFile} />
               </label>
             )}
 
             {/* Parsed — preview + confirm */}
-            {bgStatsPhase === "parsed" && bgStatsPreview && (
+            {bgStep === "parsed" && bgPreview && (
               <div className="flex flex-col gap-3">
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-3 flex flex-col gap-1">
                   <p className="text-xs font-semibold text-amber-800 mb-1">Datei erkannt</p>
-                  <p className="text-xs text-amber-700 flex items-center justify-between">
-                    <span>Partien</span>
-                    <span className="font-semibold text-amber-900">{bgStatsPreview.plays}</span>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {([
+                      { label: "Partien",  val: bgPreview.plays },
+                      { label: "Spiele",   val: bgPreview.games },
+                      { label: "Spieler",  val: bgPreview.players },
+                    ] as const).map(({ label, val }) => (
+                      <div key={label} className="bg-white/60 rounded-lg py-1.5">
+                        <p className="text-base font-bold text-amber-900 tabular-nums">{val}</p>
+                        <p className="text-[11px] text-amber-700">{label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    Spiele werden als „Besitze ich" in deine Bibliothek eingetragen. Bereits vorhandene Partien werden übersprungen.
                   </p>
-                  <p className="text-xs text-amber-700 flex items-center justify-between">
-                    <span>Spiele</span>
-                    <span className="font-semibold text-amber-900">{bgStatsPreview.games}</span>
-                  </p>
-                  <p className="text-xs text-amber-700 flex items-center justify-between">
-                    <span>Spieler</span>
-                    <span className="font-semibold text-amber-900">{bgStatsPreview.players}</span>
-                  </p>
-                  <p className="text-[11px] text-amber-600 mt-1">Bereits eingetragene Partien werden übersprungen.</p>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={handleBgStatsImport}
+                    onClick={handleBgImport}
                     className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors"
                   >
                     <Upload size={14} />
-                    Jetzt importieren
+                    Import starten
                   </button>
                   <button
-                    onClick={handleBgStatsReset}
+                    onClick={handleBgReset}
                     className="flex items-center justify-center w-10 h-10 rounded-xl border border-border bg-background text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Abbrechen"
                   >
                     <X size={15} />
                   </button>
@@ -1130,70 +1161,102 @@ export function SettingsClient({ user, profile }: SettingsClientProps) {
               </div>
             )}
 
-            {/* Importing — progress bar */}
-            {bgStatsPhase === "importing" && (
-              <div className="flex flex-col gap-2.5">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {bgStatsDone} / {bgStatsTotal} Partien
-                  </span>
-                  <span className="tabular-nums">
-                    {bgStatsTotal > 0 ? Math.round((bgStatsDone / bgStatsTotal) * 100) : 0}%
-                  </span>
+            {/* Phase 1 running */}
+            {bgStep === "phase1" && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <SpinnerIcon />
+                  <span className="font-medium text-foreground">Phase 1/2 — Spiele werden importiert…</span>
                 </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                    style={{ width: `${bgStatsTotal > 0 ? Math.round((bgStatsDone / bgStatsTotal) * 100) : 0}%` }}
-                  />
+                <p className="text-[11px] text-muted-foreground">
+                  Spiele werden in BGG-Datenbank gesucht und deiner Bibliothek hinzugefügt.
+                </p>
+              </div>
+            )}
+
+            {/* Phase 2 running */}
+            {bgStep === "phase2" && (
+              <div className="flex flex-col gap-3">
+                {/* Phase 1 done indicator */}
+                {bgP1Result && (
+                  <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+                    <Check size={13} className="flex-shrink-0" />
+                    <span>
+                      Phase 1 abgeschlossen ·{" "}
+                      <span className="font-semibold">{bgP1Result.created} Spiele</span> neu in Bibliothek
+                      {bgP1Result.existing > 0 && ` · ${bgP1Result.existing} bereits vorhanden`}
+                    </span>
+                  </div>
+                )}
+                {/* Phase 2 progress */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-foreground">Phase 2/2 — Partien</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {bgP2Done} / {bgP2Total} ({bgP2Total > 0 ? Math.round(bgP2Done / bgP2Total * 100) : 0}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                      style={{ width: `${bgP2Total > 0 ? Math.round(bgP2Done / bgP2Total * 100) : 0}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground animate-pulse">Importiere Partien…</p>
                 </div>
-                <p className="text-[11px] text-muted-foreground animate-pulse">Importiere Partien…</p>
               </div>
             )}
 
             {/* Done */}
-            {bgStatsPhase === "done" && bgStatsResult && (
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-semibold text-green-700 flex items-center gap-1.5">
-                  <Check size={15} /> {bgStatsResult.imported} {bgStatsResult.imported === 1 ? "Partie" : "Partien"} importiert!
-                </p>
-                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                  {bgStatsResult.skipped_duplicates > 0 && (
-                    <span>{bgStatsResult.skipped_duplicates} bereits vorhanden (übersprungen)</span>
+            {bgStep === "done" && bgFinal && (
+              <div className="flex flex-col gap-2.5">
+                <div className="bg-green-50 border border-green-200 rounded-xl px-3.5 py-3 flex flex-col gap-2">
+                  <p className="text-sm font-semibold text-green-800 flex items-center gap-1.5">
+                    <Check size={15} /> Import abgeschlossen!
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {([
+                      { label: "Spiele",     val: bgP1Result?.created ?? 0,   sub: "neu in Bibliothek" },
+                      { label: "Partien",    val: bgFinal.imported,            sub: "importiert" },
+                      { label: "Übersprungen", val: bgFinal.skipped,           sub: "Duplikate" },
+                    ] as const).map(({ label, val, sub }) => (
+                      <div key={label} className="bg-white/60 rounded-lg py-1.5">
+                        <p className="text-base font-bold text-green-900 tabular-nums">{val}</p>
+                        <p className="text-[10px] text-green-700 leading-tight">{label}</p>
+                        <p className="text-[10px] text-green-600/70 leading-tight">{sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {bgFinal.errors > 0 && (
+                    <p className="text-xs text-amber-700">{bgFinal.errors} Einträge konnten nicht importiert werden.</p>
                   )}
-                  {bgStatsResult.skipped_no_game > 0 && (
-                    <span>{bgStatsResult.skipped_no_game} Spiel nicht zugeordnet</span>
-                  )}
-                  {bgStatsResult.errors > 0 && (
-                    <span className="text-red-500">{bgStatsResult.errors} Fehler</span>
+                  {bgP1Result && bgP1Result.game_names.length > 0 && (
+                    <div className="bg-white/40 rounded-lg p-2 max-h-20 overflow-y-auto">
+                      {bgP1Result.game_names.slice(0, 10).map((n, i) => (
+                        <p key={i} className="text-[11px] text-green-700 leading-snug flex items-center gap-1.5">
+                          <Check size={10} className="flex-shrink-0" /> {n}
+                        </p>
+                      ))}
+                      {bgP1Result.game_names.length > 10 && (
+                        <p className="text-[11px] text-green-600/70 mt-0.5">…und {bgP1Result.game_names.length - 10} weitere</p>
+                      )}
+                    </div>
                   )}
                 </div>
-                {bgStatsResult.game_names.length > 0 && (
-                  <div className="bg-muted/50 rounded-xl p-2.5 max-h-24 overflow-y-auto">
-                    {bgStatsResult.game_names.map((n, i) => (
-                      <p key={i} className="text-xs text-muted-foreground leading-snug flex items-center gap-1.5">
-                        <Check size={11} className="text-green-500 flex-shrink-0" /> {n}
-                      </p>
-                    ))}
-                    {bgStatsResult.game_names.length === 20 && (
-                      <p className="text-xs text-muted-foreground mt-1">…und weitere</p>
-                    )}
-                  </div>
-                )}
-                <button onClick={handleBgStatsReset} className="text-xs text-amber-600 underline underline-offset-2 text-left">
+                <button onClick={handleBgReset} className="text-xs text-amber-600 underline underline-offset-2 text-left">
                   Weitere Datei importieren
                 </button>
               </div>
             )}
 
             {/* Error */}
-            {bgStatsPhase === "error" && (
+            {bgStep === "error" && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
                   <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700">{bgStatsError}</p>
+                  <p className="text-xs text-red-700">{bgError}</p>
                 </div>
-                <button onClick={handleBgStatsReset} className="text-xs text-amber-600 underline underline-offset-2 text-left">
+                <button onClick={handleBgReset} className="text-xs text-amber-600 underline underline-offset-2 text-left">
                   Erneut versuchen
                 </button>
               </div>
